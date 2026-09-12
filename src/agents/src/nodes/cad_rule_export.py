@@ -93,12 +93,10 @@ def cad_execute_node(state: dict) -> dict:
                 results.append({"task_id": task_id, "status": "completed", "count": count})
 
             elif task_type == "door":
-                # 按 task_id 匹配到布局出的门（door-entrance → 第1个，door-room-N → 第N+1个）
-                idx = 0
-                if task_id.startswith("door-room-"):
-                    idx = int(task_id.rsplit("-", 1)[-1]) + 1
-                if idx < len(door_pos):
-                    d = door_pos[idx]
+                # 按门真实 id 匹配布局出的门（编号空间统一，不再用位置索引）
+                door_by_id = {d["id"]: d for d in door_pos if d.get("id")}
+                d = door_by_id.get(task_id)
+                if d:
                     writer.add_door(CADDoor(
                         position=Point(d["position"][0], d["position"][1]),
                         width=d["width"],

@@ -41,23 +41,23 @@ def parse_json_input(file_path: str) -> dict:
             'description': '绘制内墙',
         })
 
-    # 3. 户门
+    # 3. 户门（用门真实 id，与 place_doors_on_walls 输出对齐）
     entrance_doors = [d for d in doors if d.get('type') == 'entrance']
     if entrance_doors:
         d = entrance_doors[0]
         tasks.append({
-            'id': 'door-entrance',
+            'id': d.get('id', 'door-entrance'),
             'type': 'door',
             'category': 'opening',
             'params': {'width': d.get('width_m', 1.0), 'type': 'entrance'},
             'description': f"插入户门 (宽{d.get('width_m', 1.0)}m)",
         })
 
-    # 4. 室内门
-    for i, door in enumerate(doors):
+    # 4. 室内门（用门真实 id，与 place_doors_on_walls 输出对齐，避免序号错位）
+    for door in doors:
         if door.get('type') in ('interior', 'bathroom'):
             tasks.append({
-                'id': f'door-room-{i}',
+                'id': door.get('id', f"door-room-{len(tasks)}"),
                 'type': 'door',
                 'category': 'opening',
                 'params': {'width': door.get('width_m', 0.9), 'type': door.get('type', 'interior')},
