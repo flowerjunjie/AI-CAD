@@ -1,10 +1,12 @@
 """
 几何布局引擎 — zones/doors/windows → 2D 坐标（无 LLM 依赖）
 
-MVP 级贪心排布：房间按面积降序网格排列，门窗放在房间外缘。
+MVP 级贪心排布：房间按面积降序网格排列，门窗放在精确的共享边/外侧墙上。
 坐标单位：米，origin 在 (0,0)。
 """
 from typing import Optional
+
+_EPS = 1e-6
 
 
 def _room_area(z: dict) -> float:
@@ -21,22 +23,17 @@ def layout_rooms(zones: list[dict]) -> list[dict]:
     if not zones:
         return []
 
-    # 按面积降序
     ordered = sorted(zones, key=_room_area, reverse=True)
-
-    # 简单分列：把房间排成 2 列（房间数多时更紧凑）
     n = len(ordered)
     cols = 2 if n > 1 else 1
     rows = (n + cols - 1) // cols
 
     out: list[dict] = []
-    # 先算每行高度
     row_heights: list[float] = []
     for r in range(rows):
         chunk = ordered[r * cols:(r + 1) * cols]
-        row_heights.append(max(_room_area_in_w(z) for z in chunk) if chunk else 0.0)
+        row_heights.append(max(_room_w(z) for z in chunk) if chunk else 0.0)
 
-    # 累计每行起始 y（y 向下递减，第 0 行在最上）
     total_h = sum(row_heights)
     row_y_start: list[float] = []
     y_cursor = total_h
@@ -49,7 +46,6 @@ def layout_rooms(zones: list[dict]) -> list[dict]:
         c = i % cols
         w = float(z.get("length", 0))
         h = float(z.get("width", 0))
-        # x：列内累计宽度
         x_cursor = 0.0
         for j in range(c):
             prev = ordered[r * cols + j]
@@ -68,17 +64,58 @@ def layout_rooms(zones: list[dict]) -> list[dict]:
     return out
 
 
-def _room_area_in_w(z: dict) -> float:
-    """行高取该房间的 width（深度方向）。"""
+def _room_w(z: dict) -> float:
     return float(z.get("width", 0))
+
+
+def _shared_edge(ra: dict, rb: dict) -> Optional[dict]:
+    """
+    判定两房间是否共边，返回共边几何信息（仅处理网格布局下贴边相邻）。
+    返回 {orientation: 'v'|'h', x/y: 共边固定坐标, lo: 重叠区间起, hi: 重叠区间止}
+    不共边返回 None。
+    竖直共边：ra 右缘贴 rb 左缘（或反），y 区间有重叠。
+    水平共边：ra 上缘贴 rb 下缘（或反），x 区间有重叠。
+    """
+    a_lo_x, a_hi_x = ra["x"], ra["x"] + ra["w"]
+    a_lo_y, a_hi_y = ra["y"], ra["y"] + ra["h"]
+    b_lo_x, b_hi_x = rb["x"], rb["x"] + rb["w"]
+    b_lo_y, b_hi_y = rb["y"], rb["y"] + rb["h"]
+
+    # 竖直共边（左右相邻）
+    y_lo = max(a_lo_y, b_lo_y)
+    y_hi = min(a_hi_y, b_hi_y)
+    if abs(a_hi_x - b_lo_x) < _EPS and y_hi - y_lo > _EPS:
+        return {"orientation": "v", "x": a_hi_x, "lo": y_lo, "hi": y_hi}
+    if abs(b_hi_x - a_lo_x) < _EPS and y_hi - y_lo > _EPS:
+        return {"orientation": "v", "x": b_hi_x, "lo": y_lo, "hi": y_hi}
+
+    # 水平共边（上下相邻）
+    x_lo = max(a_lo_x, b_lo_x)
+    x_hi = min(a_hi_x, b_hi_x)
+    if abs(a_hi_y - b_lo_y) < _EPS and x_hi - x_lo > _EPS:
+        return {"orientation": "h", "y": a_hi_y, "lo": x_lo, "hi": x_hi}
+    if abs(b_hi_y - a_lo_y) < _EPS and x_hi - x_lo > _EPS:
+        return {"orientation": "h", "y": b_hi_y, "lo": x_lo, "hi": x_hi}
+
+    return None
+
+
+def _find_shared_edge(name_a: str, name_b: str, by_name: dict) -> Optional[dict]:
+    """两房间间的共享边。a==b 或匹配不到 → None。"""
+    if name_a not in by_name or name_b not in by_name:
+        return None
+    if name_a == name_b:
+        return None
+    return _shared_edge(by_name[name_a], by_name[name_b])
 
 
 def place_doors_on_walls(doors: list[dict], rooms: list[dict]) -> list[dict]:
     """
-    门放在相邻房间共享墙的中点。
-    简化：按 door["location"] 字符串（如 "客厅→主卧"）匹配到两个房间，
-    放在两房间边界中点。找不到匹配就放该门位置默认（房间外缘中点）。
-    返回 [{position:(x,y), width, rotation, room_type, location, id}]
+    门精确放在两房间共享边的几何中点（不再拍脑袋的中心连线中点）。
+    - location "A→B" / "A到B"：A、B 共边 → 开在共边中点；不共边 → 退回 A 外侧边中点
+    - location "外墙南侧" 等：开在建筑外围外墙中点
+    - location 匹配到单个房间：开在该房间外侧边中点
+    返回 [{id, position:(x,y), width, rotation, room_type, location}]
     """
     by_name = {r["name"]: r for r in rooms if r.get("name")}
     placed: list[dict] = []
@@ -89,32 +126,40 @@ def place_doors_on_walls(doors: list[dict], rooms: list[dict]) -> list[dict]:
         room_type = d.get("type", "interior")
         did = d.get("id", "")
 
-        # 尝试解析 "A→B" 或 "A到B"
+        pos: Optional[tuple[float, float]] = None
+        rotation = 90.0  # 默认竖直墙开门
+
+        # 解析 "A→B" 双向 location
         a_name = b_name = None
         for sep in ("→", "->", "到"):
             if sep in loc:
                 a_name, b_name = [s.strip() for s in loc.split(sep, 1)]
                 break
 
-        pos: Optional[tuple[float, float]] = None
-        rotation = 90.0
-        if a_name in by_name and b_name in by_name:
-            ra, rb = by_name[a_name], by_name[b_name]
-            # 找共享边中点（简化：取两房间中心连线中点）
-            ca = (ra["x"] + ra["w"] / 2, ra["y"] + ra["h"] / 2)
-            cb = (rb["x"] + rb["w"] / 2, rb["y"] + rb["h"] / 2)
-            pos = ((ca[0] + cb[0]) / 2, (ca[1] + cb[1]) / 2)
-            # 水平相邻 → 门朝水平开（rot 0），垂直相邻 → 朝竖直开（rot 90）
-            if abs(ca[1] - cb[1]) < abs(ca[0] - cb[0]):
-                rotation = 0.0
+        if a_name and b_name:
+            edge = _find_shared_edge(a_name, b_name, by_name)
+            if edge is not None:
+                if edge["orientation"] == "v":
+                    pos = (edge["x"], (edge["lo"] + edge["hi"]) / 2)
+                    rotation = 0.0  # 竖直墙 → 门扇水平开
+                else:
+                    pos = ((edge["lo"] + edge["hi"]) / 2, edge["y"])
+                    rotation = 90.0  # 水平墙 → 门扇竖直开
 
         if pos is None:
-            # fallback：放该门所属房间外缘中点（取第一个匹配房间）
+            # fallback 1：单向 location 匹配到某个房间，放该房间外侧边中点
             target = _match_room(loc, by_name)
-            if target:
-                pos = (target["x"] + target["w"] / 2, target["y"])
-            else:
-                pos = (0.0, 0.0)
+            if target is not None:
+                outer = _outer_side_of_room(target, rooms)
+                if outer["orientation"] == "v":
+                    pos = (outer["x"], (outer["lo"] + outer["hi"]) / 2)
+                    rotation = 0.0
+                else:
+                    pos = ((outer["lo"] + outer["hi"]) / 2, outer["y"])
+                    rotation = 90.0
+            # fallback 2：完全匹配不到 → 建筑外围外墙中点
+            if pos is None:
+                pos, rotation = _building_outer_midpoint(rooms)
 
         placed.append({
             "id": did,
@@ -128,8 +173,73 @@ def place_doors_on_walls(doors: list[dict], rooms: list[dict]) -> list[dict]:
     return placed
 
 
+def _building_outer_midpoint(rooms: list[dict]) -> tuple[tuple[float, float], float]:
+    """建筑包围盒外围外墙中点（默认南侧，y 最小那侧）。"""
+    if not rooms:
+        return (0.0, 0.0), 90.0
+    x_lo = min(r["x"] for r in rooms)
+    x_hi = max(r["x"] + r["w"] for r in rooms)
+    y_lo = min(r["y"] for r in rooms)
+    return ((x_lo + x_hi) / 2, y_lo), 90.0
+
+
+def _outer_side_of_room(room: dict, rooms: list[dict]) -> dict:
+    """
+    房间朝向建筑外围的外侧边。
+    在房间四条边里，找与建筑包围盒边界重合的那条（即朝外的墙）。
+    若房间被完全包围（不贴任何外围边界），退回取最长边。
+    返回 {orientation:'v'|'h', x/y, lo, hi}
+    """
+    if not rooms:
+        return {"orientation": "v", "x": room["x"], "lo": room["y"], "hi": room["y"] + room["h"]}
+
+    x_lo = min(r["x"] for r in rooms)
+    x_hi = max(r["x"] + r["w"] for r in rooms)
+    y_lo = min(r["y"] for r in rooms)
+    y_hi = max(r["y"] + r["h"] for r in rooms)
+
+    rx, ry, rw, rh = room["x"], room["y"], room["w"], room["h"]
+    candidates: list[dict] = []
+
+    # 左缘贴建筑西外墙
+    if abs(rx - x_lo) < _EPS:
+        candidates.append({"orientation": "v", "x": rx, "lo": ry, "hi": ry + rh})
+    # 右缘贴建筑东外墙
+    if abs(rx + rw - x_hi) < _EPS:
+        candidates.append({"orientation": "v", "x": rx + rw, "lo": ry, "hi": ry + rh})
+    # 下缘贴建筑南外墙
+    if abs(ry - y_lo) < _EPS:
+        candidates.append({"orientation": "h", "y": ry, "lo": rx, "hi": rx + rw})
+    # 上缘贴建筑北外墙
+    if abs(ry + rh - y_hi) < _EPS:
+        candidates.append({"orientation": "h", "y": ry + rh, "lo": rx, "hi": rx + rw})
+
+    if not candidates:
+        # 被完全包围：取最长边
+        if rw >= rh:
+            candidates.append({"orientation": "h", "y": ry, "lo": rx, "hi": rx + rw})
+        else:
+            candidates.append({"orientation": "v", "x": rx, "lo": ry, "hi": ry + rh})
+
+    # 优先级：边长越长越优先（采光好），平手时按方位 南>北>西>东
+    def _priority(c: dict) -> tuple:
+        length = c["hi"] - c["lo"]
+        if c["orientation"] == "v":
+            compass = 0 if c["x"] == x_lo else 3  # 西=0, 东=3
+        else:
+            compass = 1 if c["y"] == y_lo else 2  # 南=1, 北=2
+        return (-length, compass)
+
+    return sorted(candidates, key=_priority)[0]
+
+
 def _match_room(location: str, by_name: dict) -> Optional[dict]:
-    """从 location 字符串里匹配到一个已知房间名。"""
+    """从 location 字符串里匹配到一个已知房间名（双向 "A→B" 取第一个 A）。"""
+    for sep in ("→", "->", "到"):
+        if sep in location:
+            first = location.split(sep, 1)[0].strip()
+            if first in by_name:
+                return by_name[first]
     for name in by_name:
         if name in location:
             return by_name[name]
@@ -138,36 +248,44 @@ def _match_room(location: str, by_name: dict) -> Optional[dict]:
 
 def place_windows_on_walls(windows: list[dict], rooms: list[dict]) -> list[dict]:
     """
-    窗放在每个有窗房间的外侧墙（最外沿）中段。
-    简化：取房间上沿（y 最大那侧）中点，开一段长度 = 房间 width * 0.6。
-    返回 [{start:(x,y), end:(x,y), sill_height, room, id}]
+    窗放在房间**外侧墙**（朝建筑外围的那条边）的几何中点。
+    跨度取该边长度的 60%（原行为），居中于外侧边中点。
+    返回 [{id, start:(x,y), end:(x,y), sill_height, room}]
     """
-    by_room = {}
-    for r in rooms:
-        key = r.get("name") or r.get("type")
-        by_room.setdefault(key, r)
-
+    by_name = {r["name"]: r for r in rooms if r.get("name")}
     placed: list[dict] = []
+
     for w in windows:
         room_name = w.get("room", "")
         sill = float(w.get("sill_height_m", 0.9))
         wid = w.get("id", "")
 
-        target = by_room.get(room_name)
-        if target is None:
-            target = _match_room(room_name, {r.get("name"): r for r in rooms if r.get("name")})
+        target = by_name.get(room_name) or _match_room(room_name, by_name)
 
         if target:
-            x0 = target["x"] + target["w"] * 0.2
-            x1 = target["x"] + target["w"] * 0.8
-            y = target["y"] + target["h"]  # 上沿（外侧）
-            placed.append({
-                "id": wid,
-                "start": (x0, y),
-                "end": (x1, y),
-                "sill_height": sill,
-                "room": room_name,
-            })
+            side = _outer_side_of_room(target, rooms)
+            if side["orientation"] == "v":
+                # 竖直外侧边（东/西外墙）：窗为竖直段
+                y_mid = (side["lo"] + side["hi"]) / 2
+                span = (side["hi"] - side["lo"]) * 0.3  # 各半 = 总 60%
+                placed.append({
+                    "id": wid,
+                    "start": (side["x"], y_mid - span),
+                    "end": (side["x"], y_mid + span),
+                    "sill_height": sill,
+                    "room": room_name,
+                })
+            else:
+                # 水平外侧边（南/北外墙）：窗为水平段
+                x_mid = (side["lo"] + side["hi"]) / 2
+                span = (side["hi"] - side["lo"]) * 0.3
+                placed.append({
+                    "id": wid,
+                    "start": (x_mid - span, side["y"]),
+                    "end": (x_mid + span, side["y"]),
+                    "sill_height": sill,
+                    "room": room_name,
+                })
         else:
             placed.append({
                 "id": wid,

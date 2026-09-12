@@ -56,7 +56,7 @@ def test_layout_sorted_by_area_desc():
 
 
 def test_place_doors_shared_wall():
-    """相邻房间（location 含 'A→B'）门放在两房间中心连线中点"""
+    """相邻房间（location 含 'A→B'）门精确落在共享墙中点（非中心连线中点）"""
     from src.agents.src.layout import layout_rooms, place_doors_on_walls
 
     zones = [
@@ -68,14 +68,84 @@ def test_place_doors_shared_wall():
     placed = place_doors_on_walls(doors, rooms)
     assert len(placed) == 1
     p = placed[0]["position"]
-    assert p is not None
-    # 门位置应在整个布局包围盒内
-    x1 = max(r["x"] + r["w"] for r in rooms)
-    assert p[0] >= 0 and p[0] <= x1
+    by = {r["name"]: r for r in rooms}
+    a, b = by["客厅"], by["主卧"]
+    # 两房间同行左右相邻 → 共享竖直墙 x = a.x + a.w
+    shared_x = a["x"] + a["w"]
+    lo = max(a["y"], b["y"])
+    hi = min(a["y"] + a["h"], b["y"] + b["h"])
+    assert abs(p[0] - shared_x) < 1e-6, f"门 x 应精确在共边 x={shared_x}, 实际 {p[0]}"
+    assert abs(p[1] - (lo + hi) / 2) < 1e-6, "门 y 应是共边中点"
+    assert placed[0]["rotation"] == 0.0, "竖直墙 → 门扇水平开(rot 0)"
+
+
+def test_door_on_unequal_rooms_still_on_wall():
+    """不等高房间：门仍落在共边，不漂到墙内（旧 bug 场景）"""
+    from src.agents.src.layout import layout_rooms, place_doors_on_walls
+
+    zones = [
+        {"id": "z1", "name": "客厅", "type": "living", "length": 5, "width": 4},
+        {"id": "z2", "name": "主卧", "type": "bedroom", "length": 3, "width": 2},
+    ]
+    rooms = layout_rooms(zones)
+    by = {r["name"]: r for r in rooms}
+    shared_x = by["客厅"]["x"] + by["客厅"]["w"]
+    placed = place_doors_on_walls(
+        [{"id": "d1", "location": "客厅→主卧"}], rooms)[0]
+    assert abs(placed["position"][0] - shared_x) < 1e-6
+
+
+def test_door_not_shared_falls_back_to_outer():
+    """两房间不共边 → 门退回匹配房间的外侧边中点（仍在建筑包围盒内）"""
+    from src.agents.src.layout import layout_rooms, place_doors_on_walls
+
+    zones = [
+        {"id": "z1", "name": "客厅", "type": "living", "length": 5, "width": 4},
+        {"id": "z2", "name": "主卧", "type": "bedroom", "length": 3, "width": 4},
+        {"id": "z3", "name": "厨房", "type": "kitchen", "length": 2, "width": 3},
+    ]
+    rooms = layout_rooms(zones)
+    placed = place_doors_on_walls([{"id": "d1", "location": "外墙南侧"}], rooms)[0]
+    X0 = min(r["x"] for r in rooms)
+    X1 = max(r["x"] + r["w"] for r in rooms)
+    assert X0 - 1e-6 <= placed["position"][0] <= X1 + 1e-6
+
+
+def test_door_single_room_location_to_outer():
+    """单向 location（如 '厨房'）→ 落该房间外侧边中点"""
+    from src.agents.src.layout import layout_rooms, place_doors_on_walls
+
+    zones = [
+        {"id": "z1", "name": "客厅", "type": "living", "length": 5, "width": 4},
+        {"id": "z2", "name": "厨房", "type": "kitchen", "length": 2, "width": 3},
+    ]
+    rooms = layout_rooms(zones)
+    placed = place_doors_on_walls([{"id": "d1", "location": "厨房"}], rooms)[0]
+    assert placed["position"] is not None
+
+
+def test_window_vertical_outer_wall():
+    """贴东外墙的房间 → 窗为竖直段（x 不变、y 变化），总跨度 = 边长 60%"""
+    from src.agents.src.layout import layout_rooms, place_windows_on_walls
+
+    zones = [
+        {"id": "z1", "name": "客厅", "type": "living", "length": 5, "width": 4},
+        {"id": "z2", "name": "主卧", "type": "bedroom", "length": 3, "width": 4},
+    ]
+    rooms = layout_rooms(zones)
+    by = {r["name"]: r for r in rooms}
+    # 主卧在右列最右 → 右缘贴东外墙（最长竖直边）
+    placed = place_windows_on_walls([{"id": "w2", "room": "主卧"}], rooms)[0]
+    assert placed["start"][0] == placed["end"][0], "东外墙 → 竖直窗(x 不变)"
+    bed = by["主卧"]
+    edge_x = max(r["x"] + r["w"] for r in rooms)  # 东外墙 x
+    assert abs(placed["start"][0] - edge_x) < 1e-6, "窗应在东外墙 x 上"
+    span = placed["end"][1] - placed["start"][1]
+    assert abs(span - bed["h"] * 0.6) < 1e-6, "竖直窗跨度 = 边长 60%"
 
 
 def test_place_windows_on_outer_wall():
-    """窗放在房间上沿（外侧）中段"""
+    """窗落在房间最长外侧墙（采光）中点 — 单房间 5x4 → 南墙(下沿 y) 水平窗"""
     from src.agents.src.layout import layout_rooms, place_windows_on_walls
 
     zones = [{"id": "z1", "name": "客厅", "type": "living", "length": 5, "width": 4}]
@@ -84,11 +154,14 @@ def test_place_windows_on_outer_wall():
     placed = place_windows_on_walls(windows, rooms)
     assert len(placed) == 1
     w = placed[0]
-    # 窗 y 坐标应等于房间上沿（y + h）
-    assert abs(w["start"][1] - (rooms[0]["y"] + rooms[0]["h"])) < 1e-6
-    # 窗跨度 = 房间 width 的 60%
+    # 最长外侧边 = 水平南墙(下沿 y)，窗 y 坐标 = 房间下沿
+    assert abs(w["start"][1] - rooms[0]["y"]) < 1e-6
+    # 窗跨度 = 该边(房间 length) 的 60%，居中于边中点
     span = w["end"][0] - w["start"][0]
     assert abs(span - rooms[0]["w"] * 0.6) < 1e-6
+    # 中点对齐房间水平中线
+    mid = (w["start"][0] + w["end"][0]) / 2
+    assert abs(mid - (rooms[0]["x"] + rooms[0]["w"] / 2)) < 1e-6
 
 
 def test_empty_input():
