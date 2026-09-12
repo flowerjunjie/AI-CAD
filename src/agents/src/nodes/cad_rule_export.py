@@ -1,23 +1,73 @@
 """
 Agent 节点 — CAD执行 + 规则校验 + 成果输出
+消费 raw_data 几何数据（zones/doors/windows），不再用硬编码坐标
 """
 import os
 from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
+from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls
 from src.rules.src.engine import get_engine
 from src.rules.src.residential.doors import Door
 from src.rules.src.residential.windows import Window
-from src.rules.src.residential.corridors import Corridor
 from src.rules.src.residential.rooms import Room
+
+
+def _layout_from_state(state: dict) -> dict:
+    """从 state 提取 zones/doors/windows，跑布局引擎，返回坐标。"""
+    raw = state.get("raw_data", {}) or {}
+    zones = raw.get("zones", []) or state.get("project_structure", {}).get("zones", [])
+    doors = raw.get("doors", [])
+    windows = raw.get("windows", [])
+
+    rooms = layout_rooms(zones)
+    door_pos = place_doors_on_walls(doors, rooms)
+    window_pos = place_windows_on_walls(windows, rooms)
+    return {"rooms": rooms, "doors": door_pos, "windows": window_pos, "zones": zones}
+
+
+def _outer_walls(rooms: list[dict], thickness: float) -> list[Wall]:
+    """外墙：取所有房间的最小 x/y 和最大 x/y 画外轮廓矩形。"""
+    if not rooms:
+        return []
+    x0 = min(r["x"] for r in rooms)
+    y0 = min(r["y"] for r in rooms)
+    x1 = max(r["x"] + r["w"] for r in rooms)
+    y1 = max(r["y"] + r["h"] for r in rooms)
+    return [
+        Wall(start=Point(x0, y0), end=Point(x1, y0), thickness=thickness),
+        Wall(start=Point(x1, y0), end=Point(x1, y1), thickness=thickness),
+        Wall(start=Point(x1, y1), end=Point(x0, y1), thickness=thickness),
+        Wall(start=Point(x0, y1), end=Point(x0, y0), thickness=thickness),
+    ]
+
+
+def _inner_walls(rooms: list[dict], thickness: float) -> list[Wall]:
+    """内墙：相邻房间共享边画线（MVP 简化：每对水平相邻画竖直墙）。"""
+    walls: list[Wall] = []
+    if not rooms:
+        return walls
+    for i, r in enumerate(rooms):
+        for j in range(i + 1, len(rooms)):
+            s = rooms[j]
+            # 水平相邻：y 区间重叠且 x 边贴边
+            if (r["y"] < s["y"] + s["h"] and s["y"] < r["y"] + r["h"]
+                    and abs(r["x"] + r["w"] - s["x"]) < 1e-6):
+                lo = max(r["y"], s["y"])
+                hi = min(r["y"] + r["h"], s["y"] + s["h"])
+                walls.append(Wall(start=Point(s["x"], lo), end=Point(s["x"], hi),
+                                   thickness=thickness))
+    return walls
 
 
 def cad_execute_node(state: dict) -> dict:
     """
-    CAD执行 Agent：根据任务列表操作CAD引擎生成图元
-    每完成一个子任务，暂停等待人工确认
+    CAD执行 Agent：按 raw_data 几何出图，驱动 task_list 子任务
     """
     writer = DXFWriter()
     writer.new("AC1027")
+
+    layout = _layout_from_state(state)
+    rooms, door_pos, window_pos = layout["rooms"], layout["doors"], layout["windows"]
 
     tasks = state.get("task_list", [])
     results = []
@@ -26,68 +76,60 @@ def cad_execute_node(state: dict) -> dict:
     for task in tasks:
         task_id = task.get("id", "unknown")
         task_type = task.get("type", "")
+        params = task.get("params", {})
 
         try:
             if task_type == "wall":
-                # 简化：绘制矩形外墙和内墙
-                params = task.get("params", {})
-                thickness = params.get("thickness", 0.12)
+                thickness = params.get("thickness", 0.24)
                 if task_id == "wall-outer":
-                    # 外墙
-                    writer.add_wall(Wall(start=Point(0, 0), end=Point(10, 0), thickness=thickness))
-                    writer.add_wall(Wall(start=Point(10, 0), end=Point(10, 6), thickness=thickness))
-                    writer.add_wall(Wall(start=Point(10, 6), end=Point(0, 6), thickness=thickness))
-                    writer.add_wall(Wall(start=Point(0, 6), end=Point(0, 0), thickness=thickness))
+                    for w in _outer_walls(rooms, thickness):
+                        writer.add_wall(w)
+                    count = len(_outer_walls(rooms, thickness))
                 else:
-                    # 内墙
-                    writer.add_wall(Wall(start=Point(4, 0), end=Point(4, 4), thickness=thickness))
-                    writer.add_wall(Wall(start=Point(4, 4), end=Point(7, 4), thickness=thickness))
-                    writer.add_wall(Wall(start=Point(7, 4), end=Point(7, 6), thickness=thickness))
-
-                results.append({"task_id": task_id, "status": "completed", "count": 4 if task_id == "wall-outer" else 3})
+                    inner = _inner_walls(rooms, thickness)
+                    for w in inner:
+                        writer.add_wall(w)
+                    count = len(inner)
+                results.append({"task_id": task_id, "status": "completed", "count": count})
 
             elif task_type == "door":
-                params = task.get("params", {})
-                width = params.get("width", 0.9)
-                door_type = params.get("type", "interior")
-
-                if task_id == "door-entrance":
-                    writer.add_door(CADDoor(position=Point(2, 0), width=width, rotation=0))
-                else:
-                    # 根据任务顺序放置室内门
-                    pos_map = {"door-room-0": (4, 2), "door-room-1": (5.5, 4), "door-room-2": (7, 5)}
-                    pos = pos_map.get(task_id, (5, 3))
-                    writer.add_door(CADDoor(position=Point(*pos), width=width, rotation=90))
-
-                results.append({"task_id": task_id, "status": "pending_confirm", "description": task.get("description", "")})
+                # 按 task_id 匹配到布局出的门（door-entrance → 第1个，door-room-N → 第N+1个）
+                idx = 0
+                if task_id.startswith("door-room-"):
+                    idx = int(task_id.rsplit("-", 1)[-1]) + 1
+                if idx < len(door_pos):
+                    d = door_pos[idx]
+                    writer.add_door(CADDoor(
+                        position=Point(d["position"][0], d["position"][1]),
+                        width=d["width"],
+                        rotation=d["rotation"],
+                    ))
+                results.append({"task_id": task_id, "status": "pending_confirm",
+                                "description": task.get("description", "")})
                 confirmations[task_id] = False
 
             elif task_type == "window":
-                params = task.get("params", {})
-                sill_height = params.get("sill_height", 0.9)
-                # 窗户用双线表示
-                writer.add_window(CADWindow(
-                    start=Point(1, 5.5),
-                    end=Point(3, 5.5),
-                    sill_height=sill_height
-                ))
-                writer.add_window(CADWindow(
-                    start=Point(8, 5.5),
-                    end=Point(9, 5.5),
-                    sill_height=sill_height
-                ))
-                results.append({"task_id": task_id, "status": "completed"})
+                for wp in window_pos:
+                    writer.add_window(CADWindow(
+                        start=Point(wp["start"][0], wp["start"][1]),
+                        end=Point(wp["end"][0], wp["end"][1]),
+                        sill_height=wp["sill_height"],
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(window_pos)})
 
             elif task_type == "dimension":
-                # 绘制尺寸标注
-                if task_id == "dim-axis":
-                    # 轴线标注
-                    writer.add_dimension(Point(0, 0), Point(10, 0), offset=0.5, text="10000")
-                    writer.add_dimension(Point(0, 0), Point(0, 6), offset=-0.5, text="6000")
-                elif task_id == "dim-opening":
-                    # 洞口标注
-                    writer.add_dimension(Point(2, 0), Point(2.9, 0), offset=0.5, text="900")
-                    writer.add_dimension(Point(4, 0), Point(4.9, 0), offset=0.5, text="900")
+                if rooms:
+                    x0 = min(r["x"] for r in rooms)
+                    y0 = min(r["y"] for r in rooms)
+                    x1 = max(r["x"] + r["w"] for r in rooms)
+                    y1 = max(r["y"] + r["h"] for r in rooms)
+                    writer.add_dimension(
+                        Point(x0, y0), Point(x1, y0), offset=0.5,
+                        text=str(int((x1 - x0) * 1000)))
+                    writer.add_dimension(
+                        Point(x0, y0), Point(x0, y1), offset=-0.5,
+                        text=str(int((y1 - y0) * 1000)))
                 results.append({"task_id": task_id, "status": "completed"})
 
         except Exception as e:
@@ -100,57 +142,57 @@ def cad_execute_node(state: dict) -> dict:
     return {
         "cad_results": results,
         "human_confirmations": confirmations,
-        "cad_queue": [],  # 清空队列
+        "cad_queue": [],
         "final_dwg_path": output_path if saved else None,
     }
 
 
 def rule_check_node(state: dict) -> dict:
     """
-    规则校验 Agent：使用规则引擎检查图纸元素是否符合规范
+    规则校验 Agent：按 raw_data 实际元素校验（不再硬编码）
     """
     engine = get_engine()
+    raw = state.get("raw_data", {}) or {}
+    zones = raw.get("zones", []) or state.get("project_structure", {}).get("zones", [])
+    raw_doors = raw.get("doors", [])
+    raw_windows = raw.get("windows", [])
     violations = []
 
-    # 模拟检查生成的图纸元素
-    # 实际应用中应该从CAD文件中读取实体
+    # 门宽（按实际 room_type 匹配规则）
+    if raw_doors:
+        door_elems = [
+            Door(id=d.get("id", f"d{i}"), width_m=float(d.get("width_m", 0.9)),
+                 room_type=d.get("type", "interior"), location=(0, 0))
+            for i, d in enumerate(raw_doors)
+        ]
+        violations.extend(engine.check(door_elems, rule_ids=[
+            "residential-door-main-width",
+            "residential-door-interior-width",
+            "residential-door-bathroom-width",
+        ]))
 
-    # 检查门宽
-    doors = [
-        Door(id="d_entrance", width_m=1.0, room_type="entrance", location=(2, 0)),
-        Door(id="d_room1", width_m=0.9, room_type="interior", location=(4, 2)),
-        Door(id="d_room2", width_m=0.9, room_type="interior", location=(5.5, 4)),
-        Door(id="d_bathroom", width_m=0.8, room_type="bathroom", location=(7, 5)),
-    ]
-    door_violations = engine.check(doors, rule_ids=[
-        "residential-door-main-width",
-        "residential-door-interior-width",
-        "residential-door-bathroom-width",
-    ])
-    violations.extend(door_violations)
+    # 窗台高度
+    if raw_windows:
+        win_elems = [
+            Window(id=w.get("id", f"w{i}"), sill_height_m=float(w.get("sill_height_m", 0.9)),
+                   top_height_m=2.0, room_type=w.get("room", "living"), location=(0, 0))
+            for i, w in enumerate(raw_windows)
+        ]
+        violations.extend(engine.check(win_elems, rule_ids=["residential-window-sill-height"]))
 
-    # 检查窗台高度
-    windows = [
-        Window(id="w_living", sill_height_m=0.9, top_height_m=2.0, room_type="living", location=(2, 5.5)),
-        Window(id="w_bedroom", sill_height_m=0.9, top_height_m=2.0, room_type="bedroom", location=(8.5, 5.5)),
+    # 房间面积（zones 带 length/width）
+    room_elems = [
+        Room(id=z.get("id", f"r{i}"), name=z.get("name", ""),
+             length_m=float(z.get("length", 0)), width_m=float(z.get("width", 0)))
+        for i, z in enumerate(zones)
     ]
-    window_violations = engine.check(windows, rule_ids=["residential-window-sill-height"])
-    violations.extend(window_violations)
-
-    # 检查房间面积
-    rooms = [
-        Room(id="r_living", name="客厅", length_m=5, width_m=4),
-        Room(id="r_bed1", name="卧室", length_m=3, width_m=3.5),
-        Room(id="r_kitchen", name="厨房", length_m=2.5, width_m=2.4),
-        Room(id="r_bath", name="卫生间", length_m=1.5, width_m=1.5),
-    ]
-    room_violations = engine.check(rooms, rule_ids=[
-        "residential-room-living-area",
-        "residential-room-bedroom-area",
-        "residential-room-kitchen-area",
-        "residential-room-bathroom-area",
-    ])
-    violations.extend(room_violations)
+    if room_elems:
+        violations.extend(engine.check(room_elems, rule_ids=[
+            "residential-room-living-area",
+            "residential-room-bedroom-area",
+            "residential-room-kitchen-area",
+            "residential-room-bathroom-area",
+        ]))
 
     return {
         "rule_violations": [

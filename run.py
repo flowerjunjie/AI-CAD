@@ -121,21 +121,19 @@ def run_cad():
 def run_agent(parsed):
     """Agent 端到端"""
     section("[4/5] Agent 端到端流程")
-    if NO_LLM:
-        print("  (跳过 LLM, 使用本地降级逻辑)")
-        from src.agents.src.nodes.intent_structure import intent_understanding_node
-        state = {"project_input": "三室一厅住宅，建筑面积约100平米"}
-        result = intent_understanding_node(state)
-        print(f"  意图理解: {result.get('project_type')} / {result.get('disciplines')}")
-        return result
-
     from src.agents.src.graph import run_agent_demo
-    result = run_agent_demo()
+    sample = os.path.join(PROJECT_ROOT, "data", "sample", "residential_100sqm.json")
+
+    # 样本 raw_data + task_list 直接注入 state（本地数据接线，无需 LLM 意图）
+    result = run_agent_demo(sample_path=sample, auto_mode=True)
+
+    if NO_LLM:
+        print("  (跳过 LLM, 走本地数据接线: 样本 raw_data 驱动 CAD+规则)")
     print(f"  项目类型: {result.get('project_type')}")
     print(f"  CAD 任务: {len(result.get('cad_results', []))} 个")
     print(f"  规范违规: {len(result.get('rule_violations', []))} 条")
     for v in result.get("rule_violations", []):
-        print(f"    - {v['rule_name']}")
+        print(f"    - {v['rule_name']}: {v['element_id']}")
     print(f"  DWG: {result.get('final_dwg_path')}")
     return result
 

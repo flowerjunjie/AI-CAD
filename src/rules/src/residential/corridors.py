@@ -3,7 +3,7 @@
 参考：GB 50096-2011《住宅设计规范》
 """
 from dataclasses import dataclass
-from ..engine import BaseRule, RuleResult, register_rule, ViolationSeverity
+from ..engine import BaseRule, RuleResult, register_rule, ViolationSeverity, RuleViolation
 
 
 @dataclass

@@ -3,7 +3,7 @@
 参考：GB 50096-2011《住宅设计规范》
 """
 from dataclasses import dataclass
-from ..engine import BaseRule, RuleResult, register_rule, ViolationSeverity
+from ..engine import BaseRule, RuleResult, register_rule, ViolationSeverity, RuleViolation
 
 
 @dataclass
@@ -28,7 +28,7 @@ class BedroomMinimumArea(BaseRule):
 
     def check(self, element: Room) -> RuleResult:
         violations = []
-        if element.name in ("卧室", "主卧", "次卧") and element.length_m * element.width_m < 5:
+        if element.name in ("卧室", "主卧", "次卧", "书房") and element.length_m * element.width_m < 5:
             area = element.length_m * element.width_m
             violations.append(
                 RuleViolation(
@@ -109,7 +109,7 @@ class BathroomMinimumArea(BaseRule):
 
     def check(self, element: Room) -> RuleResult:
         violations = []
-        if element.name in ("卫生间", "浴室") and element.length_m * element.width_m < 2.0:
+        if element.name in ("卫生间", "浴室", "主卫", "次卫") and element.length_m * element.width_m < 2.0:
             area = element.length_m * element.width_m
             violations.append(
                 RuleViolation(

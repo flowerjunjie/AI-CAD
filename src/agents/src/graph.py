@@ -38,6 +38,7 @@ class DesignState(TypedDict, total=False):
     disciplines: list[str]
     project_structure: dict
     task_list: list[dict]
+    raw_data: dict  # input_parser 产出的原始户型数据（zones/doors/windows 几何）
 
     # CAD execution
     cad_queue: list[dict]
@@ -101,21 +102,29 @@ def build_agent_graph() -> "StateGraph":
     return graph
 
 
-def run_agent_demo() -> dict:
-    """运行 Agent 演示流程"""
+def run_agent_demo(sample_path: str | None = None, auto_mode: bool = True) -> dict:
+    """运行 Agent 演示流程
+    sample_path: 可选，传入户型 JSON 路径 → 解析注入 raw_data + task_list
+                 让 CAD/规则节点按真实样本数据出图、校验（Phase 1 数据接线）
+    """
     graph = build_agent_graph()
     app = graph.compile()
 
-    # 初始状态
     initial_state: DesignState = {
         "project_input": "三室一厅住宅，建筑面积约100平米，需要生成施工图",
         "output_path": "/tmp/ai_cad_demo_result.dwg",
-        "auto_mode": True,  # 演示模式跳过人工确认
+        "auto_mode": auto_mode,
     }
 
-    # 执行
-    result = app.invoke(initial_state)
+    if sample_path:
+        from src.agents.src.nodes.input_parser import parse_json_input
+        parsed = parse_json_input(sample_path)
+        initial_state["raw_data"] = parsed.get("raw_data", {})
+        initial_state["task_list"] = parsed.get("task_list", [])
+        initial_state["project_structure"] = parsed.get("project_structure", {})
+        initial_state["project_type"] = parsed.get("project_type", "住宅")
 
+    result = app.invoke(initial_state)
     return result
 
 

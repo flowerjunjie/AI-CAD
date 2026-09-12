@@ -57,7 +57,8 @@ class InteriorDoorWidth(BaseRule):
 
     def check(self, element: Door) -> RuleResult:
         violations = []
-        if element.room_type != "entrance" and element.width_m < 0.9:
+        # 户内门：非户门、非卫生间门（卫生间门由 BathroomDoorWidth 单独管辖，避免重复误报）
+        if element.room_type not in ("entrance", "bathroom") and element.width_m < 0.9:
             violations.append(
                 RuleViolation(
                     rule_id=self.rule_id,
