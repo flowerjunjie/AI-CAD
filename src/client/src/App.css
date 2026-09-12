@@ -1,0 +1,276 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #16213e;
+  border-bottom: 1px solid #0f3460;
+}
+
+.header-left h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #e94560;
+}
+
+.version {
+  font-size: 12px;
+  color: #888;
+  margin-left: 8px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-ok {
+  background: #2ecc71;
+  color: #fff;
+}
+
+.status-err {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.phase-tag {
+  padding: 4px 12px;
+  background: #0f3460;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #aaa;
+}
+
+/* Main */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.panel {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.panel h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #aaa;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* CAD Panel */
+.cad-panel {
+  flex: 2;
+  background: #0f0f1a;
+  border-right: 1px solid #16213e;
+}
+
+.cad-view-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #1a1a2e;
+  border: 2px dashed #333;
+  border-radius: 8px;
+  color: #666;
+}
+
+.cad-view-placeholder p {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.cad-view-placeholder .hint {
+  font-size: 12px;
+  color: #444;
+}
+
+/* Agent Panel */
+.agent-panel {
+  flex: 1;
+  background: #16213e;
+  border-right: 1px solid #0f3460;
+}
+
+.agent-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+}
+
+.flow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #333;
+}
+
+.flow-step.active .step-dot {
+  background: #e94560;
+  box-shadow: 0 0 10px #e94560;
+}
+
+.step-label {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+}
+
+.flow-step.active .step-label {
+  color: #fff;
+}
+
+.step-arrow {
+  color: #333;
+  font-size: 16px;
+}
+
+.agent-status {
+  margin-top: 20px;
+  padding: 12px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+/* Rules Panel */
+.rules-panel {
+  flex: 1;
+  background: #1a1a2e;
+}
+
+.rules-list {
+  margin-bottom: 20px;
+}
+
+.rule-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #16213e;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.rule-name {
+  color: #eee;
+}
+
+.rule-code {
+  color: #666;
+}
+
+.search-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.search-box input {
+  flex: 1;
+  padding: 8px 12px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 13px;
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: #e94560;
+}
+
+.search-box button {
+  padding: 8px 16px;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.search-box button:hover {
+  background: #c73e54;
+}
+
+.search-results {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.result-item {
+  padding: 8px 12px;
+  background: #16213e;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 24px;
+  background: #16213e;
+  border-top: 1px solid #0f3460;
+  font-size: 11px;
+  color: #666;
+}
+
+/* Loading */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: 16px;
+  color: #666;
+}

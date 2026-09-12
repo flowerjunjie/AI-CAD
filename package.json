@@ -1,0 +1,36 @@
+{
+  "name": "ai-cad",
+  "version": "0.1.0",
+  "description": "AI辅助施工图深化Agent系统 — 规则引擎保准确 + LLM保灵活 + 人在回路保可控",
+  "private": true,
+  "workspaces": [
+    "src/client",
+    "src/server",
+    "src/agents",
+    "src/rules"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "npm run dev --workspace=src/client",
+    "dev:server": "npm run dev --workspace=src/server",
+    "bootstrap": "npm install && npm run bootstrap:agents",
+    "bootstrap:agents": "cd src/agents && pip install -r requirements.txt",
+    "test": "npm run test --workspaces --if-present",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "eslint src/",
+    "build": "npm run build --workspaces",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.2.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

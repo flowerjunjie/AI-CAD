@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+build/
+out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+.nyc_output/
+.pytest_cache/
+
+# Regenerable artifacts (not source of truth)
+data/chroma_db/
+data/final_test/
+data/test_v3/
+data/verify/
+data/verify2/
+data/test_rag_db/
+src/rules/data/
+output/
+__pycache__/
+*.dwg
+*.dxf
+*.sqlite3
+
+# Electron
+*.asar
+
+# Temp files
+*.tmp
+*.temp

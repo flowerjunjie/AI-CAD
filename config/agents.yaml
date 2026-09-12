@@ -1,0 +1,64 @@
+agents:
+  intent:
+    model: ${LLM_MODEL:MiniMax-M2.7}
+    system_prompt: >
+      你是AI-CAD系统的意图理解Agent。
+      你的任务是理解设计师的自然语言输入，
+      提取项目类型、专业需求、设计要求等关键信息。
+    max_tokens: 1024
+
+  structure:
+    model: ${LLM_MODEL:MiniMax-M2.7}
+    system_prompt: >
+      你是方案结构化Agent。
+      你的任务是将解析后的项目信息结构化，
+      提取建筑面积、层数、功能分区、主要构件等。
+    max_tokens: 2048
+
+  decompose:
+    model: ${LLM_MODEL:MiniMax-M2.7}
+    system_prompt: >
+      你是任务分解Agent。
+      将结构化方案拆解为可执行的CAD操作任务列表。
+    max_tokens: 1024
+
+  cad_execute:
+    model: ${LLM_MODEL:MiniMax-M2.7}
+    system_prompt: >
+      你是CAD执行Agent。
+      根据任务列表操作CAD引擎生成图纸元素。
+      每个操作后暂停等待人工确认。
+    max_tokens: 512
+
+  rule_check:
+    model: ${LLM_MODEL:MiniMax-M2.7}
+    system_prompt: >
+      你是规则校验Agent。
+      使用规则引擎检查图纸是否符合规范。
+    max_tokens: 1024
+
+  export:
+    system_prompt: >
+      你是成果输出Agent。
+      将最终图纸导出为DWG/PDF/材料表格式。
+    max_tokens: 512
+
+human_in_loop:
+  confirm_steps:
+    - cad_execute
+    - rule_check
+  auto_continue: false
+  timeout_seconds: 300
+
+rules:
+  residential:
+    enabled: true
+    path: ./src/rules/residential
+  fire_safety:
+    enabled: true
+    path: ./src/rules/fire_safety
+
+knowledge_base:
+  type: chroma
+  persist_path: ./data/chroma_db
+  collection_name: building_codes

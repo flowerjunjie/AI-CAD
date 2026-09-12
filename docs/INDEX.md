@@ -1,0 +1,36 @@
+# AI-CAD 项目设计文档索引
+
+> 本文档索引所有项目设计文档
+
+## 核心文档
+
+| 文档 | 说明 | 状态 |
+|------|------|------|
+| [README.md](../README.md) | 项目概述、快速开始 | ✅ |
+| [architecture.md](architecture.md) | 技术架构设计 | ✅ |
+| [phases.md](phases.md) | 分阶段实施计划 | ✅ |
+
+## 原始需求文档
+
+| 文档 | 说明 | 来源 |
+|------|------|------|
+| [AIWeb_AICAD智能体技术负责人方案.md](../doc/AIWeb_AICAD智能体技术负责人方案.md) | 面试方案 | 丁Sir |
+| [AIWeb_AICAD技术合作方案.md](../doc/AIWeb_AICAD技术合作方案.md) | 合作方案 | 丁Sir |
+
+## 待创建文档
+
+| 文档 | 说明 | 阶段 |
+|------|------|------|
+| api.md | API 接口设计 | Phase 0 |
+| decisions.md | 架构决策记录 (ADR) | Phase 0 |
+| user-stories.md | 用户故事与用例 | Phase 1 |
+| test-plan.md | 测试计划 | Phase 1 |
+
+---
+
+## 文档规范
+
+- 所有设计文档使用 Markdown 格式
+- 架构图使用 ASCII Art 或 Mermaid
+- 版本变更在文档顶部更新
+- 重要决策记录在 ADR 文档中

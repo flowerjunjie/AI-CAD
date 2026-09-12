@@ -1,0 +1,42 @@
+{
+  "project_id": "sample-001",
+  "project_name": "标准三室两厅住宅",
+  "description": "三室一厅一厨两卫住宅，建筑面积约100平米",
+  "project_type": "住宅",
+  "disciplines": ["建筑"],
+  "building_area": 100,
+  "floors": 1,
+  "zones": [
+    {"id": "z1", "name": "客厅", "type": "living", "area": 20, "length": 5, "width": 4},
+    {"id": "z2", "name": "主卧", "type": "bedroom", "area": 12, "length": 3, "width": 4},
+    {"id": "z3", "name": "次卧", "type": "bedroom", "area": 10, "length": 2.5, "width": 4},
+    {"id": "z4", "name": "书房", "type": "bedroom", "area": 8, "length": 2, "width": 4},
+    {"id": "z5", "name": "厨房", "type": "kitchen", "area": 6, "length": 2, "width": 3},
+    {"id": "z6", "name": "主卫", "type": "bathroom", "area": 4, "length": 2, "width": 2},
+    {"id": "z7", "name": "次卫", "type": "bathroom", "area": 3, "length": 1.5, "width": 2}
+  ],
+  "doors": [
+    {"id": "d1", "type": "entrance", "width_m": 1.0, "location": "外墙南侧"},
+    {"id": "d2", "type": "interior", "width_m": 0.9, "location": "客厅→主卧"},
+    {"id": "d3", "type": "interior", "width_m": 0.9, "location": "客厅→次卧"},
+    {"id": "d4", "type": "interior", "width_m": 0.9, "location": "客厅→书房"},
+    {"id": "d5", "type": "interior", "width_m": 0.8, "location": "厨房"},
+    {"id": "d6", "type": "bathroom", "width_m": 0.8, "location": "主卫"},
+    {"id": "d7", "type": "bathroom", "width_m": 0.8, "location": "次卫"}
+  ],
+  "windows": [
+    {"id": "w1", "sill_height_m": 0.9, "room": "客厅"},
+    {"id": "w2", "sill_height_m": 0.9, "room": "主卧"},
+    {"id": "w3", "sill_height_m": 0.9, "room": "次卧"},
+    {"id": "w4", "sill_height_m": 0.9, "room": "书房"},
+    {"id": "w5", "sill_height_m": 0.9, "room": "厨房"}
+  ],
+  "walls": [
+    {"id": "wall_outer", "thickness_m": 0.24, "type": "outer", "total_length_m": 32},
+    {"id": "wall_inner", "thickness_m": 0.12, "type": "inner", "total_length_m": 18}
+  ],
+  "applicable_codes": [
+    "GB 50096-2011《住宅设计规范》",
+    "GB 50016-2014《建筑设计防火规范》"
+  ]
+}

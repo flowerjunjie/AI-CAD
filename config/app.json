@@ -1,0 +1,33 @@
+{
+  "app": {
+    "name": "AI-CAD",
+    "version": "0.1.0",
+    "description": "AI辅助施工图深化系统"
+  },
+  "server": {
+    "port": 3456,
+    "host": "localhost"
+  },
+  "llm": {
+    "provider": "minimax",
+    "model": "MiniMax-M2.7",
+    "api_base": "https://api.minimaxi.com/anthropic",
+    "max_tokens": 4096,
+    "temperature": 0.3
+  },
+  "rag": {
+    "database": "chroma",
+    "persist_directory": "./data/chroma_db",
+    "embedding_model": "text-embedding-ada-002"
+  },
+  "cad": {
+    "engine": "ezdxf",
+    "com_enabled": true,
+    "com_autoCAD_version": "2020"
+  },
+  "agents": {
+    "max_concurrent_tasks": 3,
+    "human_confirm_steps": ["cad_execute", "rule_check"],
+    "timeout_seconds": 300
+  }
+}
