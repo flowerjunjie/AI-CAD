@@ -111,6 +111,47 @@ def test_door_not_shared_falls_back_to_outer():
     assert X0 - 1e-6 <= placed["position"][0] <= X1 + 1e-6
 
 
+def test_detect_collision_door_window_same_wall():
+    """同一面墙上门-窗重叠 → 检出碰撞；不同墙不报"""
+    from src.agents.src.layout import detect_opening_collisions
+
+    doors = [
+        {"id": "d1", "position": (0.0, 3.5), "width": 0.9, "rotation": 0.0},  # 西墙 x=0, y 3.05~3.95
+        {"id": "d2", "position": (5.0, 9.0), "width": 0.9, "rotation": 0.0},  # 另一面墙
+    ]
+    windows = [
+        {"id": "w1", "start": (0.0, 2.6), "end": (0.0, 4.4)},  # 西墙 x=0, y 2.6~4.4 → 与 d1 重叠
+        {"id": "w2", "start": (1.0, 13.0), "end": (4.0, 13.0)},  # 北墙，不与任何门同墙
+    ]
+    collisions = detect_opening_collisions(doors, windows)
+    assert len(collisions) == 1, f"应检出 1 处(d1×w1)，实际 {len(collisions)}: {collisions}"
+    c = collisions[0]
+    assert {c["a_id"], c["b_id"]} == {"d1", "w1"}
+    assert c["kind"] == "door-window"
+    assert c["overlap_m"] > 0
+
+
+def test_detect_collision_no_overlap():
+    """门/窗同墙但不重叠 → 不报"""
+    from src.agents.src.layout import detect_opening_collisions
+
+    doors = [{"id": "d1", "position": (0.0, 1.0), "width": 0.9, "rotation": 0.0}]
+    windows = [{"id": "w1", "start": (0.0, 4.0), "end": (0.0, 6.0)}]
+    assert detect_opening_collisions(doors, windows) == []
+
+
+def test_detect_collision_door_door():
+    """同一门洞位置两扇门 → door-door 碰撞"""
+    from src.agents.src.layout import detect_opening_collisions
+
+    doors = [
+        {"id": "d1", "position": (5.0, 8.0), "width": 1.0, "rotation": 0.0},
+        {"id": "d2", "position": (5.0, 8.5), "width": 1.0, "rotation": 0.0},
+    ]
+    c = detect_opening_collisions(doors, [])
+    assert len(c) == 1 and c[0]["kind"] == "door-door"
+
+
 def test_door_single_room_location_to_outer():
     """单向 location（如 '厨房'）→ 落该房间外侧边中点"""
     from src.agents.src.layout import layout_rooms, place_doors_on_walls

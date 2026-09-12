@@ -296,3 +296,59 @@ def place_windows_on_walls(windows: list[dict], rooms: list[dict]) -> list[dict]
             })
 
     return placed
+
+
+def _door_interval(d: dict) -> tuple:
+    """门在墙上的占据区间（门宽沿墙中线展开），返回 (wall_key, lo, hi)。
+    wall_key 标识门所在的墙（竖直墙 → ('v', x)，水平墙 → ('h', y)）。"""
+    px, py = d["position"]
+    if d["rotation"] == 0.0:
+        # 竖直墙（门扇水平开）：门在 x=px，沿 y 展开
+        return ("v", round(px, 6)), py - d["width"] / 2, py + d["width"] / 2
+    # 水平墙（门扇竖直开）：门在 y=py，沿 x 展开
+    return ("h", round(py, 6)), px - d["width"] / 2, px + d["width"] / 2
+
+
+def _window_interval(w: dict) -> tuple:
+    """窗在墙上的占据区间，返回 (wall_key, lo, hi)。"""
+    (x0, y0), (x1, y1) = w["start"], w["end"]
+    if abs(x0 - x1) < _EPS:
+        lo, hi = sorted((y0, y1))
+        return ("v", round(x0, 6)), lo, hi
+    lo, hi = sorted((x0, x1))
+    return ("h", round(y0, 6)), lo, hi
+
+
+def detect_opening_collisions(doors: list[dict], windows: list[dict]) -> list[dict]:
+    """
+    检测同一面墙上 门-门 / 门-窗 / 窗-窗 的重叠（碰撞）。
+    返回 [{a_id, b_id, kind, overlap_m}]，kind ∈ {'door-door','door-window','window-window'}。
+    纯函数，无 I/O，可单测。
+    """
+    def _overlap(lo1, hi1, lo2, hi2) -> float:
+        return max(0.0, min(hi1, hi2) - max(lo1, lo2))
+
+    # 收集所有"墙占据段"：(wall_key, kind, id, lo, hi)
+    segs: list[tuple] = []
+    for d in doors:
+        key, lo, hi = _door_interval(d)
+        segs.append((key, "door", d.get("id", ""), lo, hi))
+    for w in windows:
+        key, lo, hi = _window_interval(w)
+        segs.append((key, "window", w.get("id", ""), lo, hi))
+
+    collisions: list[dict] = []
+    for i in range(len(segs)):
+        for j in range(i + 1, len(segs)):
+            ka, ta, ida, alo, ahi = segs[i]
+            kb, tb, idb, blo, bhi = segs[j]
+            if ka != kb:
+                continue  # 不同墙
+            ov = _overlap(alo, ahi, blo, bhi)
+            if ov > _EPS:
+                kind = "door-door" if (ta == "door" and tb == "door") else (
+                    "door-window" if (ta != tb) else "window-window")
+                collisions.append({
+                    "a_id": ida, "b_id": idb, "kind": kind, "overlap_m": ov,
+                })
+    return collisions

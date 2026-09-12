@@ -53,11 +53,13 @@ def test_rule_check_uses_raw_elements():
 
     state = _make_state()
     result = rule_check_node(state)
-    # 样本：d5 厨房门 0.8m 低于户内门 0.9m（真违规）；d6/d7 卫生间门 0.8m 合规
-    # 卫生间面积均达标 → 应检出 1 条门宽违规
-    assert len(result["rule_violations"]) == 1, \
-        f"应检出 1 条(d5厨房门)，实际 {len(result['rule_violations'])} 条: {result['rule_violations']}"
-    assert result["rule_violations"][0]["element_id"] == "d5"
+    # 样本：d5 厨房门 0.8m < 户内门 0.9m（门宽违规）+ d5 门 × w5 窗 同墙碰撞
+    # 卫生间门 0.8m 合规、面积达标 → 应检出 2 条（1 门宽 + 1 碰撞）
+    assert len(result["rule_violations"]) == 2, \
+        f"应检出 2 条(d5门宽 + d5xw5碰撞)，实际 {len(result['rule_violations'])} 条"
+    rule_ids = [v["rule_id"] for v in result["rule_violations"]]
+    assert "residential-door-interior-width" in rule_ids, "应含 d5 门宽违规"
+    assert "layout-opening-collision" in rule_ids, "应含 d5×w5 门窗碰撞"
 
 
 def test_rule_check_detects_violation():

@@ -5,11 +5,26 @@ Agent 节点 — CAD执行 + 规则校验 + 成果输出
 import os
 from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
-from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls
+from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
 from src.rules.src.engine import get_engine
 from src.rules.src.residential.doors import Door
 from src.rules.src.residential.windows import Window
 from src.rules.src.residential.rooms import Room
+
+
+def _collision_violation(c: dict):
+    """把几何碰撞结果转成 RuleViolation（与 engine.check 同构，供统一遍历）"""
+    from src.rules.src.engine import RuleViolation, ViolationSeverity
+    kind_cn = {"door-door": "两扇门", "door-window": "门与窗", "window-window": "两扇窗"}
+    label = kind_cn.get(c["kind"], c["kind"])
+    return RuleViolation(
+        rule_id="layout-opening-collision",
+        rule_name="门窗碰撞检查",
+        severity=ViolationSeverity.ERROR,
+        description=f"同一面墙上{label}重叠 {c['overlap_m']:.2f}m：{c['a_id']} × {c['b_id']}",
+        element_id=f"{c['a_id']}×{c['b_id']}",
+        code_ref="施工图制图规范（门窗洞口应互不侵占）",
+    )
 
 
 def _layout_from_state(state: dict) -> dict:
@@ -191,6 +206,13 @@ def rule_check_node(state: dict) -> dict:
             "residential-room-kitchen-area",
             "residential-room-bathroom-area",
         ]))
+
+    # 门窗碰撞：同一面墙上 门/窗 重叠（几何层规则，非规范条文）
+    rooms = _layout_from_state(state)["rooms"]
+    door_layout = place_doors_on_walls(raw_doors, rooms)
+    win_layout = place_windows_on_walls(raw_windows, rooms)
+    for c in detect_opening_collisions(door_layout, win_layout):
+        violations.append(_collision_violation(c))
 
     return {
         "rule_violations": [
