@@ -83,6 +83,34 @@ class DXFReader:
         """获取各类型实体数量"""
         return {k: len(v) for k, v in self.entities.items()}
 
+    def get_wall_segments(self, layer_names=("WALL", "WALL_THICK")) -> list:
+        """
+        按图层读墙线段 → [(start_xy, end_xy), ...]（2D，z 丢弃）。
+        支持 LINE + LWPOLYLINE（展开相邻顶点对；闭合则补首尾）。
+        返回与 ezdxf 格式解耦的纯线段，供 wall_topology 解析真实户型。
+        """
+        if self.doc is None:
+            raise RuntimeError("调用 get_wall_segments 前需先 open()")
+        msp = self.doc.modelspace()
+        segs = []
+        # LINE: 逐条取 start/end
+        for layer in layer_names:
+            for ln in msp.query(f'LINE[layer=="{layer}"]'):
+                segs.append(((ln.dxf.start[0], ln.dxf.start[1]),
+                              (ln.dxf.end[0], ln.dxf.end[1])))
+        # LWPOLYLINE: 相邻顶点对展开，闭合则补首尾
+        for layer in layer_names:
+            for lwp in msp.query(f'LWPOLYLINE[layer=="{layer}"]'):
+                pts = [(v[0], v[1]) for v in lwp.points(verbatim=False)]
+                n = len(pts)
+                if n < 2:
+                    continue
+                for i in range(n - 1):
+                    segs.append((pts[i], pts[i + 1]))
+                if getattr(lwp, "closed", False) and n > 2:
+                    segs.append((pts[-1], pts[0]))
+        return segs
+
 
 class DXFWriter:
     """ezdxf DWG 写入器"""
