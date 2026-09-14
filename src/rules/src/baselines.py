@@ -3,6 +3,13 @@
 
 RuleViolation 集合序列化为 baseline JSON（存 data/baselines/<name>.json），
 用于 diff 两次规则执行结果。
+
+约定（供手工维护 baseline 时遵守）:
+- baseline 存 data/baselines/，运行时生成，不提交真实文件（.gitkeep 占位）。
+- 手工编辑 baseline JSON 时，severity 字段**必须小写**（error/warning/info）——
+  RuleViolation.from_dict 按 ViolationSeverity.value（小写）匹配，喂大写会 ValueError。
+- baseline 名只允许单个相对文件名，save/load 对含 .. / 绝对路径 / 嵌套目录的
+  name 一律抛 ValueError（防路径穿越）。
 """
 from __future__ import annotations
 
