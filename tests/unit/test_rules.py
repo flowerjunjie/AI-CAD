@@ -26,7 +26,7 @@ def test_main_door_width_pass():
     engine.register(rule)
     violations = engine.check([door])
     assert len(violations) == 0, f"Expected 0 violations, got {len(violations)}"
-    print("✅ test_main_door_width_pass")
+    print("[ok] test_main_door_width_pass")
 
 
 def test_main_door_width_fail():
@@ -39,7 +39,7 @@ def test_main_door_width_fail():
     assert len(violations) == 1
     assert violations[0].severity == ViolationSeverity.ERROR
     assert "1.0m" in violations[0].description
-    print("✅ test_main_door_width_fail")
+    print("[ok] test_main_door_width_fail")
 
 
 def test_interior_door_width():
@@ -54,7 +54,7 @@ def test_interior_door_width():
     result = rule.check(door_fail)
     assert not result.passed
     assert len(result.violations) == 1
-    print("✅ test_interior_door_width")
+    print("[ok] test_interior_door_width")
 
 
 def test_bathroom_door_width():
@@ -68,7 +68,7 @@ def test_bathroom_door_width():
     door_fail = Door(id="d6", width_m=0.6, room_type="bathroom", location=(0, 0))
     result = rule.check(door_fail)
     assert not result.passed
-    print("✅ test_bathroom_door_width")
+    print("[ok] test_bathroom_door_width")
 
 
 def test_window_sill_height():
@@ -82,7 +82,7 @@ def test_window_sill_height():
     window_fail = Window(id="w2", sill_height_m=1.0, top_height_m=2.2, room_type="living", location=(0, 0))
     result = rule.check(window_fail)
     assert not result.passed
-    print("✅ test_window_sill_height")
+    print("[ok] test_window_sill_height")
 
 
 def test_batch_check():
@@ -97,7 +97,7 @@ def test_batch_check():
     violations = engine.check(doors, rule_ids=["residential-door-main-width"])
     assert len(violations) == 1
     assert violations[0].element_id == "d2"
-    print("✅ test_batch_check")
+    print("[ok] test_batch_check")
 
 
 def test_duplicate_rule_rejected():
@@ -109,10 +109,14 @@ def test_duplicate_rule_rejected():
         engine.register(rule)
         assert False, "Should have raised ValueError"
     except ValueError:
-        print("✅ test_duplicate_rule_rejected")
+        print("[ok] test_duplicate_rule_rejected")
 
 
 if __name__ == "__main__":
+    import sys as _sys
+    for _s in (_sys.stdout, _sys.stderr):
+        if hasattr(_s, "reconfigure"):
+            _s.reconfigure(encoding="utf-8", errors="replace")
     test_main_door_width_pass()
     test_main_door_width_fail()
     test_interior_door_width()

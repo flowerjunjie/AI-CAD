@@ -3,7 +3,8 @@
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(__file__) + "/../src")
+# 项目根 (含 src 包) — 不是 ../src, 否则直跑时 src.rules 找不到
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Import all rule modules to register decorators
 import src.rules.src.residential.stairs as _stairs
@@ -26,7 +27,7 @@ def test_stair_width():
     violations = engine.check([stair])
     assert len(violations) == 1
     assert violations[0].severity == ViolationSeverity.ERROR
-    print("✅ test_stair_width")
+    print("[ok] test_stair_width")
 
 
 def test_stair_riser():
@@ -37,7 +38,7 @@ def test_stair_riser():
     engine.register(rule)
     violations = engine.check([stair])
     assert len(violations) == 1
-    print("✅ test_stair_riser")
+    print("[ok] test_stair_riser")
 
 
 def test_stair_tread():
@@ -48,7 +49,7 @@ def test_stair_tread():
     engine.register(rule)
     violations = engine.check([stair])
     assert len(violations) == 1
-    print("✅ test_stair_tread")
+    print("[ok] test_stair_tread")
 
 
 def test_exit_width():
@@ -60,7 +61,7 @@ def test_exit_width():
     violations = engine.check([exit])
     assert len(violations) == 1
     assert violations[0].severity == ViolationSeverity.ERROR
-    print("✅ test_exit_width")
+    print("[ok] test_exit_width")
 
 
 def test_exit_distance():
@@ -71,7 +72,7 @@ def test_exit_distance():
     engine.register(rule)
     violations = engine.check([exit])
     assert len(violations) == 1
-    print("✅ test_exit_distance")
+    print("[ok] test_exit_distance")
 
 
 def test_room_min_exits():
@@ -82,7 +83,7 @@ def test_room_min_exits():
     engine.register(rule)
     violations = engine.check([room])
     assert len(violations) == 1
-    print("✅ test_room_min_exits")
+    print("[ok] test_room_min_exits")
 
 
 def test_entrance_no_step():
@@ -93,7 +94,7 @@ def test_entrance_no_step():
     engine.register(rule)
     violations = engine.check([entrance])
     assert len(violations) == 1
-    print("✅ test_entrance_no_step")
+    print("[ok] test_entrance_no_step")
 
 
 def test_entrance_width():
@@ -104,7 +105,7 @@ def test_entrance_width():
     engine.register(rule)
     violations = engine.check([entrance])
     assert len(violations) == 1
-    print("✅ test_entrance_width")
+    print("[ok] test_entrance_width")
 
 
 def test_turning_space():
@@ -115,7 +116,7 @@ def test_turning_space():
     engine.register(rule)
     violations = engine.check([space])
     assert len(violations) == 1
-    print("✅ test_turning_space")
+    print("[ok] test_turning_space")
 
 
 def test_total_rule_count():
