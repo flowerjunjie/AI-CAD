@@ -197,6 +197,51 @@ def main():
     print(f"  报告:   {report}")
     print(f"\n✓ 全链路运行成功 — 共 {rule_count} 条规范 / {len(parsed['task_list'])} 个任务\n")
 
+    # 体验闭环: 渲染一张真实户型图 + 自动打开 (肉眼验收, 不用手开 CAD)
+    if not NO_LLM or "--render" in sys.argv:
+        try:
+            png = render_and_open(dwg)
+            print(f"  户型图: {png}")
+        except Exception as e:
+            print(f"  [提示] 户型渲染跳过: {e}")
+
+
+def render_and_open(dwg_path: str) -> str:
+    """把 DWG 渲染成 PNG 并自动打开, 让你一眼看到出图效果。"""
+    import ezdxf
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from ezdxf.addons.drawing import Frontend, RenderContext
+    from ezdxf.addons.drawing.matplotlib import MatplotlibBackend, setup_axes
+    # 中文标题/标注不再变豆腐块 — 收敛到 CJK 字体配置
+    from src.agents.src.tools.matplotlib_cjk import configure_cjk
+    configure_cjk()
+
+    doc = ezdxf.readfile(dwg_path)
+    msp = doc.modelspace()
+    png = os.path.join(PROJECT_ROOT, "output", "preview.png")
+    os.makedirs(os.path.dirname(png), exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(10, 7), dpi=110)
+    ctx = RenderContext(doc)
+    backend = MatplotlibBackend(ax)
+    Frontend(ctx, backend).draw_layout(msp, finalize=True)
+    setup_axes(ax)
+    ax.set_title("AI-CAD 出图预览", fontsize=13)
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(png)
+    plt.close(fig)
+
+    if os.name == "nt":
+        os.startfile(png)
+    else:
+        import webbrowser
+        webbrowser.open(png)
+    return png
+
 
 if __name__ == "__main__":
     main()
