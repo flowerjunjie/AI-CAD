@@ -65,9 +65,9 @@ def partition_rooms(segs: list, tol: float = _TOL_DEFAULT, min_room_area: float 
     """
     墙线段 -> 房间列表（shapely polygonize）。
     返回 {"rooms": [ {polygon, area, bbox, is_outer} ], "diagnostics": {...}}
-    - 端点吸附后 unary_union + polygonize 自动切面
+    - 端点吸附后 unary_union + polygonize 自动切出所有封闭面
+    - 每个封闭面都是"房间/空间"(含 L 形主厅), 一律保留 (is_outer 恒 False)
     - 面积 < min_room_area 视为阳台/薄壁碎片丢弃
-    - 面积最大闭合面 = 建筑外轮廓(is_outer=True)，其余 = 房间
     - 脏数据不崩：异常返回空 rooms + diagnostics.error
     """
     diagnostics = {"closed_faces": 0, "dropped_small": 0, "error": None}
@@ -107,14 +107,10 @@ def partition_rooms(segs: list, tol: float = _TOL_DEFAULT, min_room_area: float 
                 "is_outer": False,
             })
 
-        # is_outer：仅当某面 area 显著大于其它（> 1.5x 次大）才标外轮廓。
-        # unary_union+polygonize 对"外框+内墙"通常只吐最小房间面（外框被内墙切掉，
-        # 不单独成面），此标记用于那些"外墙围成、内部无隔墙"的单间户型。
-        if len(polys) >= 2:
-            areas = sorted((p["area"] for p in polys), reverse=True)
-            if areas[0] > areas[1] * 1.5:
-                for p in polys:
-                    p["is_outer"] = (abs(p["area"] - areas[0]) < 1e-9)
+        # 说明: 每个 polygonize 出的最小封闭面都是"房间/空间", 一律保留。
+        # 之前用 is_outer 剔除"最大面"是错的 — L 形户型里最大的面(主厅)
+        # 被误当外轮廓剔掉。真实拓扑里"封闭空间 = 房间", 不单独存在外轮廓面
+        # (unary_union 把外框边合并进最小面了)。is_outer 字段保留供兼容, 恒为 False。
 
         return {"rooms": polys, "diagnostics": diagnostics}
     except Exception as e:  # 脏数据/缺 shapely 都兜底，不打崩上游

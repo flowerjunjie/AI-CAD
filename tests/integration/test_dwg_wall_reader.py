@@ -85,3 +85,25 @@ def test_door_bridge_closes_gap(tmp_path):
     merged = add_door_bridge_edges(wall_segs, door_segs)
     result = partition_rooms(merged)
     assert result["rooms"], "门洞补边后应仍切出房间"
+
+
+def test_cad_node_uses_real_topology(tmp_path):
+    """喂真实墙线 → cad_execute_node 按真实拓扑出图（不再贪心网格）"""
+    from src.agents.src.tools.cad_tools import DXFReader
+    from src.agents.src.nodes.cad_rule_export import _layout_from_state
+
+    p = str(tmp_path / "fp.dxf")
+    _make_test_dxf(p, with_doors=False)
+    reader = DXFReader(p)
+    assert reader.open()
+    segs = reader.get_wall_segments()
+
+    state = {
+        "raw_data": {"zones": [], "doors": [], "windows": [], "wall_segments": segs},
+        "task_list": [{"id": "wall-outer", "type": "wall", "params": {"thickness": 0.24}}],
+        "output_path": str(tmp_path / "out.dwg"),
+        "auto_mode": True,
+    }
+    layout = _layout_from_state(state)
+    assert layout["topology"] == "real", "喂墙线应走真实拓扑, 非 grid"
+    assert len(layout["rooms"]) == 4, "8x6+1竖+1横 应 4 房间"

@@ -29,20 +29,22 @@ def test_partition_rooms_grid():
         assert abs(r["area"] - 12.0) < 1e-6, f"房间面积应 12, 实际 {r['area']}"
 
 
-def test_single_room_large_is_outer():
-    """单间大户型（外墙无内隔墙）→ 最大面标记 is_outer"""
+def test_l_shape_keeps_large_hall():
+    """L 形主厅(最大封闭面)保留为房间，不再被误当外轮廓剔除"""
     from src.agents.src.tools.wall_topology import partition_rooms
 
-    # 10x8 外框，内部只隔一小房间 → 大面应是 outer
-    segs = [
-        ((0, 0), (10, 0)), ((10, 0), (10, 8)), ((10, 8), (0, 8)), ((0, 8), (0, 0)),
-        ((0, 0), (3, 0)), ((3, 0), (3, 4)), ((3, 4), (0, 4)), ((0, 4), (0, 0)),  # 左下角 3x4 小房
+    lshape = [
+        ((0, 0), (12, 0)), ((12, 0), (12, 5)),
+        ((12, 5), (6, 5)), ((6, 5), (6, 9)), ((6, 9), (0, 9)), ((0, 9), (0, 0)),
+        ((0, 5), (6, 5)), ((4, 0), (4, 5)), ((6, 5), (6, 9)), ((0, 3), (4, 3)),
     ]
-    result = partition_rooms(segs)
-    outer = [r for r in result["rooms"] if r["is_outer"]]
-    rooms = [r for r in result["rooms"] if not r["is_outer"]]
-    assert len(outer) == 1 and len(rooms) == 1, f"应 1 outer + 1 room, 实际 {len(outer)}/{len(rooms)}"
-    assert outer[0]["area"] > rooms[0]["area"]
+    result = partition_rooms(lshape)
+    rooms = result["rooms"]
+    # L 形切出的所有面(含最大主厅)都当房间保留
+    assert len(rooms) == 4, f"L 形户型应保留 4 个封闭面, 实际 {len(rooms)}"
+    # 最大的那个(主厅 40㎡)也在其中
+    areas = [r["area"] for r in rooms]
+    assert abs(max(areas) - 40.0) < 1e-6, f"主厅 40㎡ 应保留, 实际 max={max(areas)}"
 
 
 def test_open_chain_dropped():

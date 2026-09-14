@@ -6,6 +6,7 @@ import os
 from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
+from src.agents.src.tools.wall_topology import partition_rooms
 from src.rules.src.engine import get_engine
 from src.rules.src.residential.doors import Door
 from src.rules.src.residential.windows import Window
@@ -28,16 +29,51 @@ def _collision_violation(c: dict):
 
 
 def _layout_from_state(state: dict) -> dict:
-    """从 state 提取 zones/doors/windows，跑布局引擎，返回坐标。"""
+    """从 state 提取 zones/doors/windows，跑布局引擎，返回坐标。
+    有 wall_segments（真实 DWG 墙线）→ 走 partition_rooms 真实拓扑；
+    没有 → fallback layout_rooms 贪心网格（现状不变，回归安全）。"""
     raw = state.get("raw_data", {}) or {}
     zones = raw.get("zones", []) or state.get("project_structure", {}).get("zones", [])
     doors = raw.get("doors", [])
     windows = raw.get("windows", [])
+    wall_segs = raw.get("wall_segments") or state.get("wall_segments") or []
+
+    if wall_segs:
+        topo = partition_rooms(wall_segs)
+        # 真实拓扑的 polygon → 用 bbox 桥接成 rooms {x,y,w,h}，下游 place_*/_outer_walls 不改
+        rooms = _polygons_to_rooms(topo["rooms"])
+        if rooms:
+            door_pos = place_doors_on_walls(doors, rooms)
+            window_pos = place_windows_on_walls(windows, rooms)
+            return {"rooms": rooms, "doors": door_pos, "windows": window_pos,
+                    "zones": zones, "topology": "real"}
+        # 真实拓扑解析失败/无有效房间 → 落回贪心网格（兜底）
 
     rooms = layout_rooms(zones)
     door_pos = place_doors_on_walls(doors, rooms)
     window_pos = place_windows_on_walls(windows, rooms)
-    return {"rooms": rooms, "doors": door_pos, "windows": window_pos, "zones": zones}
+    return {"rooms": rooms, "doors": door_pos, "windows": window_pos, "zones": zones,
+            "topology": "grid"}
+
+
+def _polygons_to_rooms(polys: list) -> list:
+    """把真实拓扑的 polygon 用 bbox 桥接成 rooms {x,y,w,h}（下游接口不变）。
+    每个封闭面都当房间保留（含 L 形主厅，is_outer 已废弃恒 False）。"""
+    out = []
+    for i, p in enumerate(polys):
+        x0, y0, x1, y1 = p["bbox"]
+        out.append({
+            "id": f"r{i}",
+            "name": p.get("name", ""),
+            "type": p.get("type", ""),
+            "x": x0,
+            "y": y0,
+            "w": x1 - x0,
+            "h": y1 - y0,
+            "area": p["area"],
+            "polygon": p["polygon"],
+        })
+    return out
 
 
 def _outer_walls(rooms: list[dict], thickness: float) -> list[Wall]:
