@@ -1,0 +1,43 @@
+{
+  "rules": [
+    {
+      "rule_id": "residential-bedroom-window-area",
+      "name": "卧室窗地比不应小于1/7",
+      "code_ref": "GB 50096-2011 第7.1.1条",
+      "severity": "warning",
+      "element_types": ["Window", "window"],
+      "predicate": "element.room_type in ('bedroom', '卧室') and element.sill_height_m > 0.9",
+      "params": {},
+      "param_defaults": {},
+      "description_template": "卧室窗台高度 {sill_height_m}m 可能影响采光",
+      "suggested_fix_template": "降低窗台高度至 <= 0.9m",
+      "enabled": true
+    },
+    {
+      "rule_id": "dsl-stair-riser",
+      "name": "楼梯踏步高度不应大于0.175m",
+      "code_ref": "GB 50096-2011 第6.3.2条",
+      "severity": "error",
+      "element_types": ["Stair", "stair"],
+      "predicate": "element.riser_height_m > max_riser_m",
+      "params": {},
+      "param_defaults": {"max_riser_m": 0.175},
+      "description_template": "楼梯踏步高度 {riser_height_m}m 超过规范限值 {max_riser_m}m",
+      "suggested_fix_template": "将踏步高度调整为 <= {max_riser_m}m",
+      "enabled": true
+    },
+    {
+      "rule_id": "dsl-corridor-escape-width",
+      "name": "疏散走道净宽不应小于1.4m",
+      "code_ref": "GB 50016-2014 第5.5.18条",
+      "severity": "error",
+      "element_types": ["Corridor", "corridor"],
+      "predicate": "element.width_m < 1.4",
+      "params": {},
+      "param_defaults": {},
+      "description_template": "疏散走道宽度 {width_m}m 小于规范要求 1.4m",
+      "suggested_fix_template": "将走廊宽度调整为 >= 1.4m",
+      "enabled": true
+    }
+  ]
+}

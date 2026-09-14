@@ -28,6 +28,31 @@ class RuleViolation:
     element_id: str | None = None
     suggested_fix: str | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        """序列化为可 JSON 化的 dict（severity 存 .value 字符串）。"""
+        return {
+            "rule_id": self.rule_id,
+            "rule_name": self.rule_name,
+            "severity": self.severity.value,
+            "description": self.description,
+            "code_ref": self.code_ref,
+            "element_id": self.element_id,
+            "suggested_fix": self.suggested_fix,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RuleViolation":
+        """从 dict 反序列化（severity 由 .value 字符串还原为枚举）。"""
+        return cls(
+            rule_id=data["rule_id"],
+            rule_name=data.get("rule_name", ""),
+            severity=ViolationSeverity(data["severity"]),
+            description=data.get("description", ""),
+            code_ref=data.get("code_ref", ""),
+            element_id=data.get("element_id"),
+            suggested_fix=data.get("suggested_fix"),
+        )
+
 
 @dataclass
 class RuleResult:
@@ -46,6 +71,9 @@ class BaseRule(ABC):
     name: str = ""
     code_ref: str = ""
     severity: ViolationSeverity = ViolationSeverity.ERROR
+    # 参数化规则可声明默认值；DSL 覆盖时 upsert 的 ParametricRule 读取
+    # self.params.get(key, self.param_defaults[key])。普通 @register_rule 规则保持 {}。
+    param_defaults: dict[str, Any] = {}
 
     @abstractmethod
     def check(self, element: Any) -> RuleResult:
@@ -66,10 +94,24 @@ class RuleEngine:
         self._registry: dict[str, BaseRule] = {}
 
     def register(self, rule: BaseRule) -> None:
-        """注册规则"""
+        """注册规则（重复 rule_id 抛 ValueError）"""
         if rule.rule_id in self._registry:
             raise ValueError(f"Duplicate rule ID: {rule.rule_id}")
         self._rules.append(rule)
+        self._registry[rule.rule_id] = rule
+
+    def upsert(self, rule: BaseRule) -> None:
+        """注册或替换规则（存在则原地替换，不存在则注册）。
+
+        用于 DSL 参数覆盖场景：同一 rule_id 用 ParametricRule 实例顶替
+        注册表里的旧类，原类代码不动（开放封闭）。不影响 register() 的
+        重复抛错行为。
+        """
+        if rule.rule_id in self._registry:
+            idx = self._rules.index(self._registry[rule.rule_id])
+            self._rules[idx] = rule
+        else:
+            self._rules.append(rule)
         self._registry[rule.rule_id] = rule
 
     def check(self, elements: list[Any], rule_ids: list[str] | None = None) -> list[RuleViolation]:
