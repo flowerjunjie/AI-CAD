@@ -96,6 +96,32 @@ def test_predicate_missing_attr_degrades_not_crash(tmp_path):
     assert not result.violations
 
 
+def test_render_missing_template_field_uses_placeholder(tmp_path):
+    """护栏: description 模板引用了 merged 里没有的字段 (如新字段没同步),
+    format_map 渲染成 [缺失:xxx] 占位, 不 KeyError 吞掉整个违规项。"""
+    data = {
+        "rules": [
+            {
+                "rule_id": "dsl-door-w",
+                "name": "门宽",
+                "code_ref": "TBD",
+                "severity": "error",
+                "element_types": ["Door", "door"],
+                "predicate": "element.width_m < 1.0",
+                "description_template": "门宽 {width_m}m < 1.0, 深度 {depth_m}",
+                "enabled": True,
+            }
+        ]
+    }
+    rules = DslRuleProvider(_write_json(data)).load()
+    door = Door(id="d1", width_m=0.8, room_type="interior", location=(0, 0))
+    result = rules[0].check(door)
+    assert not result.passed
+    desc = result.violations[0].description
+    assert "0.8" in desc, "已存在字段 width_m 应正常渲染"
+    assert "[缺失:depth_m]" in desc, "缺失字段 depth_m 应渲染成占位而非崩"
+
+
 def test_parametric_rule_pass():
     """合规元素通过。"""
     rules = DslRuleProvider(_write_json(_sample_rules_data())).load()

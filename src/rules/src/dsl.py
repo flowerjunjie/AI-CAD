@@ -24,6 +24,16 @@ from .engine import BaseRule, RuleResult, RuleViolation, ViolationSeverity
 
 # ─── 受限 eval 白名单 ─────────────────────────────────────────
 
+class _SafeRenderMap(dict):
+    """str.format_map 用的 mapping: 缺 key 渲染成 [缺失:xxx] 占位, 不 KeyError。"""
+
+    def __init__(self, base: dict) -> None:
+        super().__init__(base)
+
+    def __missing__(self, key: str) -> str:
+        return f"[缺失:{key}]"
+
+
 _ALLOWED_NODES: tuple[type, ...] = (
     ast.Expression, ast.BoolOp, ast.And, ast.Or,
     ast.Compare, ast.Eq, ast.NotEq, ast.Lt, ast.LtE,
@@ -190,7 +200,10 @@ class ParametricRule(BaseRule):
             return ""
         merged = {k: v for k, v in vars(element).items() if not k.startswith("_")}
         merged.update(self.params)
-        return template.format(**merged)
+        # 模板引用了 merged 里没有的字段 (如新专业字段没同步进 build) 时,
+        # 渲染成 [缺失:xxx] 占位而非 KeyError 吞掉整个违规项 — 违规由 predicate
+        # 判定, 描述只是文案, 文案缺字段不该让违规消失。
+        return template.format_map(_SafeRenderMap(merged))
 
 
 # ─── DslRuleProvider：JSON 加载 + schema 校验 ──────────────────
