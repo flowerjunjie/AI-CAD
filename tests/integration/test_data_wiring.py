@@ -75,3 +75,19 @@ def test_rule_check_detects_violation():
     assert result["rule_check_passed"] is False
     assert any("bathroom" in v["rule_id"] for v in result["rule_violations"]), \
         f"应检出卫生间面积违规: {result['rule_violations']}"
+
+
+def test_rule_check_hits_electrical_outlet_violation():
+    """带 raw_data['outlets'] 的 state → 命中 electrical-* 违规 (Phase 4 电气走分发表验证)"""
+    from src.agents.src.nodes.cad_rule_export import rule_check_node
+
+    state = _make_state()
+    # 加一个高插座 2.5m (超占位上限 2.0m) → 应命中 electrical-outlet-height-range
+    state["raw_data"]["outlets"] = [
+        {"id": "o1", "height_m": 2.5, "room_type": "living"},
+    ]
+    result = rule_check_node(state)
+    rule_ids = [v["rule_id"] for v in result["rule_violations"]]
+    assert "electrical-outlet-height-range" in rule_ids, \
+        f"应检出电气插座高度违规, 实际: {rule_ids}"
+    assert result["rule_check_passed"] is False

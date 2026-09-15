@@ -77,6 +77,45 @@
       "description_template": "排水管距检查井 {distance_to_manhole_m}m 超过最大间距 {max_manhole_distance_m}m",
       "suggested_fix_template": "增设检查井使间距 <= {max_manhole_distance_m}m (GB 50015 条文待确认)",
       "enabled": true
+    },
+    {
+      "rule_id": "electrical-outlet-height-range",
+      "name": "插座安装高度应在允许区间 (占位, 待规范确认)",
+      "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": ["ElectricalOutlet", "electricaloutlet"],
+      "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
+      "params": {},
+      "param_defaults": {"min_height_m": 0.0, "max_height_m": 2.0},
+      "description_template": "插座安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
+      "suggested_fix_template": "将插座安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50303 条文待确认)",
+      "enabled": true
+    },
+    {
+      "rule_id": "electrical-switch-height-range",
+      "name": "开关安装高度应在允许区间 (占位, 待规范确认)",
+      "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": ["ElectricalSwitch", "electricalswitch"],
+      "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
+      "params": {},
+      "param_defaults": {"min_height_m": 1.0, "max_height_m": 1.5},
+      "description_template": "开关安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
+      "suggested_fix_template": "将开关安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50303 条文待确认)",
+      "enabled": true
+    },
+    {
+      "rule_id": "electrical-outlet-earthing-required",
+      "name": "插座回路应具备接地 (占位, 待规范确认)",
+      "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "error",
+      "element_types": ["ElectricalOutlet", "electricaloutlet"],
+      "predicate": "element.room_type in ('bathroom', 'kitchen') and not element.has_earthing",
+      "params": {},
+      "param_defaults": {},
+      "description_template": "厨房/卫生间插座 {id} 未配置接地 (占位)",
+      "suggested_fix_template": "为厨房/卫生间插座增加接地端子 (GB 50303 条文待确认)",
+      "enabled": true
     }
   ]
 }

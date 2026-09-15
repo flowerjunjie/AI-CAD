@@ -11,6 +11,136 @@ from src.rules.src.engine import get_engine
 from src.rules.src.residential.doors import Door
 from src.rules.src.residential.windows import Window
 from src.rules.src.residential.rooms import Room
+from src.rules.src.plumbing import PlumbingPipe
+from src.rules.src.electrical import ElectricalOutlet, ElectricalSwitch
+from src.rules.src.dsl import load_dsl_rules
+
+
+# DSL 规则（default.json）加载后 upsert 进全局引擎；全局引擎默认没有它们，
+# 主链路校验前需显式加载一次（upsert 幂等，同 rule_id 顶替，重复调用安全）。
+_DSL_PREFIXES = ("plumbing-", "electrical-")
+
+
+def _dsl_rules_path() -> str:
+    """default.json 绝对路径（__file__ 回 5 层 dirname 到项目根）。"""
+    # __file__ = .../AI-CAD/src/agents/src/nodes/cad_rule_export.py
+    # 5 层 dirname 回项目根 (nodes→src→agents→src→AI-CAD)
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+    return os.path.join(root, "src", "rules", "rules", "default.json")
+
+
+def _ensure_dsl_rules_loaded(engine) -> None:
+    """加载 default.json 的 DSL 规则并按专业前缀 upsert 进引擎（幂等）。
+
+    收敛自原 plumbing 段的散落逻辑：主链路校验前调一次即可，
+    新增 DSL 专业（如 electrical）只需扩展 _DSL_PREFIXES 或加规则条目。
+    """
+    for prefix in _DSL_PREFIXES:
+        for pr in load_dsl_rules(_dsl_rules_path()):
+            if pr.rule_id.startswith(prefix):
+                engine.upsert(pr)
+
+
+def _build_door(raw: dict) -> Door:
+    return Door(id=raw.get("id", "d0"), width_m=float(raw.get("width_m", 0.9)),
+                room_type=raw.get("type", "interior"), location=(0, 0))
+
+
+def _build_window(raw: dict) -> Window:
+    return Window(id=raw.get("id", "w0"), sill_height_m=float(raw.get("sill_height_m", 0.9)),
+                 top_height_m=2.0, room_type=raw.get("room", "living"), location=(0, 0))
+
+
+def _build_room(raw: dict, idx: int) -> Room:
+    return Room(id=raw.get("id", f"r{idx}"), name=raw.get("name", ""),
+                length_m=float(raw.get("length", 0)), width_m=float(raw.get("width", 0)))
+
+
+def _build_pipe(raw: dict, idx: int) -> PlumbingPipe:
+    return PlumbingPipe(
+        id=raw.get("id", f"p{idx}"),
+        pipe_type=raw.get("pipe_type", "drain"),
+        diameter_mm=int(raw.get("diameter_mm", 50)),
+        slope=float(raw.get("slope", 0.0)),
+        distance_to_manhole_m=float(raw.get("distance_to_manhole_m", 0.0)),
+    )
+
+
+def _build_outlet(raw: dict, idx: int) -> ElectricalOutlet:
+    return ElectricalOutlet(
+        id=raw.get("id", f"o{idx}"),
+        height_m=float(raw.get("height_m", 0.3)),
+        room_type=raw.get("room_type", "living"),
+        x=float(raw.get("x", 0.0)),
+        y=float(raw.get("y", 0.0)),
+        has_earthing=bool(raw.get("has_earthing", True)),
+    )
+
+
+def _build_switch(raw: dict, idx: int) -> ElectricalSwitch:
+    return ElectricalSwitch(
+        id=raw.get("id", f"s{idx}"),
+        height_m=float(raw.get("height_m", 1.3)),
+        room_type=raw.get("room_type", "living"),
+        x=float(raw.get("x", 0.0)),
+        y=float(raw.get("y", 0.0)),
+    )
+
+
+# 分发表：raw_key → 构造器 → 规则集。
+# build 签名统一 build(raw_item, idx) → element（door/window 忽略 idx）。
+# 新增专业 = 加一项表项 + 对应 DSL/类规则，不改 rule_check_node 主链路逻辑。
+_ELEMENT_CHECKS: list[dict] = [
+    {
+        "raw_key": "doors",
+        "build": lambda r, i: _build_door(r),
+        "rule_ids": [
+            "residential-door-main-width",
+            "residential-door-interior-width",
+            "residential-door-bathroom-width",
+        ],
+    },
+    {
+        "raw_key": "windows",
+        "build": lambda r, i: _build_window(r),
+        "rule_ids": ["residential-window-sill-height"],
+    },
+    {
+        # zones 走 raw_data；无 raw 时由调用侧 fallback project_structure（见 rule_check_node）
+        "raw_key": "zones",
+        "build": _build_room,
+        "rule_ids": [
+            "residential-room-living-area",
+            "residential-room-bedroom-area",
+            "residential-room-kitchen-area",
+            "residential-room-bathroom-area",
+        ],
+    },
+    {
+        "raw_key": "pipes",
+        "build": _build_pipe,
+        "rule_ids": [
+            "plumbing-waste-pipe-min-diameter",
+            "plumbing-pipe-slope-in-range",
+            "plumbing-pipe-manhole-distance",
+        ],
+    },
+    # 电气（Phase 4）— 走 DSL electrical-* 规则（阈值占位 TBD，待业务确认）
+    {
+        "raw_key": "outlets",
+        "build": _build_outlet,
+        "rule_ids": [
+            "electrical-outlet-height-range",
+            "electrical-outlet-earthing-required",
+        ],
+    },
+    {
+        "raw_key": "switches",
+        "build": _build_switch,
+        "rule_ids": ["electrical-switch-height-range"],
+    },
+]
 
 
 def _collision_violation(c: dict):
@@ -199,49 +329,33 @@ def cad_execute_node(state: dict) -> dict:
 def rule_check_node(state: dict) -> dict:
     """
     规则校验 Agent：按 raw_data 实际元素校验（不再硬编码）
+
+    主体走 _ELEMENT_CHECKS 分发表（加专业=加表项，不改主链路逻辑）；
+    几何碰撞检测依赖 _layout_from_state/layout，非简单 raw→element 映射，
+    故留在循环外单独跑。
     """
     engine = get_engine()
     raw = state.get("raw_data", {}) or {}
     zones = raw.get("zones", []) or state.get("project_structure", {}).get("zones", [])
     raw_doors = raw.get("doors", [])
     raw_windows = raw.get("windows", [])
+
+    # DSL 规则（plumbing-/electrical-）不在全局引擎，加载后 upsert 一次（幂等）
+    _ensure_dsl_rules_loaded(engine)
+
+    # raw_key → raw 数据（zones 走 raw→project_structure 兜底；其余直接 raw.get）
+    def _raw_items(raw_key: str) -> list:
+        if raw_key == "zones":
+            return zones
+        return raw.get(raw_key, [])
+
     violations = []
-
-    # 门宽（按实际 room_type 匹配规则）
-    if raw_doors:
-        door_elems = [
-            Door(id=d.get("id", f"d{i}"), width_m=float(d.get("width_m", 0.9)),
-                 room_type=d.get("type", "interior"), location=(0, 0))
-            for i, d in enumerate(raw_doors)
-        ]
-        violations.extend(engine.check(door_elems, rule_ids=[
-            "residential-door-main-width",
-            "residential-door-interior-width",
-            "residential-door-bathroom-width",
-        ]))
-
-    # 窗台高度
-    if raw_windows:
-        win_elems = [
-            Window(id=w.get("id", f"w{i}"), sill_height_m=float(w.get("sill_height_m", 0.9)),
-                   top_height_m=2.0, room_type=w.get("room", "living"), location=(0, 0))
-            for i, w in enumerate(raw_windows)
-        ]
-        violations.extend(engine.check(win_elems, rule_ids=["residential-window-sill-height"]))
-
-    # 房间面积（zones 带 length/width）
-    room_elems = [
-        Room(id=z.get("id", f"r{i}"), name=z.get("name", ""),
-             length_m=float(z.get("length", 0)), width_m=float(z.get("width", 0)))
-        for i, z in enumerate(zones)
-    ]
-    if room_elems:
-        violations.extend(engine.check(room_elems, rule_ids=[
-            "residential-room-living-area",
-            "residential-room-bedroom-area",
-            "residential-room-kitchen-area",
-            "residential-room-bathroom-area",
-        ]))
+    for entry in _ELEMENT_CHECKS:
+        raw_items = _raw_items(entry["raw_key"])
+        if not raw_items:
+            continue
+        elems = [entry["build"](item, i) for i, item in enumerate(raw_items)]
+        violations.extend(engine.check(elems, rule_ids=entry["rule_ids"]))
 
     # 门窗碰撞：同一面墙上 门/窗 重叠（几何层规则，非规范条文）
     rooms = _layout_from_state(state)["rooms"]
@@ -249,40 +363,6 @@ def rule_check_node(state: dict) -> dict:
     win_layout = place_windows_on_walls(raw_windows, rooms)
     for c in detect_opening_collisions(door_layout, win_layout):
         violations.append(_collision_violation(c))
-
-    # 给排水：管道元素校验 (Phase 3, 走 DSL 的 plumbing-* 规则)
-    raw_pipes = raw.get("pipes", [])
-    if raw_pipes:
-        from src.rules.src.plumbing import PlumbingPipe
-        from src.rules.src.dsl import load_dsl_rules
-        # plumbing 规则是 DSL (default.json), 非 @register_rule 类,
-        # 全局引擎默认没有 — 显式 load 后 upsert 进本实例, 主链路才查得到。
-        import os
-        # __file__ = .../AI-CAD/src/agents/src/nodes/cad_rule_export.py
-        # 5 层 dirname 回项目根 (nodes→src→agents→src→AI-CAD)
-        _dsl_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))),
-            "src", "rules", "rules", "default.json",
-        )
-        for _pr in load_dsl_rules(_dsl_path):
-            if _pr.rule_id.startswith("plumbing-"):
-                engine.upsert(_pr)
-        pipe_elems = [
-            PlumbingPipe(
-                id=p.get("id", f"p{i}"),
-                pipe_type=p.get("pipe_type", "drain"),
-                diameter_mm=int(p.get("diameter_mm", 50)),
-                slope=float(p.get("slope", 0.0)),
-                distance_to_manhole_m=float(p.get("distance_to_manhole_m", 0.0)),
-            )
-            for i, p in enumerate(raw_pipes)
-        ]
-        violations.extend(engine.check(pipe_elems, rule_ids=[
-            "plumbing-waste-pipe-min-diameter",
-            "plumbing-pipe-slope-in-range",
-            "plumbing-pipe-manhole-distance",
-        ]))
 
     return {
         "rule_violations": [
