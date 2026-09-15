@@ -83,14 +83,12 @@ class DXFReader:
         """获取各类型实体数量"""
         return {k: len(v) for k, v in self.entities.items()}
 
-    def get_wall_segments(self, layer_names=("WALL", "WALL_THICK")) -> list:
+    def _segments_from_layer(self, layer_names) -> list:
+        """按图层取线段核心逻辑 → [(start_xy, end_xy), ...]（2D，z 丢弃）。
+
+        LINE 逐条取 start/end；LWPOLYLINE 展开相邻顶点对（闭合则补首尾）。
+        返回与 ezdxf 格式解耦的纯线段。墙/给排水各图层读取共用此法。
         """
-        按图层读墙线段 → [(start_xy, end_xy), ...]（2D，z 丢弃）。
-        支持 LINE + LWPOLYLINE（展开相邻顶点对；闭合则补首尾）。
-        返回与 ezdxf 格式解耦的纯线段，供 wall_topology 解析真实户型。
-        """
-        if self.doc is None:
-            raise RuntimeError("调用 get_wall_segments 前需先 open()")
         msp = self.doc.modelspace()
         segs = []
         # LINE: 逐条取 start/end
@@ -101,7 +99,9 @@ class DXFReader:
         # LWPOLYLINE: 相邻顶点对展开，闭合则补首尾
         for layer in layer_names:
             for lwp in msp.query(f'LWPOLYLINE[layer=="{layer}"]'):
-                pts = [(v[0], v[1]) for v in lwp.points(verbatim=False)]
+                # ezdxf>=1.0: points() 是上下文管理器, format='xy' 给 (x,y)
+                with lwp.points(format='xy') as pts:
+                    pts = [(v[0], v[1]) for v in pts]
                 n = len(pts)
                 if n < 2:
                     continue
@@ -110,6 +110,41 @@ class DXFReader:
                 if getattr(lwp, "closed", False) and n > 2:
                     segs.append((pts[-1], pts[0]))
         return segs
+
+    def get_wall_segments(self, layer_names=("WALL", "WALL_THICK")) -> list:
+        """
+        按图层读墙线段 → [(start_xy, end_xy), ...]（2D，z 丢弃）。
+        支持 LINE + LWPOLYLINE（展开相邻顶点对；闭合则补首尾）。
+        返回与 ezdxf 格式解耦的纯线段，供 wall_topology 解析真实户型。
+        """
+        if self.doc is None:
+            raise RuntimeError("调用 get_wall_segments 前需先 open()")
+        return self._segments_from_layer(layer_names)
+
+    def get_plumbing_segments(
+        self,
+        layer_names=("PIPE", "PIPE_WASTE", "PIPE_VENT", "PIPE_DRAIN"),
+        include_layer: bool = False,
+    ) -> list:
+        """按图层读给排水管道线段。
+
+        include_layer=False (默认): 返回纯线段 [(start_xy, end_xy), ...]，
+            与 get_wall_segments 形态一致（start/end 为 2 元组）。
+        include_layer=True: 返回统一结构化 dict
+            [{"start": start_xy, "end": end_xy, "layer": layer}, ...]，
+            每条都带来源图层，供 plumbing_extractor 按图层映射管径。
+            结构化 dict 消除「纯线段 vs 带图层」的形态歧义。
+        """
+        if self.doc is None:
+            raise RuntimeError("调用 get_plumbing_segments 前需先 open()")
+        if not include_layer:
+            return self._segments_from_layer(layer_names)
+        # 按图层分组再平铺，给每段补上来源图层（统一 dict 形态）
+        out = []
+        for layer in layer_names:
+            for a, b in self._segments_from_layer((layer,)):
+                out.append({"start": a, "end": b, "layer": layer})
+        return out
 
 
 class DXFWriter:
