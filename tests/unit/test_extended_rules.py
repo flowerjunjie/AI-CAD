@@ -7,10 +7,20 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Import all rule modules to register decorators
+# 必须 import 全部 11 个规则模块 — get_engine() 是全局单例, 直跑单文件时
+# 只有这里 import 过的模块会注册进引擎; 漏 import 会让 test_total_rule_count
+# 因规则数不足而炸 (此前只 import 4 个, 靠别的测试文件先 import 才侥幸绿)。
 import src.rules.src.residential.stairs as _stairs
-import src.rules.src.fire_safety.exits as _exits
-import src.rules.src.accessibility.entrances as _entrances
+import src.rules.src.residential.doors as _doors
+import src.rules.src.residential.rooms as _rooms
+import src.rules.src.residential.windows as _windows
+import src.rules.src.residential.areas as _areas
+import src.rules.src.residential.corridors as _rcorridors
 import src.rules.src.residential.daylight as _daylight
+import src.rules.src.fire_safety.exits as _exits
+import src.rules.src.fire_safety.corridors as _fcorridors
+import src.rules.src.accessibility.entrances as _entrances
+import src.rules.src.accessibility.ramps as _ramps
 
 from src.rules.src.engine import RuleEngine, ViolationSeverity, get_engine
 from src.rules.src.residential.stairs import Stair, StairMinWidth, StairRiserMaxHeight, StairTreadMinDepth
@@ -125,10 +135,13 @@ def test_total_rule_count():
     rules = engine.list_rules()
     # 应该至少有25条规则
     assert len(rules) >= 25, f"Expected >= 25 rules, got {len(rules)}"
-    print(f"✅ test_total_rule_count ({len(rules)} rules)")
+    print(f"? test_total_rule_count ({len(rules)} rules)")
 
 
 if __name__ == "__main__":
+    import sys as _s
+    for _x in (_s.stdout, _s.stderr):
+        if hasattr(_x, "reconfigure"): _x.reconfigure(encoding="utf-8", errors="replace")
     test_stair_width()
     test_stair_riser()
     test_stair_tread()
@@ -139,4 +152,4 @@ if __name__ == "__main__":
     test_entrance_width()
     test_turning_space()
     test_total_rule_count()
-    print("\n🎉 All extended tests passed!")
+    print("\n? All extended tests passed!")
