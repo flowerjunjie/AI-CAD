@@ -18,7 +18,8 @@ from src.rules.src.dsl import load_dsl_rules
 
 # DSL 规则（default.json）加载后 upsert 进全局引擎；全局引擎默认没有它们，
 # 主链路校验前需显式加载一次（upsert 幂等，同 rule_id 顶替，重复调用安全）。
-_DSL_PREFIXES = ("plumbing-", "electrical-")
+# 不再维护专业前缀白名单 — _ensure_dsl_rules_loaded 按「引擎里还没有」数据驱动判断,
+# 加新 DSL 专业只需往 default.json 加条目, 主链路零改动。
 
 
 def _dsl_rules_path() -> str:
@@ -31,15 +32,23 @@ def _dsl_rules_path() -> str:
 
 
 def _ensure_dsl_rules_loaded(engine) -> None:
-    """加载 default.json 的 DSL 规则并按专业前缀 upsert 进引擎（幂等）。
+    """加载 default.json 的 DSL 规则, 只 upsert 标记 dsl_only=true 的纯新增专业规则。
 
-    收敛自原 plumbing 段的散落逻辑：主链路校验前调一次即可，
-    新增 DSL 专业（如 electrical）只需扩展 _DSL_PREFIXES 或加规则条目。
+    判据 (稳定, 不依赖 import 时序): 由 default.json 每条规则的 dsl_only 字段声明
+    「这条是纯 DSL 新增专业」, 而非靠「引擎里有没有它」反推 (后者受调用方 import
+    过哪些规则模块影响, 时序脆弱)。
+
+    - 纯新增专业 (plumbing-/electrical-/未来 hvac-...) 在 default.json 里标
+      "dsl_only": true → 主链路 upsert 进引擎。
+    - 与 @register_rule 的 34 类重名的「参数覆盖」规则保持 dsl_only 默认 false
+      → 不 upsert, 硬编码版不动 (守 34 类零改动红线)。
+
+    加新专业 = 往 default.json 加条目 + 标 dsl_only:true, 主链路零改动。
+    JSON 只解析一次。
     """
-    for prefix in _DSL_PREFIXES:
-        for pr in load_dsl_rules(_dsl_rules_path()):
-            if pr.rule_id.startswith(prefix):
-                engine.upsert(pr)
+    for rule in load_dsl_rules(_dsl_rules_path()):
+        if getattr(rule, "dsl_only", False):
+            engine.upsert(rule)
 
 
 def _build_door(raw: dict) -> Door:

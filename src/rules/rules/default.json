@@ -5,117 +5,168 @@
       "name": "卧室窗地比不应小于1/7",
       "code_ref": "GB 50096-2011 第7.1.1条",
       "severity": "warning",
-      "element_types": ["Window", "window"],
+      "element_types": [
+        "Window",
+        "window"
+      ],
       "predicate": "element.room_type in ('bedroom', '卧室') and element.sill_height_m > 0.9",
       "params": {},
       "param_defaults": {},
       "description_template": "卧室窗台高度 {sill_height_m}m 可能影响采光",
       "suggested_fix_template": "降低窗台高度至 <= 0.9m",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": false
     },
     {
       "rule_id": "dsl-stair-riser",
       "name": "楼梯踏步高度不应大于0.175m",
       "code_ref": "GB 50096-2011 第6.3.2条",
       "severity": "error",
-      "element_types": ["Stair", "stair"],
+      "element_types": [
+        "Stair",
+        "stair"
+      ],
       "predicate": "element.riser_height_m > max_riser_m",
       "params": {},
-      "param_defaults": {"max_riser_m": 0.175},
+      "param_defaults": {
+        "max_riser_m": 0.175
+      },
       "description_template": "楼梯踏步高度 {riser_height_m}m 超过规范限值 {max_riser_m}m",
       "suggested_fix_template": "将踏步高度调整为 <= {max_riser_m}m",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": false
     },
     {
       "rule_id": "dsl-corridor-escape-width",
       "name": "疏散走道净宽不应小于1.4m",
       "code_ref": "GB 50016-2014 第5.5.18条",
       "severity": "error",
-      "element_types": ["Corridor", "corridor"],
+      "element_types": [
+        "Corridor",
+        "corridor"
+      ],
       "predicate": "element.width_m < 1.4",
       "params": {},
       "param_defaults": {},
       "description_template": "疏散走道宽度 {width_m}m 小于规范要求 1.4m",
       "suggested_fix_template": "将走廊宽度调整为 >= 1.4m",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": false
     },
     {
       "rule_id": "plumbing-waste-pipe-min-diameter",
       "name": "排水横管最小管径 (占位, 待规范确认)",
       "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
       "severity": "error",
-      "element_types": ["PlumbingPipe", "plumbingpipe"],
+      "element_types": [
+        "PlumbingPipe",
+        "plumbingpipe"
+      ],
       "predicate": "element.pipe_type in ('waste', 'drain') and element.diameter_mm < min_pipe_diameter_mm",
       "params": {},
-      "param_defaults": {"min_pipe_diameter_mm": 50},
+      "param_defaults": {
+        "min_pipe_diameter_mm": 50
+      },
       "description_template": "排水横管管径 {diameter_mm}mm 小于最小要求 {min_pipe_diameter_mm}mm",
       "suggested_fix_template": "将管径调整为 >= {min_pipe_diameter_mm}mm (GB 50015 条文待确认)",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": true
     },
     {
       "rule_id": "plumbing-pipe-slope-in-range",
       "name": "排水管坡度应在规范区间 (占位, 待规范确认)",
       "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
       "severity": "warning",
-      "element_types": ["PlumbingPipe", "plumbingpipe"],
+      "element_types": [
+        "PlumbingPipe",
+        "plumbingpipe"
+      ],
       "predicate": "element.slope < min_slope or element.slope > max_slope",
       "params": {},
-      "param_defaults": {"min_slope": 0.0, "max_slope": 12.0},
+      "param_defaults": {
+        "min_slope": 0.0,
+        "max_slope": 12.0
+      },
       "description_template": "排水管坡度 {slope}% 超出规范区间 [{min_slope}%, {max_slope}%]",
       "suggested_fix_template": "将坡度调整到 {min_slope}%~{max_slope}% (GB 50015 条文待确认)",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": true
     },
     {
       "rule_id": "plumbing-pipe-manhole-distance",
       "name": "排水横管距检查井最大间距 (占位, 待规范确认)",
       "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
       "severity": "warning",
-      "element_types": ["PlumbingPipe", "plumbingpipe"],
+      "element_types": [
+        "PlumbingPipe",
+        "plumbingpipe"
+      ],
       "predicate": "element.distance_to_manhole_m > max_manhole_distance_m",
       "params": {},
-      "param_defaults": {"max_manhole_distance_m": 25.0},
+      "param_defaults": {
+        "max_manhole_distance_m": 25.0
+      },
       "description_template": "排水管距检查井 {distance_to_manhole_m}m 超过最大间距 {max_manhole_distance_m}m",
       "suggested_fix_template": "增设检查井使间距 <= {max_manhole_distance_m}m (GB 50015 条文待确认)",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": true
     },
     {
       "rule_id": "electrical-outlet-height-range",
       "name": "插座安装高度应在允许区间 (占位, 待规范确认)",
       "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
       "severity": "warning",
-      "element_types": ["ElectricalOutlet", "electricaloutlet"],
+      "element_types": [
+        "ElectricalOutlet",
+        "electricaloutlet"
+      ],
       "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
       "params": {},
-      "param_defaults": {"min_height_m": 0.0, "max_height_m": 2.0},
+      "param_defaults": {
+        "min_height_m": 0.0,
+        "max_height_m": 2.0
+      },
       "description_template": "插座安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
       "suggested_fix_template": "将插座安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50303 条文待确认)",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": true
     },
     {
       "rule_id": "electrical-switch-height-range",
       "name": "开关安装高度应在允许区间 (占位, 待规范确认)",
       "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
       "severity": "warning",
-      "element_types": ["ElectricalSwitch", "electricalswitch"],
+      "element_types": [
+        "ElectricalSwitch",
+        "electricalswitch"
+      ],
       "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
       "params": {},
-      "param_defaults": {"min_height_m": 1.0, "max_height_m": 1.5},
+      "param_defaults": {
+        "min_height_m": 1.0,
+        "max_height_m": 1.5
+      },
       "description_template": "开关安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
       "suggested_fix_template": "将开关安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50303 条文待确认)",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": true
     },
     {
       "rule_id": "electrical-outlet-earthing-required",
       "name": "插座回路应具备接地 (占位, 待规范确认)",
       "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
       "severity": "error",
-      "element_types": ["ElectricalOutlet", "electricaloutlet"],
+      "element_types": [
+        "ElectricalOutlet",
+        "electricaloutlet"
+      ],
       "predicate": "element.room_type in ('bathroom', 'kitchen') and not element.has_earthing",
       "params": {},
       "param_defaults": {},
       "description_template": "厨房/卫生间插座 {id} 未配置接地 (占位)",
       "suggested_fix_template": "为厨房/卫生间插座增加接地端子 (GB 50303 条文待确认)",
-      "enabled": true
+      "enabled": true,
+      "dsl_only": true
     }
   ]
 }

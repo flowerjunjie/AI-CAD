@@ -100,6 +100,10 @@ class DslRuleSpec:
     description_template: str = ""
     suggested_fix_template: str = ""
     enabled: bool = True
+    # 纯 DSL 新增专业规则才置 True — 只有它会被主链路 upsert 进引擎;
+    # 与 @register_rule 的 34 类重名的「参数覆盖」规则保持默认 False, 不顶替硬编码版
+    # (守住 34 类零改动红线)。
+    dsl_only: bool = False
     _compiled_predicate: str = ""
 
     def __post_init__(self) -> None:
@@ -131,6 +135,7 @@ def _build_spec(raw: dict[str, Any]) -> DslRuleSpec:
         description_template=raw.get("description_template", ""),
         suggested_fix_template=raw.get("suggested_fix_template", ""),
         enabled=raw.get("enabled", True),
+        dsl_only=raw.get("dsl_only", False),
     )
 
 
@@ -148,6 +153,7 @@ class ParametricRule(BaseRule):
         self.name = spec.name
         self.code_ref = spec.code_ref
         self.severity = spec.severity
+        self.dsl_only: bool = spec.dsl_only
         self.params: dict[str, Any] = {**spec.param_defaults, **spec.params}
         self._spec = spec
 
