@@ -107,15 +107,24 @@ def test_upsert_keeps_other_rules_and_adds_dsl():
 
 
 def test_default_schema_is_valid():
-    """仓库自带 default.json 可被 DslRuleProvider 正常加载。"""
+    """仓库自带 default.json 可被 DslRuleProvider 正常加载。
+
+    不锁死规则总数 (各 Phase 会不断追加新专业), 只校验:
+    - schema 合法可加载
+    - Phase 2 的 residential DSL 规则仍在
+    - Phase 3 追加的 plumbing 规则也在
+    """
     default = os.path.join(project_root, "src", "rules", "rules", "default.json")
     rules = load_dsl_rules(default)
-    assert len(rules) == 3
-    assert set(r.rule_id for r in rules) == {
-        "residential-bedroom-window-area",
-        "dsl-stair-riser",
-        "dsl-corridor-escape-width",
-    }
+    rule_ids = set(r.rule_id for r in rules)
+    # Phase 2 原有 residential DSL 规则
+    assert {"residential-bedroom-window-area",
+            "dsl-stair-riser",
+            "dsl-corridor-escape-width"} <= rule_ids
+    # Phase 3 给排水专业
+    assert {"plumbing-waste-pipe-min-diameter",
+            "plumbing-pipe-slope-in-range",
+            "plumbing-pipe-manhole-distance"} <= rule_ids
 
 
 def test_default_schema_rules_hit_real_elements():

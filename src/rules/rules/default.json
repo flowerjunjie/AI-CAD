@@ -38,6 +38,45 @@
       "description_template": "疏散走道宽度 {width_m}m 小于规范要求 1.4m",
       "suggested_fix_template": "将走廊宽度调整为 >= 1.4m",
       "enabled": true
+    },
+    {
+      "rule_id": "plumbing-waste-pipe-min-diameter",
+      "name": "排水横管最小管径 (占位, 待规范确认)",
+      "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "error",
+      "element_types": ["PlumbingPipe", "plumbingpipe"],
+      "predicate": "element.pipe_type in ('waste', 'drain') and element.diameter_mm < min_pipe_diameter_mm",
+      "params": {},
+      "param_defaults": {"min_pipe_diameter_mm": 50},
+      "description_template": "排水横管管径 {diameter_mm}mm 小于最小要求 {min_pipe_diameter_mm}mm",
+      "suggested_fix_template": "将管径调整为 >= {min_pipe_diameter_mm}mm (GB 50015 条文待确认)",
+      "enabled": true
+    },
+    {
+      "rule_id": "plumbing-pipe-slope-in-range",
+      "name": "排水管坡度应在规范区间 (占位, 待规范确认)",
+      "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": ["PlumbingPipe", "plumbingpipe"],
+      "predicate": "element.slope < min_slope or element.slope > max_slope",
+      "params": {},
+      "param_defaults": {"min_slope": 0.0, "max_slope": 12.0},
+      "description_template": "排水管坡度 {slope}% 超出规范区间 [{min_slope}%, {max_slope}%]",
+      "suggested_fix_template": "将坡度调整到 {min_slope}%~{max_slope}% (GB 50015 条文待确认)",
+      "enabled": true
+    },
+    {
+      "rule_id": "plumbing-pipe-manhole-distance",
+      "name": "排水横管距检查井最大间距 (占位, 待规范确认)",
+      "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": ["PlumbingPipe", "plumbingpipe"],
+      "predicate": "element.distance_to_manhole_m > max_manhole_distance_m",
+      "params": {},
+      "param_defaults": {"max_manhole_distance_m": 25.0},
+      "description_template": "排水管距检查井 {distance_to_manhole_m}m 超过最大间距 {max_manhole_distance_m}m",
+      "suggested_fix_template": "增设检查井使间距 <= {max_manhole_distance_m}m (GB 50015 条文待确认)",
+      "enabled": true
     }
   ]
 }
