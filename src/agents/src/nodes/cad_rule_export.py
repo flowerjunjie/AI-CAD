@@ -250,6 +250,40 @@ def rule_check_node(state: dict) -> dict:
     for c in detect_opening_collisions(door_layout, win_layout):
         violations.append(_collision_violation(c))
 
+    # 给排水：管道元素校验 (Phase 3, 走 DSL 的 plumbing-* 规则)
+    raw_pipes = raw.get("pipes", [])
+    if raw_pipes:
+        from src.rules.src.plumbing import PlumbingPipe
+        from src.rules.src.dsl import load_dsl_rules
+        # plumbing 规则是 DSL (default.json), 非 @register_rule 类,
+        # 全局引擎默认没有 — 显式 load 后 upsert 进本实例, 主链路才查得到。
+        import os
+        # __file__ = .../AI-CAD/src/agents/src/nodes/cad_rule_export.py
+        # 5 层 dirname 回项目根 (nodes→src→agents→src→AI-CAD)
+        _dsl_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))),
+            "src", "rules", "rules", "default.json",
+        )
+        for _pr in load_dsl_rules(_dsl_path):
+            if _pr.rule_id.startswith("plumbing-"):
+                engine.upsert(_pr)
+        pipe_elems = [
+            PlumbingPipe(
+                id=p.get("id", f"p{i}"),
+                pipe_type=p.get("pipe_type", "drain"),
+                diameter_mm=int(p.get("diameter_mm", 50)),
+                slope=float(p.get("slope", 0.0)),
+                distance_to_manhole_m=float(p.get("distance_to_manhole_m", 0.0)),
+            )
+            for i, p in enumerate(raw_pipes)
+        ]
+        violations.extend(engine.check(pipe_elems, rule_ids=[
+            "plumbing-waste-pipe-min-diameter",
+            "plumbing-pipe-slope-in-range",
+            "plumbing-pipe-manhole-distance",
+        ]))
+
     return {
         "rule_violations": [
             {
