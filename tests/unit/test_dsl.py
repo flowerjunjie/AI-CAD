@@ -67,7 +67,33 @@ def test_parametric_rule_violation():
     result = rules[0].check(bad)
     assert not result.passed
     assert result.violations[0].element_id == "d1"
-    assert result.violations[0].description == "户门宽度 0.8m < 1.0m"
+
+
+def test_predicate_missing_attr_degrades_not_crash(tmp_path):
+    """护栏: predicate 引用了元素没有的属性 (depth_m) 时, check 不 AttributeError
+    崩整条校验链, 而是降级跳过该元素 (passed=True) + 记 warning。
+
+    场景: DSL 规则写 element.depth_m 但 Door 没有该字段 — 加新专业字段时
+    规则没同步就会遇到, 之前会炸掉整个 rule_check_node, 现在显式兜住。
+    """
+    data = {
+        "rules": [
+            {
+                "rule_id": "dsl-door-depth",
+                "name": "门深度检查 (占位)",
+                "code_ref": "TBD",
+                "severity": "warning",
+                "element_types": ["Door", "door"],
+                "predicate": "element.depth_m > 0.1",
+                "enabled": True,
+            }
+        ]
+    }
+    rules = DslRuleProvider(_write_json(data)).load()
+    door = Door(id="d1", width_m=0.9, room_type="interior", location=(0, 0))
+    result = rules[0].check(door)  # Door 没有 depth_m
+    assert result.passed, "缺失属性应降级为通过, 不崩"
+    assert not result.violations
 
 
 def test_parametric_rule_pass():

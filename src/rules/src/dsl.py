@@ -144,7 +144,18 @@ class ParametricRule(BaseRule):
     def check(self, element: Any) -> RuleResult:
         if not self._matches_type(element):
             return RuleResult(passed=True)
-        if not self._evaluate_predicate(element):
+        try:
+            violated = self._evaluate_predicate(element)
+        except AttributeError as e:
+            # predicate 引用了该元素没有的属性 (如某 DSL 规则写 element.depth_m
+            # 但元素没有) — 不静默放行也不让整条校验链炸, 降级成一条明确诊断。
+            import logging
+            logging.getLogger(__name__).warning(
+                "规则 %s 的 predicate 引用了 %s 没有的属性 %s, 跳过该元素: %s",
+                self.rule_id, type(element).__name__, getattr(e, "arg", None), e,
+            )
+            return RuleResult(passed=True)
+        if not violated:
             return RuleResult(passed=True)
         violation = RuleViolation(
             rule_id=self.rule_id,
