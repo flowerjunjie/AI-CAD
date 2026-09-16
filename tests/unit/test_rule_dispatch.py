@@ -77,3 +77,35 @@ def test_new_dsl_professional_rules_load_without_code_change():
     upserted = [r for r in load_dsl_rules(path) if r.rule_id not in existing]
     assert any(r.rule_id == "hvac-duct-min-size" for r in upserted), \
         "新专业前缀规则应无需改代码即可被数据驱动逻辑纳入"
+
+
+def test_dispatch_table_entries_are_simple_raw_element_rule_mapping():
+    """护栏 (SOP 反模式③): 分发表 _ELEMENT_CHECKS 每一项都必须是
+    「raw 元素 → build 出单个 element → engine.check(elements, rule_ids)」
+    这种简单映射。几何层逻辑 (依赖 _layout_from_state/坐标的碰撞检测) 不进表。
+
+    不变量: 每项 = {raw_key: str, build: callable(raw,idx)->object,
+    rule_ids: list[str]}, 且 build 产物是可被 engine.check 消费的 element
+    (有 rule_id 匹配的类型, 不是坐标系/几何结构)。任何一项若偏离 (比如把
+    需要 layout 的碰撞检测塞进表), 会破坏主链路的语义, 在此拦下。
+    """
+    from src.agents.src.nodes.cad_rule_export import _ELEMENT_CHECKS
+
+    assert _ELEMENT_CHECKS, "分发表不能为空"
+    for entry in _ELEMENT_CHECKS:
+        assert set(entry) == {"raw_key", "build", "rule_ids"}, \
+            f"分发表项 {entry.get('raw_key')} 结构必须恰为 raw_key/build/rule_ids, 实际 {sorted(entry)}"
+        assert isinstance(entry["raw_key"], str) and entry["raw_key"], \
+            f"raw_key 需非空 str: {entry['raw_key']!r}"
+        assert callable(entry["build"]), f"build 需 callable: {entry['raw_key']}"
+        assert isinstance(entry["rule_ids"], list) and entry["rule_ids"], \
+            f"rule_ids 需非空 list: {entry['rule_ids']!r}"
+        assert all(isinstance(rid, str) for rid in entry["rule_ids"]), \
+            f"rule_ids 元素需 str: {entry['raw_key']}"
+        # build 需能产出可被 engine 消费的 element (对空 raw 造默认实例不崩)
+        elem = entry["build"]({}, 0)
+        assert elem is not None, f"{entry['raw_key']} 的 build 对空 raw 应产默认 element"
+        # 几何依赖型对象不应混进表 (其 build 产物不该需要 layout 上下文才有意义)
+        assert not hasattr(elem, "polygon") and not hasattr(elem, "bbox"), \
+            f"{entry['raw_key']} 的 build 产出几何对象 (polygon/bbox), 几何逻辑不该进分发表"
+
