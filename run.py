@@ -208,11 +208,14 @@ def main():
     print(f"  报告:   {report}")
     print(f"\n✓ 全链路运行成功 — 共 {rule_count} 条规范 / {len(parsed['task_list'])} 个任务\n")
 
-    # 体验闭环: 渲染一张真实户型图 + 自动打开 (肉眼验收, 不用手开 CAD)
+    # 体验闭环: 渲染「Agent 真实出图」+ 自动打开 (肉眼验收, 不用手开 CAD)
+    # 渲染对象 = agent_result 的 final_dwg_path (Agent 真出图), 不是 [3/5] 独立小样。
+    # 否则 preview.png 画的是固定 4 线样板, 跟 LLM/Agent 出图没关系 — 渲染错了对象。
     if not NO_LLM or "--render" in sys.argv:
+        real_dwg = (agent_result or {}).get("final_dwg_path") or dwg
         try:
-            png = render_and_open(dwg)
-            print(f"  户型图: {png}")
+            png = render_and_open(real_dwg)
+            print(f"  户型图: {png} (渲染自 {real_dwg})")
         except Exception as e:
             print(f"  [提示] 户型渲染跳过: {e}")
 
