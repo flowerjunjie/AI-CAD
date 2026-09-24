@@ -7,8 +7,11 @@
 | 文档 | 说明 | 状态 |
 |------|------|------|
 | [README.md](../README.md) | 项目概述、快速开始 | ✅ |
+| [DELIVERY.md](../DELIVERY.md) | 技术实力交付报告（占位+路线图） | ✅ |
 | [architecture.md](architecture.md) | 技术架构设计 | ✅ |
 | [phases.md](phases.md) | 分阶段实施计划 | ✅ |
+| [capability-map.md](capability-map.md) | 一页纸能力地图（展示用） | ✅ |
+| [capability-slide.html](capability-slide.html) | 单屏技术实力幻灯片（展示用） | ✅ |
 
 ## 原始需求文档
 

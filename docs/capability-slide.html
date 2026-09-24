@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-CAD · 技术实力总览</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#16223a; --line:#243350;
+    --ink:#e8eefc; --sub:#8fa0c4; --dim:#5a6a8c;
+    --ok:#33d6a6; --ok2:#1fae85; --todo:#f0b429; --todo2:#3a3320;
+    --blue:#4f9cff; --violet:#a08cff; --accent:#e94560;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 20% -10%,#132444 0%,var(--bg) 60%);
+    color:var(--ink);font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  .stage{width:min(100vw,177.78vh);aspect-ratio:16/9;padding:2.2vh 2.2vw}
+  .grid{display:grid;grid-template-rows:auto 1fr auto;gap:1.2vh;height:100%}
+
+  /* header */
+  .hd{display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:1vh}
+  .logo{width:5vw;height:5vw;border-radius:14%;background:linear-gradient(135deg,var(--accent),#ff7a59);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:2.2vw;color:#fff;box-shadow:0 6px 20px rgba(233,69,96,.4)}
+  h1{font-size:1.9vw;font-weight:700;letter-spacing:.4px}
+  h1 span{color:var(--sub);font-weight:400;font-size:1.1vw;margin-left:.8vw}
+  .tag{font-size:.95vw;color:var(--sub);border:1px solid var(--line);border-radius:999px;padding:.5vh 1.2vw;background:var(--panel)}
+
+  /* body: left map + right list */
+  .main{display:grid;grid-template-columns:1.25fr 1fr;gap:1.4vw;height:100%}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:1.6vh 1.3vw}
+  .card h2{font-size:1.15vw;color:var(--sub);font-weight:600;margin-bottom:1vh;display:flex;align-items:center;gap:.6vw}
+  .card h2::before{content:"";width:.4vw;height:1.4vh;background:var(--accent);border-radius:2px}
+
+  /* engine spine */
+  .spine{display:flex;flex-direction:column;gap:.9vh;height:100%;justify-content:center}
+  .spine-node{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:1.1vh 1.1vw;font-size:1.05vw;text-align:center}
+  .spine-node.core{background:linear-gradient(135deg,#1a2a4a,#16223a);border-color:#31486f}
+  .spine-node .t{font-weight:600}
+  .spine-node .s{font-size:.85vw;color:var(--sub);margin-top:.3vh}
+  .spine-arrow{text-align:center;color:var(--dim);font-size:1.1vw;line-height:.4vh}
+  .profs{display:grid;grid-template-columns:repeat(5,1fr);gap:.7vw}
+  .prof{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:.9vh .5vw;text-align:center;font-size:.82vw}
+  .prof .dot{width:1vw;height:1vw;border-radius:50%;background:var(--ok);margin:0 auto .5vh;box-shadow:0 0 10px var(--ok)}
+  .prof .n{font-weight:600;font-size:1vw}
+  .prof .r{color:var(--sub);font-size:.78vw;margin-top:.3vh}
+
+  /* capability list */
+  .cap{display:grid;grid-template-columns:1fr 1fr;gap:1.6vw;height:100%;align-items:center}
+  .capcol{display:flex;flex-direction:column;gap:.75vh}
+  .capcol .head{font-size:1.05vw;font-weight:700;margin-bottom:.2vh;display:flex;align-items:center;gap:.5vw}
+  .capcol.done .head{color:var(--ok)} .capcol.tbd .head{color:var(--todo)}
+  .capcol .head .chip{font-size:.75vw;font-weight:500;color:var(--sub);border:1px solid var(--line);border-radius:999px;padding:.2vh .8vw}
+  .row{display:flex;align-items:center;gap:.6vw;font-size:.92vw;background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:.7vh .9vw}
+  .row .mk{font-weight:800}
+  .capcol.done .mk{color:var(--ok)} .capcol.tbd .mk{color:var(--todo)}
+  .row .lb{flex:1}
+  .row .lt{font-size:.75vw;color:var(--dim)}
+  .capcol.tbd .row{background:var(--todo2);border-color:#4a3d1f}
+
+  /* footer */
+  .ft{display:flex;align-items:center;justify-content:space-between;gap:1.4vw}
+  .proof{display:flex;gap:.8vw;flex-wrap:wrap}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.8vh 1vw;font-size:.82vw;text-align:center;min-width:8vw}
+  .kpi b{display:block;font-size:1.5vw;color:var(--blue);font-weight:800}
+  .kpi span{color:var(--sub)}
+  .march{font-size:.95vw;color:var(--ink)}
+  .march b{color:var(--accent)}
+  .march .m{color:var(--sub)}
+  .road{display:flex;gap:.5vw;margin-top:.6vh}
+  .road i{font-style:normal;font-size:.78vw;color:var(--sub);border:1px solid var(--line);border-radius:6px;padding:.2vh .6vw}
+  .road i.done{color:var(--ok);border-color:var(--ok2)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="grid">
+
+  <!-- HEADER -->
+  <div class="hd">
+    <div class="brand">
+      <div class="logo">AI<br>CAD</div>
+      <h1>施工图深化智能体 <span>· 技术实力总览</span></h1>
+    </div>
+    <div class="tag">规则引擎保准确 · LLM 保灵活 · 人在回路保可控</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- 左: 引擎底座 + 五专业 -->
+    <div class="card">
+      <h2>兼容并蓄 · 一个底座，五个专业同范式接入</h2>
+      <div class="spine">
+        <div class="spine-node core"><div class="t">规则 DSL 引擎</div><div class="s">受限 eval · 信任边界护栏 · 命中/放行/参数覆盖</div></div>
+        <div class="spine-arrow">▼  加分发表项 + 元素模型 + DSL 规则 = 加一个专业（主链路 0 改动）</div>
+        <div class="profs">
+          <div class="prof"><div class="dot"></div><div class="n">建筑</div><div class="r">30 规则类</div></div>
+          <div class="prof"><div class="dot"></div><div class="n">给排水</div><div class="r">3 DSL · 管/坡度</div></div>
+          <div class="prof"><div class="dot"></div><div class="n">电气</div><div class="r">3 DSL · 插座/开关</div></div>
+          <div class="prof"><div class="dot"></div><div class="n">暖通</div><div class="r">3 DSL · 风管/风口</div></div>
+          <div class="prof"><div class="dot"></div><div class="n">结构</div><div class="r">2 DSL · 梁/柱</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右: 能力清单 ✅/▢ -->
+    <div class="cap">
+      <div class="capcol done">
+        <div class="head">✓ 已跑通 <span class="chip">实跑验证</span></div>
+        <div class="row"><span class="mk">✓</span><span class="lb">规则引擎</span><span class="lt">30 类 + 14 DSL</span></div>
+        <div class="row"><span class="mk">✓</span><span class="lb">多专业接入</span><span class="lt">给排水/电气/暖通/结构</span></div>
+        <div class="row"><span class="mk">✓</span><span class="lb">上游 DWG 解析</span><span class="lt">一份 INSERT 底座</span></div>
+        <div class="row"><span class="mk">✓</span><span class="lb">LLM Agent 全链路</span><span class="lt">LangGraph · 双路径可验</span></div>
+        <div class="row"><span class="mk">✓</span><span class="lb">出图 + 校验 + RAG</span><span class="lt">DWG/PNG · 本地不出境</span></div>
+      </div>
+      <div class="capcol tbd">
+        <div class="head">▢ 待专业专家补 <span class="chip">机制已通·值待定</span></div>
+        <div class="row"><span class="mk">▢</span><span class="lb">规范数值回填</span><span class="lt">各阈值 TBD</span></div>
+        <div class="row"><span class="mk">▢</span><span class="lb">DWG 图层/块名约定</span><span class="lt">各院制图规范</span></div>
+        <div class="row"><span class="mk">▢</span><span class="lb">出图深化</span><span class="lt">元素→图元画法</span></div>
+        <div class="row"><span class="mk">▢</span><span class="lb">碰撞检测 / 团队协作</span><span class="lt">多专业 · 多设计师</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER: 数据背书 + 路线图 -->
+  <div class="ft">
+    <div class="proof">
+      <div class="kpi"><b>171</b><span>测试 passed</span></div>
+      <div class="kpi"><b>5</b><span>专业接入</span></div>
+      <div class="kpi"><b>14</b><span>DSL 规则</span></div>
+      <div class="kpi"><b>31</b><span>commit 演进</span></div>
+    </div>
+    <div class="march">
+      <b>可扩展</b>：加一个新专业 = 改 JSON + 元素模型 + 分发表一项，主链路循环体 <b>0 行</b>改动 ·
+      架构已消化"加专业"复杂度，<span class="m">专业价值留给专业的人</span>
+      <div class="road">
+        <i class="done">✓ Phase 0–6</i><i>M1 数值回填</i><i>M2 图层约定</i><i>M3 出图深化</i><i>M4 碰撞检测</i><i>M5 团队协作</i>
+      </div>
+    </div>
+  </div>
+
+</div></div>
+</body>
+</html>
