@@ -62,9 +62,14 @@
 
 ## 当前专业接入状态（盘点）
 
-| 专业 | 元素 | DSL 规则 | `dsl_only` | 主链路 |
-|------|------|---------|-----------|--------|
-| 给排水 | `PlumbingPipe` | 3 条 `plumbing-*` | true | 已接 |
-| 电气 | `ElectricalOutlet`/`ElectricalSwitch` | 3 条 `electrical-*` | true | 已接 |
-| 暖通 | `HvacDuct`/`HvacUnit`/`HvacGrille` | 3 条 `hvac-*` | true | 已接 |
-| 结构 | `StructuralBeam`/`StructuralColumn` | 2 条 `structural-*` | true | 已接 |
+| 专业 | 元素 | DSL 规则 | `dsl_only` | 主链路 | 上游解析 (G2) |
+|------|------|---------|-----------|--------|--------|
+| 给排水 | `PlumbingPipe` | 3 条 `plumbing-*` | true | 已接 | `get_plumbing_segments` (线段) |
+| 电气 | `ElectricalOutlet`/`ElectricalSwitch` | 3 条 `electrical-*` | true | 已接 | `get_electrical_points` (INSERT 块) |
+| 暖通 | `HvacDuct`/`HvacUnit`/`HvacGrille` | 3 条 `hvac-*` | true | 已接 | `get_hvac_points` (INSERT 块) |
+| 结构 | `StructuralBeam`/`StructuralColumn` | 2 条 `structural-*` | true | 已接 | `get_structural_segments`/`get_structural_blocks` |
+
+> 上游解析共性：结构/电气/暖通的块类元素共用**一份**底层 INSERT 读取
+> `DXFReader.get_element_blocks`（各专业只加「图层/块名 → kind」映射 dict），
+> 契约见 `docs/element-upstream-contract.md`。三层测试（真实 DXF 喂 `get_*`）已固化，
+> G2 孤儿模块根治。

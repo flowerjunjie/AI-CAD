@@ -13,6 +13,88 @@ from src.agents.src.tools.hvac_extractor import extract_hvac_points
 from src.rules.src.hvac import HvacDuct, HvacUnit, HvacGrille
 
 
+# ─── DXF 造数据辅助 (照 test_structural_extractor._make_structural_dxf 范式) ───
+def _make_hvac_dxf(path):
+    """造含暖通 INSERT 块的 DXF。
+
+    放:
+      HVAC_DUCT (块类): INSERT 块名 DUCT_STD, 插入点 (0.0, 0.0)
+      HVAC_UNIT (块类): INSERT 块名 UNIT_STD, 插入点 (4.0, 6.0)
+      HVAC_GRILLE (块类): INSERT 块名 GRILLE_STD, 插入点 (2.0, 3.0)
+    """
+    import ezdxf
+
+    doc = ezdxf.new("AC1027")
+    for layer in ("HVAC_DUCT", "HVAC_UNIT", "HVAC_GRILLE"):
+        doc.layers.new(layer)
+    for blk in ("DUCT_STD", "UNIT_STD", "GRILLE_STD"):
+        doc.blocks.new(blk)
+    msp = doc.modelspace()
+
+    # ezdxf 1.4.4: add_blockref(name, insert) 的 insert 是位置参
+    msp.add_blockref("DUCT_STD", (0.0, 0.0), dxfattribs={"layer": "HVAC_DUCT"})
+    msp.add_blockref("UNIT_STD", (4.0, 6.0), dxfattribs={"layer": "HVAC_UNIT"})
+    msp.add_blockref("GRILLE_STD", (2.0, 3.0), dxfattribs={"layer": "HVAC_GRILLE"})
+
+    doc.saveas(path)
+
+
+def _open_reader(dxf_path):
+    from src.agents.src.tools.cad_tools import DXFReader
+
+    reader = DXFReader(dxf_path)
+    assert reader.open(), "DXF open() 失败"
+    return reader
+
+
+# ─── DXF-based cases: 真实 DXF 喂 get_hvac_points (G2 根治证据) ───
+def test_hvac_points_real_dxf_full_chain(tmp_path):
+    """真实 DXF 里造暖通 INSERT 块 → reader.get_hvac_points() dict 契约
+    → 喂 extract_hvac_points 全链路通。"""
+    p = str(tmp_path / "hvac.dxf")
+    _make_hvac_dxf(p)
+    reader = _open_reader(p)
+
+    pts = reader.get_hvac_points()  # 默认 HVAC_DUCT + HVAC_UNIT + HVAC_GRILLE
+    assert len(pts) == 3, f"3 块 = 3 点位, 实际 {len(pts)}"
+
+    by_id = {q["id"]: q for q in pts}
+    assert set(by_id) == {"DUCT_STD", "UNIT_STD", "GRILLE_STD"}, \
+        f"点位 id 应为块名, 实际 {set(by_id)}"
+    duct, unit, grille = by_id["DUCT_STD"], by_id["UNIT_STD"], by_id["GRILLE_STD"]
+    # 占位映射: 块名 DUCT_STD→duct / UNIT_STD→unit / GRILLE_STD→grille
+    assert (duct["kind"], unit["kind"], grille["kind"]) == ("duct", "unit", "grille"), \
+        f"kind 映射不符, 实际 {(duct['kind'], unit['kind'], grille['kind'])}"
+    assert unit["x"] == 4.0 and unit["y"] == 6.0, \
+        f"UNIT_STD 插入点应 (4.0,6.0), 实际 ({unit['x']},{unit['y']})"
+    # 每个点位只带当前 kind 相关的缺省键 (value None), extractor 按 kind 兜底占位
+    assert "cooling_kw" in unit and "duct_type" not in unit, \
+        f"unit 点位应只带 unit 相关键, 实际 {list(unit)}"
+    assert "duct_type" in duct and "unit_type" not in duct, \
+        f"duct 点位应只带 duct 相关键, 实际 {list(duct)}"
+
+    # 全链路: 真实 dict → 抽层 → 元素 (缺省字段走占位 + warning, 不崩)
+    elems = extract_hvac_points(pts)
+    assert [type(e).__name__ for e in elems] == ["HvacDuct", "HvacUnit", "HvacGrille"], \
+        f"全链路应 duct/unit/grille → HvacDuct/HvacUnit/HvacGrille, 实际 " \
+        f"{[type(e).__name__ for e in elems]}"
+    assert elems[0].diameter_mm == 100, "duct 缺省 → 占位 100mm"
+    assert elems[1].unit_type == "room" and elems[1].x == 4.0, \
+        "unit 缺省 → 占位 room, x 保持真实值 4.0"
+
+
+def test_hvac_points_requires_open():
+    """未 open() 取暖通点位 → RuntimeError。"""
+    from src.agents.src.tools.cad_tools import DXFReader
+
+    reader = DXFReader("nonexistent.dxf")
+    try:
+        reader.get_hvac_points()
+        assert False, "未 open 应抛 RuntimeError"
+    except RuntimeError:
+        pass
+
+
 def test_duct_from_point():
     elems = extract_hvac_points([
         {"kind": "duct", "duct_type": "supply", "diameter_mm": 100,
