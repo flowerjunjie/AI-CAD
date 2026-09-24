@@ -7,7 +7,6 @@ pydantic>=2.6.0
 python-dotenv>=1.0.0
 chromadb>=0.4.24
 openai>=1.12.0
-minimax-ai>=0.3.0
 ezdxf>=0.18.0
 numpy>=1.26.0
 pillow>=10.2.0

@@ -1,5 +1,5 @@
 @echo off
-rem 在桌面生成真正的 .lnk 快捷方式 → 指向 start.bat, 双击即运行
+rem Generate desktop .lnk shortcut pointing to start.bat
 setlocal
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0make_desktop_shortcut.ps1"
 pause
