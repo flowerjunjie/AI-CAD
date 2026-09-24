@@ -103,6 +103,19 @@ AI-CAD/
 
 ## 🚀 快速开始
 
+### Windows 一键可执行（推荐）
+
+双击或命令行运行 `start.bat`，自动装依赖 + 跑全链路 + 弹出户型图：
+
+```bat
+start.bat            全流程含 LLM (联网, 出图+自动弹窗口型图)
+start.bat no-llm     纯本地快验 (不联网, 秒级确定结果)
+```
+
+想在桌面放一个图标？双击 `make_desktop_shortcut.bat` 即可生成 `.lnk`。
+
+### 命令行（手动）
+
 ### 环境要求
 
 - Node.js >= 18
