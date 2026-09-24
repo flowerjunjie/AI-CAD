@@ -63,7 +63,7 @@ export async function runPipeline(sample: string, useLlm: boolean) {
 export async function runRagSearch(query: string) {
   const store = useEngineStore.getState();
   type RAGResp = { query: string; results: RAGResult[] };
-  const resp = await postJson<RAGResp, { query: string }>('/api/rag/search', { query });
+  const resp = await postJson<RAGResp, { query: string; top_k: number }>('/api/rag/search', { query, top_k: 5 });
   store.setRagResults(query, resp?.results || []);
 }
 

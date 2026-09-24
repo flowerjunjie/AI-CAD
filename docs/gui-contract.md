@@ -1,0 +1,94 @@
+# AI-CAD 专业 GUI · 共享契约 (专家团作战地图)
+
+> 本文件是所有专家团的**唯一接口基准**。谁先动谁就按这份写，不许猜接口。
+> 目标：把"黑框命令行"升级成专业级 Electron 桌面 GUI —— 已实现的能力真驱动 Python 引擎，
+> 未实现的能力置灰卡片 + 操作说明 + 所属专业，诚实标注不造假。
+
+## 0. 顶层架构
+
+```
+[ Electron 主进程 ]────IPC────[ React 前端 ]
+        │  起子进程                     │  fetch /api/*
+        ▼                              ▼
+[ Python FastAPI 桥  ]  ──驱动──>  真实 Python 引擎
+   src/gui/bridge.py              (规则引擎 / LangGraph Agent / RAG / 渲染)
+```
+
+- **前端**：仓库里已有 `src/client/` (React + Electron + zustand + three)。升级它的 `App.tsx`，
+  把写死的占位数据换成**真调本地 FastAPI 桥**拿到的数据。开发模式 `localhost:3000` 由 vite 起。
+- **桥**：新建 `src/gui/bridge.py`，用 FastAPI + uvicorn，`http://127.0.0.1:8642`，CORS 放行 `localhost:*`。
+  它是 GUI 唯一的引擎入口，**已实现能力全部从它出数据**。
+- **入口**：`start_gui.bat`（纯 ASCII）起 uvicorn + 拉起 electron；失败兜底 `start_gui.py`。
+
+## 1. FastAPI 桥接口契约 (Python, src/gui/bridge.py)
+
+| 方法·路径 | 请求 | 响应 (JSON) | 底层来源 (已实现) |
+|---|---|---|---|
+| `GET /api/health` | – | `{"status":"ok","phase":"Phase 6","modules":{"rules":n,"dsl":m,"rag":bool,"llm":bool}}` | get_engine().list_rules() 计数 |
+| `GET /api/rules` | – | `[{rule_id,name,code_ref,severity,source,enabled}]` source∈{hardcoded,dsl} | engine.list_rules() + DSL |
+| `POST /api/pipeline` | `{"sample":"residential_100sqm.json","use_llm":false}` | `{"project_type","zones":[{name,type,area}],"task_count","violations":[violation],"dwg_path","preview_url"}` | run_agent_demo(inject_sample_structure=not use_llm) |
+| `GET /api/preview?sample=residential_100sqm.json` | – | 直接返回 PNG bytes (Content-Type image/png) | render_and_open 逻辑抽成只渲染不弹窗 |
+| `GET /api/rule-violations` | – | 全量规则实测违规演示 `[{...}]` | engine.check([bad elements]) 演示 |
+| `POST /api/rag/search` | `{"query":"疏散走道最小宽度"}` | `{"query","results":[{text,score,category}]}` | RAGKnowledgeBase.search (本地 chroma_db) |
+
+**violation 结构**（引擎 `RuleViolation.to_dict()` 已固定，桥原样透出）：
+```json
+{"rule_id","rule_name","severity":"error|warning|info","description","code_ref","element_id","suggested_fix"}
+```
+
+**约束**：
+- `POST /api/pipeline` 走 `--no-llm` 等价路径（`inject_sample_structure=True`），秒级确定结果；
+  `use_llm=true` 时 `inject_sample_structure=False`，但**默认前端不勾**，避免 100s 冷启动 + 联网。
+- 预览渲染抽 `bridge.render_sample_png(sample) -> bytes`，**绝不弹窗**（`os.startfile` 那段只在 run.py 里）。
+- 所有 import 懒加载（langgraph 冷启动 ~100s，模块收集时不许触发），沿用 `graph.py` 的 lazy 写法。
+- 端口 8642 被占就 `+1` 重试，返回实际端口给前端。
+
+## 2. React 前端页面契约 (src/client/src/)
+
+主界面三区布局（沿用现有 `.app` 骨架，升级数据源）：
+
+```
+Header:  品牌 + 状态徽章(● 引擎已连接/未连接) + Phase 标签
+Main:
+  ├─ 左 CAD 视图:   画 <img src={api}/api/preview?sample=...> 真户型图 + 「重新出图」按钮
+  │                 (未实现: 专业管/线/柱图元 → 置灰卡片 "出图深化 · 各专业图元标准")
+  ├─ 中 Agent 流程:  6 步流水线, 点「运行」→ POST /api/pipeline → 高亮已完成步 + 出 violations
+  └─ 右 规则/知识:   GET /api/rules 真规则列表(分 hard/dsl 两 tab) + RAG 检索框(POST /api/rag/search)
+Footer:  占位符卡片区 —— 未实现能力置灰, 每张含: 标题 / 一句话操作说明 / 所属专业 / [占位] 徽章
+```
+
+**占位符卡片数据 (未实现, 前端写死成配置, 不造假数据)**：
+```js
+const PLACEHOLDERS = [
+  {id:"m1-values",  title:"规范数值回填",  desc:"各专业阈值待专家确认后填 default.json, 改 JSON 零代码", domain:"给排水/电气/暖通/结构", owner:"各业专家"},
+  {id:"m2-layer",   title:"DWG 图层约定",  desc:"各院点位图层/块名映射待对齐制图规范", domain:"出图规范", owner:"制图规范"},
+  {id:"m3-render",  title:"出图深化",      desc:"各专业 元素→图元 画法 (线型/填充/图层着色)", domain:"各专业制图", owner:"各专业制图规范"},
+  {id:"m4-collision",title:"多专业碰撞检测",desc:"管线穿梁 / 插座撞梁 自动检测", domain:"多专业协同", owner:"团队工程"},
+  {id:"m5-team",    title:"团队协作",      desc:"多设计师 + 改动冲突检测 + 权限", domain:"协同", owner:"团队"},
+];
+```
+
+**状态**：沿用 zustand；新增 `useEngineStore`（engineConnected, rules, violations, running, lastSample）。
+**网络**：`const API = "http://127.0.0.1:8642"`（开发可覆写 `VITE_API`）。所有 fetch 失败 → 顶部徽章变「● 引擎未连接」+ 置灰，**不崩**。
+
+## 3. 各专业域 → 桥/前端 责任切分 (专家团分工)
+
+| 专家团 | 负责 | 关键文件 |
+|---|---|---|
+| A 前端/桌面 | React 三区 UI + 占位卡片 + zustand + 接 /api | src/client/src/App.tsx 等 |
+| B 规则域 | /api/rules + /api/rule-violations 真数据 + 规则分 tab | src/gui/bridge.py (规则段) |
+| C Agent 域 | /api/pipeline + /api/preview 真出图 | src/gui/bridge.py (agent 段) |
+| D RAG/知识 | /api/rag/search 本地检索真结果 | src/gui/bridge.py (rag 段) |
+| E 入口/构建 | start_gui.bat / start_gui.py / electron 起法 / vite 代理 | 根 scripts |
+
+> 桥是**同一个文件** src/gui/bridge.py，但按段切给 B/C/D 各自写各自的路由函数，
+> A 和 E 不碰桥逻辑。若并行写同一文件冲突，以「每段一个独立函数 + 底部统一 app.include」收敛。
+
+## 4. 交付红线 (每个专家团交付前自查)
+
+- [ ] 已实现能力：前端拿到的**真数据**能跑通（贴 curl/浏览器截图证据）
+- [ ] 未实现能力：只有置灰卡片 + 说明，**无任何伪造数字/假图元**
+- [ ] `python -c "import src.gui.bridge"` 不崩（模块收集不触发 langgraph 冷启动）
+- [ ] 启动 `start_gui.bat` 后浏览器/Electron 能连上、徽章变绿
+- [ ] 纯 ASCII 的 .bat / .py 入口不炸（沿用上一轮 GBK 教训）
+- [ ] 不改 `src/rules/` `src/agents/src/` 既有引擎代码（只读调用，不破坏 171 测试）
