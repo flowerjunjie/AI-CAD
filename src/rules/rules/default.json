@@ -224,6 +224,45 @@
       "suggested_fix_template": "将风口安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50736 条文待确认)",
       "enabled": true,
       "dsl_only": true
+    },
+    {
+      "rule_id": "structural-beam-width-depth-ratio",
+      "name": "梁截面高宽比应在允许区间 (占位, 待规范确认)",
+      "code_ref": "GB 50010 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": [
+        "StructuralBeam",
+        "structuralbeam"
+      ],
+      "predicate": "element.width_mm > 0 and (element.depth_mm / element.width_mm < min_ratio or element.depth_mm / element.width_mm > max_ratio)",
+      "params": {},
+      "param_defaults": {
+        "min_ratio": 1.5,
+        "max_ratio": 4.0
+      },
+      "description_template": "梁截面高宽比 {depth_mm}/{width_mm} 超出允许区间 [{min_ratio}, {max_ratio}] (占位)",
+      "suggested_fix_template": "将梁截面高宽比调整到 {min_ratio}~{max_ratio} (GB 50010 条文待确认)",
+      "enabled": true,
+      "dsl_only": true
+    },
+    {
+      "rule_id": "structural-column-min-section",
+      "name": "柱最小截面尺寸 (占位, 待规范确认)",
+      "code_ref": "GB 50011 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "error",
+      "element_types": [
+        "StructuralColumn",
+        "structuralcolumn"
+      ],
+      "predicate": "element.column_type != 'foundation' and element.section_mm < min_section_mm",
+      "params": {},
+      "param_defaults": {
+        "min_section_mm": 300
+      },
+      "description_template": "柱 {id} 截面短边 {section_mm}mm 小于最小要求 {min_section_mm}mm (占位)",
+      "suggested_fix_template": "将柱截面短边调整为 >= {min_section_mm}mm (GB 50011 条文待确认)",
+      "enabled": true,
+      "dsl_only": true
     }
   ]
 }

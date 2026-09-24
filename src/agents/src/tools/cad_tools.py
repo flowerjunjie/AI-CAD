@@ -146,6 +146,55 @@ class DXFReader:
                 out.append({"start": a, "end": b, "layer": layer})
         return out
 
+    def get_structural_segments(
+        self,
+        layer_names=("BEAM", "WALL_SHEAR"),
+        include_layer: bool = False,
+    ) -> list:
+        """按图层读结构梁/承重墙线段（照 get_plumbing_segments 范式）。
+
+        include_layer=False (默认): 纯线段 [(start_xy, end_xy), ...]。
+        include_layer=True: 统一结构化 dict
+            [{"start": start_xy, "end": end_xy, "layer": layer}, ...]，
+            每条带来源图层，供 structural_extractor 按图层映射 beam_type/width_mm。
+        契约: docs/structural-upstream-contract.md §2.1
+        """
+        if self.doc is None:
+            raise RuntimeError("调用 get_structural_segments 前需先 open()")
+        if not include_layer:
+            return self._segments_from_layer(layer_names)
+        out = []
+        for layer in layer_names:
+            for a, b in self._segments_from_layer((layer,)):
+                out.append({"start": a, "end": b, "layer": layer})
+        return out
+
+    def get_structural_blocks(self, layer_names=("COLUMN", "FOUNDATION", "NODE")) -> list:
+        """按图层读 INSERT 块 → 结构化 dict（与 ezdxf 实体解耦）。
+
+        每项: {"block_name": ..., "x": ..., "y": ..., "layer": ...}
+        - block_name 是结构专业图层约定里声明的块名（如 COL_K / COL_Z / FOUND_S，TBD）
+        - 插入点取 dxf.insert 前 2 个值 (x, y)，z 丢弃（与线段类一致）
+        - 只认 INSERT 实体；同图层的 CIRCLE/多边形不视为柱（避免误抓门窗小圆圈）
+
+        实测 (ezdxf 1.4.4): msp.query('INSERT[layer=="<图层>"]')
+        返回实体的 .dxf.name / .dxf.insert(3 元组取前 2) / .dxf.layer。
+        契约: docs/structural-upstream-contract.md §2.2
+        """
+        if self.doc is None:
+            raise RuntimeError("调用 get_structural_blocks 前需先 open()")
+        msp = self.doc.modelspace()
+        out = []
+        for layer in layer_names:
+            for ins in msp.query(f'INSERT[layer=="{layer}"]'):
+                out.append({
+                    "block_name": ins.dxf.name,
+                    "x": ins.dxf.insert[0],
+                    "y": ins.dxf.insert[1],
+                    "layer": ins.dxf.layer,
+                })
+        return out
+
 
 class DXFWriter:
     """ezdxf DWG 写入器"""

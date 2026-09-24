@@ -14,6 +14,7 @@ from src.rules.src.residential.rooms import Room
 from src.rules.src.plumbing import PlumbingPipe
 from src.rules.src.electrical import ElectricalOutlet, ElectricalSwitch
 from src.rules.src.hvac import HvacDuct, HvacUnit, HvacGrille
+from src.rules.src.structural import StructuralBeam, StructuralColumn
 from src.rules.src.dsl import load_dsl_rules
 
 
@@ -131,6 +132,27 @@ def _build_hvac_grille(raw: dict, idx: int) -> HvacGrille:
     )
 
 
+def _build_structural_beam(raw: dict, idx: int) -> StructuralBeam:
+    return StructuralBeam(
+        id=raw.get("id", f"sb{idx}"),
+        beam_type=raw.get("beam_type", "main"),
+        width_mm=int(raw.get("width_mm", 300)),
+        depth_mm=int(raw.get("depth_mm", 0)),
+        x=float(raw.get("x", 0.0)),
+        y=float(raw.get("y", 0.0)),
+    )
+
+
+def _build_structural_column(raw: dict, idx: int) -> StructuralColumn:
+    return StructuralColumn(
+        id=raw.get("id", f"sc{idx}"),
+        column_type=raw.get("column_type", "frame"),
+        section_mm=int(raw.get("section_mm", 0)),
+        x=float(raw.get("x", 0.0)),
+        y=float(raw.get("y", 0.0)),
+    )
+
+
 # 分发表：raw_key → 构造器 → 规则集。
 # build 签名统一 build(raw_item, idx) → element（door/window 忽略 idx）。
 # 新增专业 = 加一项表项 + 对应 DSL/类规则，不改 rule_check_node 主链路逻辑。
@@ -198,6 +220,17 @@ _ELEMENT_CHECKS: list[dict] = [
         "raw_key": "hvac_grilles",
         "build": _build_hvac_grille,
         "rule_ids": ["hvac-grille-height-range"],
+    },
+    # 结构（Phase 6）— 走 DSL structural-* 规则（阈值占位 TBD，待业务确认）
+    {
+        "raw_key": "structural_beams",
+        "build": _build_structural_beam,
+        "rule_ids": ["structural-beam-width-depth-ratio"],
+    },
+    {
+        "raw_key": "structural_columns",
+        "build": _build_structural_column,
+        "rule_ids": ["structural-column-min-section"],
     },
 ]
 

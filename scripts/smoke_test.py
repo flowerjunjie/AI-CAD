@@ -105,6 +105,9 @@ def main():
         "hvac_units": [{"id": "hu", "unit_type": "outdoor", "cooling_kw": 3.5,
                         "location_type": "indoor"}],
         "hvac_grilles": [{"id": "hg", "grille_type": "supply", "height_m": 1.0}],
+        "structural_beams": [{"id": "sb", "beam_type": "main", "width_mm": 300,
+                              "depth_mm": 240}],
+        "structural_columns": [{"id": "sc", "column_type": "frame", "section_mm": 250}],
     }})
     ids = {v["rule_id"] for v in out["rule_violations"]}
     check("主链路 plumbing 命中", "plumbing-waste-pipe-min-diameter" in ids)
@@ -114,6 +117,9 @@ def main():
           "hvac-duct-velocity-range" in ids
           and "hvac-unit-outdoor-placement" in ids
           and "hvac-grille-height-range" in ids)
+    check("主链路 structural 命中",
+          "structural-beam-width-depth-ratio" in ids
+          and "structural-column-min-section" in ids)
 
     print(f"\nsmoke_test: {len(_failures)==0 and '全过' or f'{len(_failures)} 项 FAIL'} "
           f"(用时 {time.time()-t0:.2f}s)")

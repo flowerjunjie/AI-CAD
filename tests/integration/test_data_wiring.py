@@ -108,3 +108,26 @@ def test_rule_check_hits_plumbing_waste_pipe_violation():
     assert "plumbing-waste-pipe-min-diameter" in rule_ids, \
         f"应检出给排水排水横管最小管径违规, 实际: {rule_ids}"
     assert result["rule_check_passed"] is False
+
+
+def test_rule_check_hits_structural_beam_and_column():
+    """带 raw_data['structural_beams']/['structural_columns'] 的 state →
+    命中 structural-* 违规 (Phase 6 结构走分发表验证, 对称 plumbing/electrical/hvac)"""
+    from src.agents.src.nodes.cad_rule_export import rule_check_node
+
+    state = _make_state()
+    # 梁 300x240 深宽比 0.8 < 占位下限 1.5 → 命中 structural-beam-width-depth-ratio
+    state["raw_data"]["structural_beams"] = [
+        {"id": "sb1", "beam_type": "main", "width_mm": 300, "depth_mm": 240},
+    ]
+    # 框架柱截面 250mm < 占位下限 300mm → 命中 structural-column-min-section
+    state["raw_data"]["structural_columns"] = [
+        {"id": "sc1", "column_type": "frame", "section_mm": 250},
+    ]
+    result = rule_check_node(state)
+    rule_ids = [v["rule_id"] for v in result["rule_violations"]]
+    assert "structural-beam-width-depth-ratio" in rule_ids, \
+        f"应检出结构梁深宽比违规, 实际: {rule_ids}"
+    assert "structural-column-min-section" in rule_ids, \
+        f"应检出结构柱最小截面违规, 实际: {rule_ids}"
+    assert result["rule_check_passed"] is False

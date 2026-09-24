@@ -67,4 +67,4 @@
 | 给排水 | `PlumbingPipe` | 3 条 `plumbing-*` | true | 已接 |
 | 电气 | `ElectricalOutlet`/`ElectricalSwitch` | 3 条 `electrical-*` | true | 已接 |
 | 暖通 | `HvacDuct`/`HvacUnit`/`HvacGrille` | 3 条 `hvac-*` | true | 已接 |
-| 结构 | — | — | — | **待接（照本 SOP）** |
+| 结构 | `StructuralBeam`/`StructuralColumn` | 2 条 `structural-*` | true | 已接 |
