@@ -1,6 +1,4 @@
-"""
-Electron 主进程 — AI-CAD 桌面应用
-"""
+// Electron 主进程 — AI-CAD 桌面应用
 import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import * as path from 'path';
 import * as url from 'url';
