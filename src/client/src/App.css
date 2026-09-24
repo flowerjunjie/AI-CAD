@@ -254,7 +254,7 @@ body {
   color: #ccc;
 }
 
-/* Footer */
+/* Footer (legacy text bar — overridden by .footer-cards) */
 .footer {
   display: flex;
   justify-content: space-between;
@@ -274,3 +274,141 @@ body {
   font-size: 16px;
   color: #666;
 }
+
+/* ============================================================
+   专业 GUI 升级层（A 前端/桌面专家团）
+   ============================================================ */
+
+/* panel header row (title + inline control) */
+.panel-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.panel-head-row h2 { margin-bottom: 0; }
+
+/* buttons */
+.btn-primary {
+  padding: 8px 18px;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.btn-primary:hover:not(:disabled) { background: #c73e54; }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+
+/* CAD image view */
+.cad-view-img {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  border: 2px dashed #333;
+  border-radius: 8px;
+  overflow: auto;
+  min-height: 240px;
+}
+.cad-view-img img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.cad-meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #888;
+}
+.cad-meta span { background: #16213e; padding: 4px 10px; border-radius: 6px; }
+
+/* agent controls */
+.agent-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa; cursor: pointer; }
+.chk input { accent-color: #e94560; }
+
+/* flow states */
+.flow-step.done .step-dot { background: #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+.flow-step.pending .step-dot { background: #555; }
+.flow-step.running .step-dot { background: #f0b429; }
+
+/* violations */
+.violations { margin-top: 16px; }
+.violations h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: #888; margin-bottom: 8px;
+}
+.violation {
+  padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;
+  font-size: 12px; border-left: 3px solid #555; background: #0f0f1a;
+}
+.violation .vio-name { display: block; color: #eee; font-weight: 600; margin-bottom: 2px; }
+.violation .vio-desc { display: block; color: #aaa; }
+.violation .vio-fix { display: block; color: #3498db; margin-top: 2px; font-size: 11px; }
+.violation.sev-error { border-left-color: #e74c3c; }
+.violation.sev-warning { border-left-color: #f0b429; }
+.violation.sev-info { border-left-color: #3498db; }
+
+/* rules tabs */
+.tabs { display: flex; gap: 4px; }
+.tab {
+  padding: 3px 10px; font-size: 11px; border: 1px solid #0f3460;
+  background: #0f0f1a; color: #888; border-radius: 6px; cursor: pointer;
+}
+.tab-active { background: #0f3460; color: #fff; border-color: #e94560; }
+
+/* rule item 2-line layout */
+.rule-item { flex-direction: column; align-items: flex-start; gap: 3px; }
+.rule-main { display: flex; align-items: center; gap: 8px; width: 100%; }
+.rule-sub { display: flex; justify-content: space-between; width: 100%; gap: 8px; }
+.rule-sev {
+  font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #0f0f1a;
+}
+.rule-sev.sev-error { color: #e74c3c; }
+.rule-sev.sev-warning { color: #f0b429; }
+.rule-sev.sev-info { color: #3498db; }
+.rule-src { color: #555; font-size: 10px; text-transform: uppercase; }
+.empty-hint { font-size: 12px; color: #555; padding: 8px; text-align: center; }
+
+/* RAG results */
+.rag-hit-line { font-size: 11px; color: #888; margin-bottom: 8px; padding: 0 4px; }
+.result-item .rag-meta { display: block; margin-top: 4px; font-size: 10px; color: #666; }
+
+/* ── Placeholder footer (未实现能力 · 置灰卡片) ── */
+.footer.footer-cards {
+  flex-direction: column; align-items: stretch;
+  gap: 8px; padding: 10px 24px; flex-wrap: nowrap;
+}
+.footer-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #555;
+}
+.placeholder-row {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+}
+.placeholder-card {
+  flex: 0 0 auto; min-width: 170px; max-width: 220px;
+  background: #0f0f1a; border: 1px dashed #333; border-radius: 8px;
+  padding: 8px 10px; opacity: 0.6; filter: grayscale(0.5);
+}
+.ph-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.ph-badge {
+  font-size: 9px; padding: 1px 6px; border-radius: 4px;
+  background: #f0b429; color: #1a1a2e; font-weight: 700;
+}
+.ph-title { font-size: 12px; font-weight: 600; color: #ccc; }
+.ph-desc { font-size: 11px; color: #888; margin-bottom: 4px; }
+.ph-domain { font-size: 10px; color: #555; }

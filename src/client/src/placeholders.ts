@@ -1,0 +1,46 @@
+// 未实现能力 · 占位配置（数据写死，不造假数字/假图元）
+export interface Placeholder {
+  id: string;
+  title: string;
+  desc: string;
+  domain: string;
+  owner: string;
+}
+
+export const PLACEHOLDERS: Placeholder[] = [
+  {
+    id: 'm1-values',
+    title: '规范数值回填',
+    desc: '各专业阈值待专家确认后填 default.json，改 JSON 零代码',
+    domain: '给排水/电气/暖通/结构',
+    owner: '各业专家',
+  },
+  {
+    id: 'm2-layer',
+    title: 'DWG 图层约定',
+    desc: '各院点位图层/块名映射待对齐制图规范',
+    domain: '出图规范',
+    owner: '制图规范',
+  },
+  {
+    id: 'm3-render',
+    title: '出图深化',
+    desc: '各专业 元素→图元 画法（线型/填充/图层着色）',
+    domain: '各专业制图',
+    owner: '各专业制图规范',
+  },
+  {
+    id: 'm4-collision',
+    title: '多专业碰撞检测',
+    desc: '管线穿梁 / 插座撞梁 自动检测',
+    domain: '多专业协同',
+    owner: '团队工程',
+  },
+  {
+    id: 'm5-team',
+    title: '团队协作',
+    desc: '多设计师 + 改动冲突检测 + 权限',
+    domain: '协同',
+    owner: '团队',
+  },
+];

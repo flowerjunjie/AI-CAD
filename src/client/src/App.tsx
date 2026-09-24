@@ -1,11 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
-
-interface AppState {
-  status: string;
-  phase: string;
-  modules: Record<string, string>;
-}
+import { useEngineStore } from './useEngineStore';
+import { syncEngine, runPipeline, runRagSearch, previewUrl, API } from './engineApi';
+import { PLACEHOLDERS } from './placeholders';
 
 declare global {
   interface Window {
@@ -17,55 +14,38 @@ declare global {
   }
 }
 
-function App() {
-  const [appState, setAppState] = useState<AppState | null>(null);
-  const [rules, setRules] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+const STEPS = ['意图理解', '方案结构化', 'CAD执行', '规则校验', '成果输出'];
 
+function App() {
+  const {
+    engineConnected, phase, rules, violations,
+    running, lastSample, pipelineResult, ragResults, ragQuery,
+  } = useEngineStore();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [previewKey, setPreviewKey] = useState(0);
+  const [rulesTab, setRulesTab] = useState<'hardcoded' | 'dsl' | 'all'>('all');
+  const [useLlm, setUseLlm] = useState(false);
+
+  // 启动 + 周期性探测引擎可达性
   useEffect(() => {
-    loadAppState();
-    loadRules();
+    syncEngine();
+    const timer = setInterval(syncEngine, 8000);
+    return () => clearInterval(timer);
   }, []);
 
-  const loadAppState = async () => {
-    try {
-      const state = await window.electronAPI?.healthCheck();
-      setAppState(state);
-    } catch (err) {
-      console.error('Failed to load app state:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const shownRules = rulesTab === 'all' ? rules : rules.filter((r) => r.source === rulesTab);
+  const previewSrc = `${API}/api/preview?sample=${encodeURIComponent(lastSample)}`;
 
-  const loadRules = async () => {
-    try {
-      const data = await window.electronAPI?.listRules();
-      setRules(data || []);
-    } catch (err) {
-      console.error('Failed to load rules:', err);
-    }
-  };
+  const handleRun = useCallback(async () => {
+    await runPipeline(lastSample, useLlm);
+    setPreviewKey((k) => k + 1); // 强制重刷 <img>
+  }, [lastSample, useLlm]);
 
-  const handleSearch = async () => {
+  const handleRag = useCallback(async () => {
     if (!searchQuery.trim()) return;
-    try {
-      const results = await window.electronAPI?.searchKnowledge(searchQuery);
-      setSearchResults(results?.results || []);
-    } catch (err) {
-      console.error('Search failed:', err);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="app">
-        <div className="loading">AI-CAD 正在启动...</div>
-      </div>
-    );
-  }
+    await runRagSearch(searchQuery);
+  }, [searchQuery]);
 
   return (
     <div className="app">
@@ -73,72 +53,174 @@ function App() {
       <header className="header">
         <div className="header-left">
           <h1>AI-CAD</h1>
-          <span className="version">v0.1.0</span>
+          <span className="version">v0.1.0 · 专业 GUI</span>
         </div>
         <div className="header-right">
-          <span className={`status-badge ${appState?.status === 'ok' ? 'status-ok' : 'status-err'}`}>
-            {appState?.status === 'ok' ? '● 运行中' : '● 已停止'}
+          <span
+            className={`status-badge ${engineConnected ? 'status-ok' : 'status-err'}`}
+            title={engineConnected ? `桥: ${API}` : `无法连接 ${API} — 请启动 start_gui.bat`}
+          >
+            {engineConnected ? '● 引擎已连接' : '● 引擎未连接'}
           </span>
-          <span className="phase-tag">{appState?.phase || 'Phase 0'}</span>
+          <span className="phase-tag">{phase}</span>
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="main">
-        {/* Left Panel - CAD View */}
+        {/* 左: CAD 视图 */}
         <section className="panel cad-panel">
-          <h2>CAD 视图</h2>
-          <div className="cad-view-placeholder">
-            <p>图纸预览区域</p>
-            <p className="hint">支持 DWG/DXF 格式</p>
+          <div className="panel-head-row">
+            <h2>CAD 视图 · {lastSample}</h2>
+            <button
+              className="btn-primary btn-sm"
+              onClick={() => setPreviewKey((k) => k + 1)}
+              disabled={!engineConnected}
+              title="重新拉取真户型图"
+            >
+              重新出图
+            </button>
           </div>
+
+          {engineConnected ? (
+            <div className="cad-view-img">
+              <img
+                key={previewKey}
+                src={previewSrc}
+                alt="户型图预览"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  img.style.display = 'none';
+                  const holder = img.parentElement!.querySelector<HTMLElement>('.cad-img-fallback');
+                  if (holder) holder.style.display = 'flex';
+                }}
+              />
+              <div className="cad-view-placeholder cad-img-fallback" style={{ display: 'none' }}>
+                <p>户型图暂不可用</p>
+                <p className="hint">桥未返回 PNG，检查 /api/preview</p>
+              </div>
+            </div>
+          ) : (
+            <div className="cad-view-placeholder">
+              <p>引擎未连接</p>
+              <p className="hint">启动 start_gui.bat 后户型图将自动出现</p>
+            </div>
+          )}
+
+          {pipelineResult && (
+            <div className="cad-meta">
+              <span>{pipelineResult.project_type}</span>
+              <span>{pipelineResult.zones.length} 功能区</span>
+              <span>{pipelineResult.task_count} 任务</span>
+            </div>
+          )}
         </section>
 
-        {/* Center Panel - Agent Flow */}
+        {/* 中: Agent 流程 */}
         <section className="panel agent-panel">
           <h2>Agent 执行流程</h2>
           <div className="agent-flow">
-            {['意图理解', '方案结构化', '任务分解', 'CAD执行', '规则校验', '成果输出'].map((step, i) => (
-              <div key={step} className={`flow-step ${i === 0 ? 'active' : ''}`}>
-                <div className="step-dot" />
-                <div className="step-label">{step}</div>
-                {i < 5 && <div className="step-arrow" />}
-              </div>
+            {STEPS.map((step, i) => (
+              <React.Fragment key={step}>
+                <div
+                  className={`flow-step ${running ? (i === 0 ? 'active' : 'pending') : pipelineResult ? 'done' : ''}`}
+                >
+                  <div className="step-dot" />
+                  <div className="step-label">{step}</div>
+                </div>
+                {i < STEPS.length - 1 && <div className="step-arrow">→</div>}
+              </React.Fragment>
             ))}
           </div>
-          <div className="agent-status">
-            <p>当前状态: <strong>等待输入</strong></p>
+
+          <div className="agent-controls">
+            <label className="chk">
+              <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} />
+              启用 LLM 主导（联网·较慢）
+            </label>
+            <button className="btn-primary" onClick={handleRun} disabled={running || !engineConnected}>
+              {running ? '运行中…' : '运行流水线'}
+            </button>
           </div>
+
+          <div className="agent-status">
+            {running ? (
+              <p><strong>运行中</strong> — 正在调用 LangGraph 全链路…</p>
+            ) : pipelineResult ? (
+              <p>
+                完成 · <strong>{pipelineResult.violations.length}</strong> 条规范违规 · DWG: {pipelineResult.dwg_path}
+              </p>
+            ) : (
+              <p>当前状态: <strong>{engineConnected ? '等待运行' : '引擎未连接'}</strong></p>
+            )}
+          </div>
+
+          {/* 违规清单 — 真数据 */}
+          {violations.length > 0 && (
+            <div className="violations">
+              <h3>规范违规 ({violations.length})</h3>
+              {violations.map((v, i) => (
+                <div key={i} className={`violation sev-${v.severity}`}>
+                  <span className="vio-name">{v.rule_name}</span>
+                  <span className="vio-desc">{v.description}</span>
+                  {v.suggested_fix && <span className="vio-fix">→ {v.suggested_fix}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
-        {/* Right Panel - Rules & Knowledge */}
+        {/* 右: 规则 + 知识 */}
         <section className="panel rules-panel">
-          <h2>规范规则</h2>
+          <div className="panel-head-row">
+            <h2>规范规则 · {rules.length}</h2>
+            <div className="tabs">
+              {(['all', 'hardcoded', 'dsl'] as const).map((t) => (
+                <button
+                  key={t}
+                  className={`tab ${rulesTab === t ? 'tab-active' : ''}`}
+                  onClick={() => setRulesTab(t)}
+                >
+                  {t === 'all' ? '全部' : t === 'hardcoded' ? '硬编码' : 'DSL'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="rules-list">
-            {rules.map(rule => (
-              <div key={rule.id} className="rule-item">
-                <span className="rule-name">{rule.name}</span>
-                <span className="rule-code">{rule.code}</span>
+            {shownRules.length === 0 && <div className="empty-hint">{engineConnected ? '无' : '引擎未连接，规则列表暂空'}</div>}
+            {shownRules.map((rule) => (
+              <div key={rule.rule_id} className="rule-item">
+                <div className="rule-main">
+                  <span className="rule-name">{rule.name}</span>
+                  <span className={`rule-sev sev-${rule.severity}`}>{rule.severity}</span>
+                </div>
+                <div className="rule-sub">
+                  <span className="rule-code">{rule.code_ref}</span>
+                  <span className="rule-src">{rule.source}</span>
+                </div>
               </div>
             ))}
           </div>
 
-          <h2>知识检索</h2>
+          <h2>知识检索 · RAG</h2>
           <div className="search-box">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="输入规范问题..."
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="输入规范问题，如：疏散走道最小宽度"
+              onKeyDown={(e) => e.key === 'Enter' && handleRag()}
             />
-            <button onClick={handleSearch}>检索</button>
+            <button onClick={handleRag} disabled={!engineConnected}>检索</button>
           </div>
-          {searchResults.length > 0 && (
+          {ragResults.length > 0 && (
             <div className="search-results">
-              {searchResults.map((result: any, i: number) => (
+              <div className="rag-hit-line">「{ragQuery}」命中 {ragResults.length} 条</div>
+              {ragResults.map((r, i) => (
                 <div key={i} className="result-item">
-                  <p>{result.content}</p>
+                  <p>{r.text}</p>
+                  <span className="rag-meta">{r.category} · 相关度 {r.score}</span>
                 </div>
               ))}
             </div>
@@ -146,10 +228,21 @@ function App() {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="footer">
-        <span>AI辅助施工图深化系统</span>
-        <span>规则引擎保准确 · LLM保灵活 · 人在回路保可控</span>
+      {/* Footer: 占位符卡片（未实现能力，置灰） */}
+      <footer className="footer footer-cards">
+        <div className="footer-title">发展占位 · 各专业专家补齐</div>
+        <div className="placeholder-row">
+          {PLACEHOLDERS.map((p) => (
+            <div key={p.id} className="placeholder-card" title={`负责方: ${p.owner}`}>
+              <div className="ph-head">
+                <span className="ph-badge">占位</span>
+                <span className="ph-title">{p.title}</span>
+              </div>
+              <p className="ph-desc">{p.desc}</p>
+              <div className="ph-domain">{p.domain}</div>
+            </div>
+          ))}
+        </div>
       </footer>
     </div>
   );
