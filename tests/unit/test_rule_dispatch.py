@@ -48,35 +48,24 @@ def test_ensure_dsl_does_not_override_registered_class():
 
 
 def test_new_dsl_professional_rules_load_without_code_change():
-    """数据驱动收敛: 加新专业只需往 default.json 加条目, _DSL_PREFIXES 硬编码
-    白名单已删 — 用临时 JSON 造一个新专业前缀 (hvac-), 不碰主链路代码也能进引擎。
-    """
-    import tempfile
-    import json
-    from src.rules.src.dsl import DslRuleProvider
-    from src.rules.src.engine import RuleEngine
+    """数据驱动收敛: 加新专业只需往 default.json 加条目 (dsl_only=true), 不碰主链路
+    代码也能进引擎。直接调真实的 _ensure_dsl_rules_loaded (用 default.json 的真实
+    dsl_only 判据), 而非临时 JSON + 手动 load_dsl_rules + "引擎里有没有它" 反推。
 
-    payload = {"rules": [{
-        "rule_id": "hvac-duct-min-size",
-        "name": "风管最小尺寸 (占位)",
-        "code_ref": "TBD",
-        "severity": "warning",
-        "element_types": ["HvacDuct"],
-        "predicate": "True",
-        "enabled": True,
-    }]}
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
-        json.dump(payload, f)
-        path = f.name
-    # 纯 DSL 规则 (引擎里没有 hvac-duct-min-size) 会被 _ensure 逻辑 upsert
-    from src.agents.src.nodes.cad_rule_export import _dsl_rules_path
-    # 直接复用收敛后的判定: 规则不在现有引擎 → upsert。用一个干净引擎模拟
+    判据是 default.json 里 dsl_only=true 字段 (稳定, 不依赖 import 时序),
+    而非 SOP 明令禁止的反模式②「靠引擎里有没有它反推」。
+    """
+    from src.rules.src.engine import RuleEngine
+    from src.agents.src.nodes import cad_rule_export as cre
+
     engine = RuleEngine()
-    from src.rules.src.dsl import load_dsl_rules
-    existing = {r.rule_id for r in engine.list_rules()}
-    upserted = [r for r in load_dsl_rules(path) if r.rule_id not in existing]
-    assert any(r.rule_id == "hvac-duct-min-size" for r in upserted), \
-        "新专业前缀规则应无需改代码即可被数据驱动逻辑纳入"
+    before_ids = {r.rule_id for r in engine.list_rules()}
+    # 调真实收敛逻辑: 读 default.json, 按 dsl_only=true upsert 进干净引擎
+    cre._ensure_dsl_rules_loaded(engine)
+    newly = {r.rule_id for r in engine.list_rules()} - before_ids
+    # 新专业 hvac 规则 (default.json 里 dsl_only=true) 应被 upsert 进引擎
+    assert "hvac-duct-velocity-range" in newly, \
+        "新专业前缀规则应经 _ensure_dsl_rules_loaded 的 dsl_only 判据被数据驱动纳入"
 
 
 def test_dispatch_table_entries_are_simple_raw_element_rule_mapping():

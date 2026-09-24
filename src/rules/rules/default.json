@@ -167,6 +167,63 @@
       "suggested_fix_template": "为厨房/卫生间插座增加接地端子 (GB 50303 条文待确认)",
       "enabled": true,
       "dsl_only": true
+    },
+    {
+      "rule_id": "hvac-duct-velocity-range",
+      "name": "风速应在允许区间 (占位, 待规范确认)",
+      "code_ref": "GB 50736 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": [
+        "HvacDuct",
+        "hvacaduct"
+      ],
+      "predicate": "element.velocity_ms < min_velocity_ms or element.velocity_ms > max_velocity_ms",
+      "params": {},
+      "param_defaults": {
+        "min_velocity_ms": 1.5,
+        "max_velocity_ms": 8.0
+      },
+      "description_template": "风速 {velocity_ms}m/s 超出允许区间 [{min_velocity_ms}m/s, {max_velocity_ms}m/s] (占位)",
+      "suggested_fix_template": "将风速调整到 {min_velocity_ms}m/s~{max_velocity_ms}m/s (GB 50736 条文待确认)",
+      "enabled": true,
+      "dsl_only": true
+    },
+    {
+      "rule_id": "hvac-unit-outdoor-placement",
+      "name": "室外机应安装在室外 (占位, 待规范确认)",
+      "code_ref": "GB 50189 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "error",
+      "element_types": [
+        "HvacUnit",
+        "hvacunit"
+      ],
+      "predicate": "element.unit_type == 'outdoor' and element.location_type != 'outdoor'",
+      "params": {},
+      "param_defaults": {},
+      "description_template": "室外空调机组 {id} 未安装在室外 (location_type={location_type}, 占位)",
+      "suggested_fix_template": "将室外空调机组调整至室外安装 (GB 50189 条文待确认)",
+      "enabled": true,
+      "dsl_only": true
+    },
+    {
+      "rule_id": "hvac-grille-height-range",
+      "name": "风口安装高度应在允许区间 (占位, 待规范确认)",
+      "code_ref": "GB 50736 TBD — 业务侧确认后更新条文号与数值",
+      "severity": "warning",
+      "element_types": [
+        "HvacGrille",
+        "hvacgrille"
+      ],
+      "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
+      "params": {},
+      "param_defaults": {
+        "min_height_m": 2.0,
+        "max_height_m": 3.5
+      },
+      "description_template": "风口安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
+      "suggested_fix_template": "将风口安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50736 条文待确认)",
+      "enabled": true,
+      "dsl_only": true
     }
   ]
 }

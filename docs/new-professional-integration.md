@@ -7,7 +7,8 @@
 ## 前置认知（先搞清楚再动手）
 
 - 引擎里规则分两类来源，**接入方式不同**：
-  - **34 个硬编码类**（`residential/fire_safety/accessibility`，`@register_rule` 注册）——**不动**，是默认行为锚点，守住"34 类零改动"红线。
+  - **30 个硬编码类**（`residential/fire_safety/accessibility`，`@register_rule` 注册）——**不动**，是默认行为锚点。
+    数量口径（易漂移）：以 `engine.list_rules()` 实查为准（当前 30 条），**别把具体数字写死当红线**——红线的真锚点是下面"零改动验证"那条 git diff 命令（0 行），数字只会随后续加类而变。
   - **DSL 规则**（`src/rules/rules/default.json` 里的 JSON）——`load_dsl_rules` 解析成 `ParametricRule`，走**受限 eval**（白名单：`element` 属性 + `params` 键 + `len()` + 比较，`eval/exec/__import__/getattr` 全部 load 时 fail-fast 拒）。**新专业一律走这条**，不要为它建硬编码规则类。
 
 ## 步骤（照序做）
@@ -22,8 +23,8 @@
 - `element_types`：你的元素类名（大小写两个都写，如 `["HvacDuct","hvacduct"]`）。
 - `predicate`：受限 eval 表达式，只引用"第 1 步的元素字段 + `params` 键"。
 - `param_defaults`：阈值占位默认值（**业务规范数值没定就填占位 + `code_ref` 标 `TBD`，别臆想规范数据**）。
-- **`dsl_only: true`** —— 这条最关键。`_ensure_dsl_rules_loaded` 只 upsert `dsl_only=true` 的规则；与 34 类重名的参数覆盖规则保持 `false` 不顶替。
-  - 坑（Phase 3 真踩过）：曾用"引擎里有没有它"当判据，结果依赖调用方 import 过哪些模块的**时序**，把 34 类重名规则误 upsert 成 DSL 版、违反红线。`dsl_only` 字段是稳定判据，**不要退回 import 时序判断**。
+- **`dsl_only: true`** —— 这条最关键。`_ensure_dsl_rules_loaded` 只 upsert `dsl_only=true` 的规则；与硬编码类重名的参数覆盖规则保持 `false` 不顶替。
+  - 坑（Phase 3 真踩过）：曾用"引擎里有没有它"当判据，结果依赖调用方 import 过哪些模块的**时序**，把硬编码类重名规则误 upsert 成 DSL 版、违反红线。`dsl_only` 字段是稳定判据，**不要退回 import 时序判断**。
 
 ### 3. 主链路接入 —— 分发表加一项，不改逻辑
 在 `cad_rule_export.py` 的 `_ELEMENT_CHECKS` 分发表加一项：
@@ -40,7 +41,7 @@
 ### 5. 验证 —— 对结果负责（红线一）
 - `python -m pytest -q` 全绿（当前基线 120/3，加你的测试后只增不减）。
 - **单独跑你新加的测试文件**（`python tests/unit/test_xxx.py`）确认非 pytest 上下文也通。
-- **确认 34 类零改动**：`git diff -- src/rules/src/residential src/rules/src/fire_safety src/rules/src/accessibility` 应为 0 行。
+- **确认硬编码类零改动**：`git diff -- src/rules/src/residential src/rules/src/fire_safety src/rules/src/accessibility` 应为 0 行。
 
 ## 护栏已内置（不用重做，但要知道）
 
@@ -53,8 +54,8 @@
 
 | 反模式 | 为什么错 | 正确做法 |
 |--------|---------|---------|
-| 为新专业建 `@register_rule` 硬编码类 | 破坏"34 类零改动" + 重复 DSL 已有能力 | 走 `default.json` + `ParametricRule` |
-| `dsl_only` 判据依赖"引擎里有没有它" | 依赖 import 时序，会把 34 类误顶替 | 用 `dsl_only` 字段显式声明 |
+| 为新专业建 `@register_rule` 硬编码类 | 破坏"硬编码类零改动" + 重复 DSL 已有能力 | 走 `default.json` + `ParametricRule` |
+| `dsl_only` 判据依赖"引擎里有没有它" | 依赖 import 时序，会把硬编码类误顶替 | 用 `dsl_only` 字段显式声明 |
 | 几何层逻辑塞进 `_ELEMENT_CHECKS` 分发表 | 分发表是简单映射，几何依赖 layout | 几何留在循环外单独跑 |
 | `default.json` 里 DSL 规则不标 `dsl_only` | 默认 false 不会 upsert，规则成了死配置 | 纯新增专业一律标 `true` |
 | 测试只跑全量 `pytest` 不单独跑文件 | "全量绿但单独跑挂"是最危险的假绿（全局单例时序污染） | 全量 + 单跑都绿 |
@@ -65,4 +66,5 @@
 |------|------|---------|-----------|--------|
 | 给排水 | `PlumbingPipe` | 3 条 `plumbing-*` | true | 已接 |
 | 电气 | `ElectricalOutlet`/`ElectricalSwitch` | 3 条 `electrical-*` | true | 已接 |
-| 暖通 | — | — | — | **待接（照本 SOP）** |
+| 暖通 | `HvacDuct`/`HvacUnit`/`HvacGrille` | 3 条 `hvac-*` | true | 已接 |
+| 结构 | — | — | — | **待接（照本 SOP）** |

@@ -13,6 +13,7 @@ from src.rules.src.residential.windows import Window
 from src.rules.src.residential.rooms import Room
 from src.rules.src.plumbing import PlumbingPipe
 from src.rules.src.electrical import ElectricalOutlet, ElectricalSwitch
+from src.rules.src.hvac import HvacDuct, HvacUnit, HvacGrille
 from src.rules.src.dsl import load_dsl_rules
 
 
@@ -40,8 +41,8 @@ def _ensure_dsl_rules_loaded(engine) -> None:
 
     - 纯新增专业 (plumbing-/electrical-/未来 hvac-...) 在 default.json 里标
       "dsl_only": true → 主链路 upsert 进引擎。
-    - 与 @register_rule 的 34 类重名的「参数覆盖」规则保持 dsl_only 默认 false
-      → 不 upsert, 硬编码版不动 (守 34 类零改动红线)。
+    - 与 @register_rule 的硬编码类重名的「参数覆盖」规则保持 dsl_only 默认 false
+      → 不 upsert, 硬编码版不动 (守硬编码类零改动红线, 以 git diff 0 行为准)。
 
     加新专业 = 往 default.json 加条目 + 标 dsl_only:true, 主链路零改动。
     JSON 只解析一次。
@@ -91,6 +92,39 @@ def _build_switch(raw: dict, idx: int) -> ElectricalSwitch:
     return ElectricalSwitch(
         id=raw.get("id", f"s{idx}"),
         height_m=float(raw.get("height_m", 1.3)),
+        room_type=raw.get("room_type", "living"),
+        x=float(raw.get("x", 0.0)),
+        y=float(raw.get("y", 0.0)),
+    )
+
+
+def _build_hvac_duct(raw: dict, idx: int) -> HvacDuct:
+    return HvacDuct(
+        id=raw.get("id", f"hd{idx}"),
+        duct_type=raw.get("duct_type", "supply"),
+        diameter_mm=int(raw.get("diameter_mm", 100)),
+        airflow_m3h=float(raw.get("airflow_m3h", 0.0)),
+        velocity_ms=float(raw.get("velocity_ms", 0.0)),
+    )
+
+
+def _build_hvac_unit(raw: dict, idx: int) -> HvacUnit:
+    return HvacUnit(
+        id=raw.get("id", f"hu{idx}"),
+        unit_type=raw.get("unit_type", "room"),
+        cooling_kw=float(raw.get("cooling_kw", 0.0)),
+        location_type=raw.get("location_type", "indoor"),
+        x=float(raw.get("x", 0.0)),
+        y=float(raw.get("y", 0.0)),
+    )
+
+
+def _build_hvac_grille(raw: dict, idx: int) -> HvacGrille:
+    return HvacGrille(
+        id=raw.get("id", f"hg{idx}"),
+        grille_type=raw.get("grille_type", "supply"),
+        height_m=float(raw.get("height_m", 2.5)),
+        airflow_m3h=float(raw.get("airflow_m3h", 0.0)),
         room_type=raw.get("room_type", "living"),
         x=float(raw.get("x", 0.0)),
         y=float(raw.get("y", 0.0)),
@@ -148,6 +182,22 @@ _ELEMENT_CHECKS: list[dict] = [
         "raw_key": "switches",
         "build": _build_switch,
         "rule_ids": ["electrical-switch-height-range"],
+    },
+    # 暖通（Phase 5）— 走 DSL hvac-* 规则（阈值占位 TBD，待业务确认）
+    {
+        "raw_key": "hvac_ducts",
+        "build": _build_hvac_duct,
+        "rule_ids": ["hvac-duct-velocity-range"],
+    },
+    {
+        "raw_key": "hvac_units",
+        "build": _build_hvac_unit,
+        "rule_ids": ["hvac-unit-outdoor-placement"],
+    },
+    {
+        "raw_key": "hvac_grilles",
+        "build": _build_hvac_grille,
+        "rule_ids": ["hvac-grille-height-range"],
     },
 ]
 

@@ -6,10 +6,10 @@
 和 ezdxf 文件 IO 两个最慢点, 秒级出结果。
 
 覆盖 (都是这几轮沉淀的架构不变量, 改崩一个就说明碰了红线):
-- 34 个 @register_rule 类注册正常 + get_engine 非空
+- 硬编码规则类 @register_rule 注册正常 + get_engine 非空
 - DSL 受限 eval 白名单 (危险调用被拒) — 信任边界
 - DSL 缺属性/缺文案 护栏 (不崩校验链)
-- _ensure_dsl_rules_loaded dsl_only 判据 (34 类重名不被 DSL 顶替)
+- _ensure_dsl_rules_loaded dsl_only 判据 (硬编码类重名不被 DSL 顶替)
 - rule_check_node 分发表 plumbing/electrical 端到端命中
 
 用法: python scripts/smoke_test.py   (无参数, 直接跑)
@@ -35,7 +35,7 @@ def main():
     t0 = time.time()
     print("smoke_test: 核心不变量秒级验证 (全量 pytest 仅 commit 前跑)")
 
-    # 1. 34 类注册 + 引擎非空 (import 全部 11 个规则模块, 触发 @register_rule)
+    # 1. 硬编码规则类注册 + 引擎非空 (import 全部规则模块, 触发 @register_rule)
     import src.rules.src.residential.doors
     import src.rules.src.residential.windows
     import src.rules.src.residential.stairs
@@ -50,7 +50,7 @@ def main():
     from src.rules.src.engine import get_engine, RuleEngine
     eng = get_engine()
     n = len(eng.list_rules())
-    check("34类注册 (get_engine 非空)", n >= 25, f"只有 {n} 条")
+    check("硬编码规则类注册 (get_engine 非空)", n >= 25, f"只有 {n} 条")
 
     # 2. DSL 受限 eval 白名单: 危险调用必须被拒 (信任边界)
     import json, tempfile
@@ -80,7 +80,7 @@ def main():
     except AttributeError:
         check("DSL 缺属性护栏 (不崩, 降级)", False, "AttributeError 未兜住")
 
-    # 4. dsl_only 判据: 34 类重名不被 DSL 顶替
+    # 4. dsl_only 判据: 硬编码类重名不被 DSL 顶替
     from src.rules.src.dsl import ParametricRule
     from src.rules.src.residential.daylight import BedroomMinWindowArea
     from src.agents.src.nodes import cad_rule_export as cre
@@ -89,22 +89,31 @@ def main():
     cre._ensure_dsl_rules_loaded(eng2)
     by_id = {r.rule_id: r for r in eng2.list_rules()}
     check("dsl_only 判据 (plumbing 进引擎)", "plumbing-waste-pipe-min-diameter" in by_id)
-    check("34类不被 DSL 顶替",
+    check("硬编码类不被 DSL 顶替",
           "residential-bedroom-window-area" not in by_id
           or not isinstance(by_id["residential-bedroom-window-area"], ParametricRule))
 
-    # 5. rule_check_node 端到端: plumbing + electrical 命中
+    # 5. rule_check_node 端到端: plumbing + electrical + hvac 命中
     from src.agents.src.nodes.cad_rule_export import rule_check_node
     out = rule_check_node({"raw_data": {
         "zones": [], "doors": [], "windows": [],
         "pipes": [{"id": "p", "pipe_type": "waste", "diameter_mm": 40, "slope": 2.0}],
         "outlets": [{"id": "o", "height_m": 2.5, "room_type": "kitchen", "has_earthing": False}],
         "switches": [],
+        "hvac_ducts": [{"id": "hd", "duct_type": "supply", "diameter_mm": 100,
+                        "airflow_m3h": 500.0, "velocity_ms": 9.0}],
+        "hvac_units": [{"id": "hu", "unit_type": "outdoor", "cooling_kw": 3.5,
+                        "location_type": "indoor"}],
+        "hvac_grilles": [{"id": "hg", "grille_type": "supply", "height_m": 1.0}],
     }})
     ids = {v["rule_id"] for v in out["rule_violations"]}
     check("主链路 plumbing 命中", "plumbing-waste-pipe-min-diameter" in ids)
     check("主链路 electrical 命中",
           "electrical-outlet-height-range" in ids and "electrical-outlet-earthing-required" in ids)
+    check("主链路 hvac 命中",
+          "hvac-duct-velocity-range" in ids
+          and "hvac-unit-outdoor-placement" in ids
+          and "hvac-grille-height-range" in ids)
 
     print(f"\nsmoke_test: {len(_failures)==0 and '全过' or f'{len(_failures)} 项 FAIL'} "
           f"(用时 {time.time()-t0:.2f}s)")

@@ -91,3 +91,20 @@ def test_rule_check_hits_electrical_outlet_violation():
     assert "electrical-outlet-height-range" in rule_ids, \
         f"应检出电气插座高度违规, 实际: {rule_ids}"
     assert result["rule_check_passed"] is False
+
+
+def test_rule_check_hits_plumbing_waste_pipe_violation():
+    """带 raw_data['pipes'] 的 state → 命中 plumbing-* 违规 (给排水走分发表验证, 对称电气)"""
+    from src.agents.src.nodes.cad_rule_export import rule_check_node
+
+    state = _make_state()
+    # 加一条 40mm 的 waste 管 (小于最小管径 50mm) → 应命中 plumbing-waste-pipe-min-diameter
+    state["raw_data"]["pipes"] = [
+        {"id": "p1", "pipe_type": "waste", "diameter_mm": 40,
+         "slope": 0.02, "distance_to_manhole_m": 5.0},
+    ]
+    result = rule_check_node(state)
+    rule_ids = [v["rule_id"] for v in result["rule_violations"]]
+    assert "plumbing-waste-pipe-min-diameter" in rule_ids, \
+        f"应检出给排水排水横管最小管径违规, 实际: {rule_ids}"
+    assert result["rule_check_passed"] is False
