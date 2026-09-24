@@ -102,10 +102,18 @@ def build_agent_graph() -> "StateGraph":
     return graph
 
 
-def run_agent_demo(sample_path: str | None = None, auto_mode: bool = True) -> dict:
+def run_agent_demo(
+    sample_path: str | None = None,
+    auto_mode: bool = True,
+    inject_sample_structure: bool = True,
+) -> dict:
     """运行 Agent 演示流程
     sample_path: 可选，传入户型 JSON 路径 → 解析注入 raw_data + task_list
                  让 CAD/规则节点按真实样本数据出图、校验（Phase 1 数据接线）
+    inject_sample_structure: True (默认) = 注入 sample 的 project_structure/task_list，
+                 本地快验、LLM 意图被样本数据覆盖（结果确定、秒级）。
+                 False = 只注入 raw_data 几何，project_structure/task_list 交给
+                 LLM 的 intent + structure 节点生成（真 LLM 主导出图）。
     """
     graph = build_agent_graph()
     app = graph.compile()
@@ -119,10 +127,14 @@ def run_agent_demo(sample_path: str | None = None, auto_mode: bool = True) -> di
     if sample_path:
         from src.agents.src.nodes.input_parser import parse_json_input
         parsed = parse_json_input(sample_path)
+        # raw_data 是出图几何原料 (zones/doors/windows 坐标), 两种模式都注入
         initial_state["raw_data"] = parsed.get("raw_data", {})
-        initial_state["task_list"] = parsed.get("task_list", [])
-        initial_state["project_structure"] = parsed.get("project_structure", {})
-        initial_state["project_type"] = parsed.get("project_type", "住宅")
+        # project_structure/task_list 只在「本地快验」模式注入; LLM 主导模式
+        # 交给 intent + structure 节点生成, 不被样本覆盖
+        if inject_sample_structure:
+            initial_state["task_list"] = parsed.get("task_list", [])
+            initial_state["project_structure"] = parsed.get("project_structure", {})
+            initial_state["project_type"] = parsed.get("project_type", "住宅")
 
     result = app.invoke(initial_state)
     return result

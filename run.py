@@ -34,6 +34,7 @@ os.environ.setdefault("AGNES_BASE_URL", "https://apihub.agnes-ai.com/v1")
 os.environ.setdefault("AGNES_MODEL", "agnes-2.0-flash")
 
 NO_LLM = "--no-llm" in sys.argv
+USE_LLM = "--llm" in sys.argv
 
 
 def section(title):
@@ -122,12 +123,22 @@ def run_agent(parsed):
     """Agent 端到端"""
     section("[4/5] Agent 端到端流程")
     from src.agents.src.graph import run_agent_demo
+    from src.agents.src.nodes.intent_structure import _get_llm
     sample = os.path.join(PROJECT_ROOT, "data", "sample", "residential_100sqm.json")
 
-    # 样本 raw_data + task_list 直接注入 state（本地数据接线，无需 LLM 意图）
-    result = run_agent_demo(sample_path=sample, auto_mode=True)
+    # --llm: 真 LLM 主导 — intent+structure 节点生成方案, 不被样本 project_structure 覆盖
+    # 默认 / --no-llm: 本地快验 — sample 的 raw_data+task_list 直接驱动 CAD (秒级, 结果确定)
+    inject_structure = not USE_LLM
+    result = run_agent_demo(
+        sample_path=sample, auto_mode=True,
+        inject_sample_structure=inject_structure,
+    )
 
-    if NO_LLM:
+    if USE_LLM:
+        llm_live = _get_llm() is not None
+        print(f"  (LLM 主导模式: intent+structure 由 LLM 生成方案 "
+              f"{'— LLM 实例就绪' if llm_live else '— 无 LLM, 静默 fallback 默认住宅'})")
+    elif NO_LLM:
         print("  (跳过 LLM, 走本地数据接线: 样本 raw_data 驱动 CAD+规则)")
     print(f"  项目类型: {result.get('project_type')}")
     print(f"  CAD 任务: {len(result.get('cad_results', []))} 个")
