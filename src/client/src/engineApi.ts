@@ -1,7 +1,8 @@
 import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult } from './useEngineStore';
 
-// 开发可用 import.meta.env.VITE_API 覆写；默认本地桥
-const API = (import.meta.env.VITE_API as string | undefined) || 'http://127.0.0.1:8642';
+// 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
+// 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
+const API = (import.meta.env.VITE_API as string | undefined) || '';
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {

@@ -79,17 +79,52 @@ def start_bridge(port: int) -> subprocess.Popen:
     )
 
 
+def _find_npm() -> str | None:
+    """定位 npm (nvm/多版本管理下 PATH 可能不全, 优先常见安装位置)。"""
+    import shutil
+    found = shutil.which("npm")
+    if found:
+        return found
+    # 常见安装位置兜底 (nvm-windows / 系统级)
+    import glob
+    candidates = [
+        r"C:\Program Files\nodejs\npm.cmd",
+        r"C:\Program Files (x86)\nodejs\npm.cmd",
+    ]
+    candidates += glob.glob(os.path.join(os.environ.get("LOCALAPPDATA", ""), "AppData", "Roaming", "nvm", "*", "npm.cmd"))
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
 def start_frontend(vite_dir: str, port: int) -> subprocess.Popen | None:
-    """起 vite dev (node 可用时)。返回 Popen; 不可用返回 None。"""
+    """起 vite dev server (node 可用时) → 浏览器开专业三区 GUI。
+    用 `dev:vite` (真 vite server), 不是 `dev` (那是 electron 黑壳, 浏览器连不上)。"""
     if not os.path.isdir(vite_dir) or not os.path.isfile(os.path.join(vite_dir, "package.json")):
         return None
-    cmd = ["npm", "run", "dev"]
+    npm = _find_npm()
+    if not npm:
+        print("[start_gui] 未找到 node/npm, 前端退到桥兜底页")
+        return None
+    # 复用 vite 配置的 3000 端口; node_modules 缺则先装一次 (幂等)
+    if not os.path.isdir(os.path.join(vite_dir, "..", "node_modules")) and \
+       not os.path.isdir(os.path.join(vite_dir, "node_modules")):
+        try:
+            subprocess.run([npm, "install", "--no-audit", "--no-fund"],
+                           cwd=PROJECT_ROOT, creationflags=_CREATE_NO_WINDOW,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+        except Exception as e:
+            print(f"[start_gui] npm install 跳过 ({e}) — 前端将退到桥兜底页")
+    cmd = [npm, "run", "dev:vite"]
     kwargs: dict = dict(cwd=vite_dir, creationflags=_CREATE_NO_WINDOW,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        env={**os.environ, "VITE_API": f"http://{HOST}:{port}"})
+                        env={**os.environ, "VITE_API": f"http://{HOST}:{port}",
+                             "VITE_BRIDGE_PORT": str(port)})
     try:
         return subprocess.Popen(cmd, **kwargs)
     except FileNotFoundError:
+        print(f"[start_gui] npm 不存在 ({npm}), 前端退到桥兜底页")
         return None
 
 

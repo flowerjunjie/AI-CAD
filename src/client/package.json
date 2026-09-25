@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "electron .",
     "build": "tsc && vite build",
-    "package": "electron-builder"
+    "package": "electron-builder",
+    "dev:vite": "vite",
+    "dev:web": "vite"
   },
   "dependencies": {
     "react": "^18.2.0",

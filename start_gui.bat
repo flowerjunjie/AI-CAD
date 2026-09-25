@@ -1,10 +1,6 @@
 @echo off
-rem AI-CAD GUI launcher (Windows)
-rem Usage: double-click to open the professional GUI in your browser.
-rem   - installs fastapi + uvicorn if missing
-rem   - starts the FastAPI engine bridge (no console window)
-rem   - opens the GUI (vite dev if node present, else bridge landing page)
-rem   - Ctrl+C / close keeps the bridge clean
+rem AI-CAD GUI launcher - double-click to open the professional 3-panel GUI.
+rem Starts the Python engine bridge (no black console) + vite frontend + browser.
 setlocal
 cd /d "%~dp0"
 
@@ -15,19 +11,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/2] Checking GUI bridge deps (fastapi + uvicorn)...
+rem bridge deps (fastapi/uvicorn)
 python -m pip install -q fastapi "uvicorn[standard]"
 if errorlevel 1 (
-  echo [X] fastapi/uvicorn install failed. Check network or pip mirror.
+  echo [X] pip install failed. Check network / pip mirror.
   pause
   exit /b 1
 )
 
-echo [2/2] Launching AI-CAD GUI...
 python start_gui.py
-if errorlevel 1 (
-  echo [X] GUI launch failed. See output above.
-  pause
-  exit /b 1
-)
 pause
