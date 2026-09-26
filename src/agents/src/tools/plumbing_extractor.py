@@ -68,10 +68,29 @@ def _dist_to_manhole(mid, manhole_points) -> float:
                for m in manhole_points)
 
 
+def _diameter_override(diam_overs, start, end, layer_key: str, fallback: int) -> int:
+    """有真实管径标注才取真实值, 否则回退图层映射的占位管径。
+
+    镜像 _slope_from_annotations 的「标注才有值, 否则占位」范式: 管径本应来自
+    真实图纸 (INSERT 块属性 / 图例), 图层名映射只是 TBD 占位。调用侧可按
+    图层提供 {端点坐标: 公称管径 mm} 覆盖, 使 e2e 样本能造出 DN40 这类
+    偏小管径段 (命中 min-diameter 违规), 而不改全局 _LAYER_MAP 语义。
+    """
+    if not diam_overs or layer_key not in diam_overs:
+        return fallback
+    over = diam_overs[layer_key]
+    mid = (((start[0] + end[0]) / 2.0), ((start[1] + end[1]) / 2.0))
+    for key in (mid, start):
+        if key in over:
+            return int(over[key])
+    return fallback
+
+
 def extract_plumbing_pipes(
     segs,
     manhole_points=(),
     annotations=None,
+    diameter_annotations=None,
 ) -> list[PlumbingPipe]:
     """把管道线段配对成 PlumbingPipe 实例列表。
 
@@ -80,11 +99,14 @@ def extract_plumbing_pipes(
       - include_layer=True  → {"start","end","layer"} dict 按各自图层映射管径
     manhole_points: 检查井/立管 2D 坐标点序列, 用于算距检查井距离。
     annotations: 高程标注, 见 _slope_from_annotations。
+    diameter_annotations: 管径标注 (可选), 见 _diameter_override — 按图层给
+      {端点/中点坐标: 公称管径 mm}, 覆盖 _LAYER_MAP 占位值; 缺省 None 行为不变。
     """
     pipes = []
     for idx, item in enumerate(segs):
         start, end, layer = _segment_and_layer(item)
         ptype, diam = _LAYER_MAP.get(layer, _DEFAULT)
+        diam = _diameter_override(diameter_annotations, start, end, layer, diam)
         mid = (((start[0] + end[0]) / 2.0), ((start[1] + end[1]) / 2.0))
         pipes.append(PlumbingPipe(
             id=f"plumbing-{idx}",

@@ -37,13 +37,33 @@ def _beam_type_and_width(layer: str) -> tuple[str, int]:
     return mapped
 
 
-def extract_structural_beams(segs) -> list[StructuralBeam]:
+def _depth_from_annotations(ann, start, end) -> int:
+    """有截面深标注才取深值, 否则占位 0 (TBD)。
+
+    镜像 plumbing 的高程标注范式: 梁深不来自 DXF 线段 (纯 2D 几何无截面),
+    由调用侧按「端点坐标 → 截面深 mm」提供; 查不到即占位 0。
+    ann: 可选 dict, 值为 {端点坐标 (x,y) 或 中点坐标: 截面深 mm}。
+    优先按段中点查 (最贴合「一条梁一个截面」), 中点缺失再按起点查。
+    """
+    if not ann:
+        return 0
+    mid = (((start[0] + end[0]) / 2.0), ((start[1] + end[1]) / 2.0))
+    if mid in ann:
+        return int(ann[mid])
+    if start in ann:
+        return int(ann[start])
+    return 0
+
+
+def extract_structural_beams(segs, annotations=None) -> list[StructuralBeam]:
     """把结构梁/承重墙线段配对成 StructuralBeam 实例列表。
 
     segs: get_structural_segments 的输出。两种形态都支持（照 plumbing）:
       - include_layer=False → ((start_xy, end_xy), ...)  纯线段, 无图层信息
       - include_layer=True  → {"start","end","layer"} dict 按各自图层映射
-    顺序与入参一致。缺省截面深/平面坐标占位 0 (TBD)。
+    顺序与入参一致。截面深缺省占位 0; 有 annotations (端点/中点 → 截面深 mm)
+    才按标注取深, 否则保持占位 0 (镜像 plumbing 高程标注范式, 见
+    _depth_from_annotations)。平面坐标取中点占位。
     """
     beams = []
     for idx, item in enumerate(segs):
@@ -59,7 +79,7 @@ def extract_structural_beams(segs) -> list[StructuralBeam]:
             id=f"structural-beam-{idx}",
             beam_type=beam_type,
             width_mm=width_mm,
-            depth_mm=0,  # TBD: 截面高占位 (深度/梁高宽比规则需要业务给)
+            depth_mm=_depth_from_annotations(annotations, start, end),
             x=x,
             y=y,
         ))
@@ -69,6 +89,7 @@ def extract_structural_beams(segs) -> list[StructuralBeam]:
 # 块类: 块名 → (column_type, 截面短边 mm)。占位映射, TBD 待业务确认。
 _COLUMN_BLOCK_MAP = {
     "COL_K": ("frame", 400),         # TBD: 框架柱截面
+    "COL_S": ("construction", 200),  # TBD: 小截面柱 (短边 200mm, < 300 下限, e2e 违规样本)
     "COL_Z": ("construction", 240),  # TBD: 构造柱截面
     "FOUND_S": ("foundation", 0),    # TBD: 基础无柱截面概念, 0 占位
 }

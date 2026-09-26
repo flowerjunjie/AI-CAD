@@ -137,10 +137,13 @@ def test_structural_blocks_real_dxf(tmp_path):
     assert found["layer"] == "FOUNDATION", \
         f"FOUND_S 图层应 FOUNDATION, 实际 {found['layer']}"
 
-    # 只认 INSERT: 各 block 都应是 dict 且 4 字段齐全 (z 已丢弃, 不出现)
+    # 只认 INSERT: 各 block 都应是 dict 且字段齐全 (z 已丢弃, 不出现)。
+    # attrs 是 get_element_blocks 的增量键 (INSERT 块 ATTRIB 数值透传, 无属性时为
+    # 空 dict), 电气/暖通靠它读真实数值; 此处纳入契约, 不要求无属性块 attrs 为空以外必非空。
     for b in blocks:
-        assert set(b) == {"block_name", "x", "y", "layer"}, \
-            f"block 契约字段应为 4 个 (z 丢弃), 实际 {set(b)}"
+        assert set(b) == {"block_name", "x", "y", "layer", "attrs"}, \
+            f"block 契约字段应为 5 个 (z 丢弃, attrs 增量), 实际 {set(b)}"
+        assert isinstance(b["attrs"], dict), f"attrs 应为 dict, 实际 {type(b['attrs'])}"
 
 
 def test_structural_blocks_ignore_same_layer_circles(tmp_path):

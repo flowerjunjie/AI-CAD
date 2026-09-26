@@ -188,11 +188,17 @@ class DXFReader:
         out = []
         for layer in layer_names:
             for ins in msp.query(f'INSERT[layer=="{layer}"]'):
+                # ATTRIB 数值透传 (tag → text 值): 电气 height_m/has_earthing、
+                # 暖通 velocity_ms/location_type 等「元素画成带属性 INSERT 块」时,
+                # 数值就挂在块的 ATTRIB 上。缺则 attrs 为空 dict, 下游 extractor
+                # 退回占位默认 (向后兼容: 原 4 键全保留, attrs 为纯增量)。
+                attrs = {a.dxf.tag: a.dxf.text for a in ins.attribs}
                 out.append({
                     "block_name": ins.dxf.name,
                     "x": ins.dxf.insert[0],
                     "y": ins.dxf.insert[1],
                     "layer": ins.dxf.layer,
+                    "attrs": attrs,
                 })
         return out
 
@@ -221,14 +227,29 @@ class DXFReader:
         out = []
         for blk in self.get_element_blocks(layer_names):
             kind = _BLOCK.get(blk["block_name"]) or _LAYER.get(blk["layer"], _DEFAULT)
+            # 数值字段: 优先读 INSERT 块 ATTRIB (agent 造样本时可写真实值), 缺则 None
+            # 让 extractor 退占位默认。ATTRIB 值全是字符串, 须强转:
+            # height_m → float (None 跳过); has_earthing → bool (小写 'true'/'false',
+            # 避免 bool('false')==True 的坑, 空值 None 让 extractor 兜底 True)。
+            a = blk.get("attrs", {})
+            raw_h = a.get("height_m")
+            try:
+                height_m = float(raw_h) if raw_h not in (None, "") else None
+            except (TypeError, ValueError):
+                height_m = None
+            raw_e = (a.get("has_earthing") or "").strip().lower()
+            if raw_e in ("true", "false"):
+                has_earthing = raw_e == "true"
+            else:
+                has_earthing = None  # 缺省, extractor 兜底 True (outlet)
             out.append({
                 "kind": kind,
                 "id": blk["block_name"],
                 "x": blk["x"],
                 "y": blk["y"],
-                "height_m": None,      # 占位, 由 extractor 按 kind 给默认并 warning
-                "room_type": None,     # 缺省, extractor 兜底 "living"
-                "has_earthing": None,  # 缺省, extractor 兜底 True (outlet)
+                "height_m": height_m,
+                "room_type": a.get("room_type"),
+                "has_earthing": has_earthing,
             })
         return out
 

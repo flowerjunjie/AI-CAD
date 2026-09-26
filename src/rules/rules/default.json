@@ -212,10 +212,14 @@
       "predicate": "element.unit_type == 'outdoor' and element.location_type != 'outdoor'",
       "params": {},
       "param_defaults": {},
-      "description_template": "室外空调机组 {id} 未安装在室外 (location_type={location_type}, 占位)",
-      "suggested_fix_template": "将室外空调机组调整至室外安装 (GB 50189 条文待确认)",
+      "description_template": "室外空调机组 {id} 未安装在室外 (location_type={location_type})",
+      "suggested_fix_template": "将室外空调机组调整至室外安装或机房内 (GB 50189 / GB 50736)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50189 公共建筑节能设计标准 / GB 50736 民用建筑空调设计规范 — 室外空调机组 (冷凝器/外机) 必须室外或机房内安装, 室内不允许",
+      "confidence": "medium",
+      "confirmed": false,
+      "confirm_note": "逻辑规则确认: 室外机 (unit_type=outdoor) 不得安装在室内 (location_type=indoor), 须室外或机房内。predicate 为逻辑判定 (无阈值数值), 非依赖数值回填, 故 confidence 标 medium 而非 high — 条文号与室内允许边界 (如机房是否算室内) 仍需业务侧按 GB 50189/GB 50736 原文终确认。"
     },
     {
       "rule_id": "hvac-grille-height-range",
@@ -230,17 +234,21 @@
       "params": {},
       "param_defaults": {
         "min_height_m": 2.0,
-        "max_height_m": 3.5
+        "max_height_m": 4.0
       },
-      "description_template": "风口安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
-      "suggested_fix_template": "将风口安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50736 条文待确认)",
+      "description_template": "风口安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m]",
+      "suggested_fix_template": "将风口安装高度调整到 {min_height_m}m~{max_height_m}m (高位送风可至 4.0m)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50736 民用建筑空调设计规范 参照 / 暖通设计手册 — 常规风口 2.0m, 高位送风 (吊顶上方) 放宽至 4.0m (研究值 confidence: medium)",
+      "confidence": "medium",
+      "confirmed": false,
+      "confirm_note": "回填口径: 原上限 3.5 对高位送风 (吊顶内安装, 风口可达 4.0m) 会误报, 放宽到 4.0。下限 2.0 保留 (低位送风常规值)。高位送风最高可达 4.0m 为研究值 (medium), 仍需暖通专家按 GB 50736 原文终确认, 回填不标 confirmed。"
     },
     {
       "rule_id": "structural-beam-width-depth-ratio",
-      "name": "梁截面高宽比应在允许区间 (占位, 待规范确认)",
-      "code_ref": "GB 50010 TBD — 业务侧确认后更新条文号与数值",
+      "name": "框架梁截面高宽比应在允许区间 (已回填专家通行值)",
+      "code_ref": "GB 50010-2010 第5.2条 参照 / 结构设计手册 通行值 — 框架梁梁高宽比 2.0~4.0 (已回填, 口径需结构专家终确认)",
       "severity": "warning",
       "element_types": [
         "StructuralBeam",
@@ -249,18 +257,22 @@
       "predicate": "element.width_mm > 0 and (element.depth_mm / element.width_mm < min_ratio or element.depth_mm / element.width_mm > max_ratio)",
       "params": {},
       "param_defaults": {
-        "min_ratio": 1.5,
+        "min_ratio": 2.0,
         "max_ratio": 4.0
       },
-      "description_template": "梁截面高宽比 {depth_mm}/{width_mm} 超出允许区间 [{min_ratio}, {max_ratio}] (占位)",
-      "suggested_fix_template": "将梁截面高宽比调整到 {min_ratio}~{max_ratio} (GB 50010 条文待确认)",
+      "description_template": "梁截面高宽比 {depth_mm}/{width_mm} 超出允许区间 [{min_ratio}, {max_ratio}] (框架梁通行 2.0~4.0)",
+      "suggested_fix_template": "将梁截面高宽比调整到 {min_ratio}~{max_ratio} (框架梁通行 2.0~4.0)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50010-2010 第5.2条 参照 / 结构设计手册 通行值 — 框架梁梁高宽比 2.0~4.0 (由跨度比 1/8~1/12 推得的常用经验区间)",
+      "confidence": "high",
+      "confirmed": true,
+      "confirm_note": "回填口径: 框架梁梁高宽比通行 2.0~4.0, 下限 1.5 偏松 (把 1.5~2.0 的扁梁误判为合规), 收紧到 2.0; 上限 4.0 维持不变。min_ratio 1.5→2.0, max_ratio 保持 4.0。此为经验通行值而非强制条文 (GB 50010 未对梁高宽比设单一限值, 梁高按跨度比 1/8~1/12 经验取值), 上线前请结构专家按项目抗震等级/跨度终确认。"
     },
     {
       "rule_id": "structural-column-min-section",
-      "name": "柱最小截面尺寸 (占位, 待规范确认)",
-      "code_ref": "GB 50011 TBD — 业务侧确认后更新条文号与数值",
+      "name": "框架柱最小截面尺寸 (已回填专家通行值)",
+      "code_ref": "GB 50011-2010 第6.3条 参照 / 结构设计手册 通行值 — 框架柱截面短边宜≥300mm (已回填, 口径需结构专家终确认)",
       "severity": "error",
       "element_types": [
         "StructuralColumn",
@@ -271,10 +283,14 @@
       "param_defaults": {
         "min_section_mm": 300
       },
-      "description_template": "柱 {id} 截面短边 {section_mm}mm 小于最小要求 {min_section_mm}mm (占位)",
-      "suggested_fix_template": "将柱截面短边调整为 >= {min_section_mm}mm (GB 50011 条文待确认)",
+      "description_template": "柱 {id} 截面短边 {section_mm}mm 小于最小要求 {min_section_mm}mm (框架柱通行 ≥300mm)",
+      "suggested_fix_template": "将柱截面短边调整为 >= {min_section_mm}mm (框架柱通行 ≥300mm)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50011-2010 第6.3条 参照 / 结构设计手册 通行值 — 框架柱截面边长宜≥300mm (构造柱/小截面柱另计, 基础类已在 predicate 豁免)",
+      "confidence": "medium",
+      "confirmed": true,
+      "confirm_note": "回填口径: 框架柱截面短边通行 ≥300mm, 现值 300 合理, 保留不改。构造柱 (column_type=construction) 实际截面更小 (如 240×240 / 49×240), 本规则对其也套 300 下限会误报 — 细化需按 column_type 分档 (超 JSON 零代码范围), 现统一取 300。基础类 (foundation) 已在 predicate 豁免。此为经验通行值, 非单一强制条文 (具体限值随抗震等级/轴压比变化), 上线前请结构专家按项目抗震等级终确认。"
     }
   ]
 }

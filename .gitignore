@@ -56,6 +56,9 @@ output/
 __pycache__/
 *.dwg
 *.dxf
+# 各专业 e2e 测试的可运行 fixture (由 data/sample/make_*_sample_dxf.py 生成,
+# 断言依赖 os.path.isfile), 放行 — 其余 dxf 出图产物仍忽略
+!data/sample/*_sample.dxf
 *.sqlite3
 
 # Electron
@@ -65,3 +68,4 @@ __pycache__/
 *.tmp
 *.temp
 *.spec
+background-info/
