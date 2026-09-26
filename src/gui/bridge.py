@@ -154,9 +154,28 @@ def _rule_source(rule: object) -> str:
     return "hardcoded"
 
 
+def _confirmed_rule_ids() -> set[str]:
+    """读 default.json 里 confirmed=true 的 rule_id 集合 (专家填值后标 True)。
+
+    供 /api/rules 透出 confirmed 状态 → 前端 M1 卡按专业点亮「专家填值即点亮」。
+    解析失败返回空集 (不阻塞 /api/rules 主链路)。
+    """
+    try:
+        import json
+        import os
+        root = _project_root()
+        p = os.path.join(root, "src", "rules", "rules", "default.json")
+        with open(p, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return {r["rule_id"] for r in data.get("rules", []) if r.get("confirmed")}
+    except Exception:
+        return set()
+
+
 @app.get("/api/rules")
 def api_rules() -> List[dict]:
     engine = _load_rules_module()
+    confirmed = _confirmed_rule_ids()
     out = []
     for r in engine.list_rules():
         out.append({
@@ -166,6 +185,7 @@ def api_rules() -> List[dict]:
             "severity": r.severity.value if hasattr(r.severity, "value") else str(r.severity),
             "source": _rule_source(r),
             "enabled": True,
+            "confirmed": r.rule_id in confirmed,
         })
     return out
 

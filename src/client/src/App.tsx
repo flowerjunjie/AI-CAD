@@ -228,20 +228,46 @@ function App() {
         </section>
       </main>
 
-      {/* Footer: 占位符卡片（未实现能力，置灰） */}
+      {/* Footer: 占位符卡片（未实现能力，置灰；某专业规则 confirmed=true 即点亮该专业） */}
       <footer className="footer footer-cards">
         <div className="footer-title">发展占位 · 各专业专家补齐</div>
         <div className="placeholder-row">
-          {PLACEHOLDERS.map((p) => (
-            <div key={p.id} className="placeholder-card" title={`负责方: ${p.owner}`}>
-              <div className="ph-head">
-                <span className="ph-badge">占位</span>
-                <span className="ph-title">{p.title}</span>
+          {PLACEHOLDERS.map((p) => {
+            // 专家填值即点亮: 该占位声明的专业前缀里, 有 confirmed 规则 → 该专业变实
+            const litPrefixes = p.disciplinePrefixes?.filter((pref) =>
+              rules.some((r) => r.confirmed && r.rule_id.startsWith(pref)),
+            ) || [];
+            const allLit = litPrefixes.length > 0 && litPrefixes.length === p.domain.split('/').length;
+            return (
+              <div
+                key={p.id}
+                className={`placeholder-card ${allLit ? 'placeholder-card-lit' : ''}`}
+                title={`负责方: ${p.owner}`}
+              >
+                <div className="ph-head">
+                  <span className={`ph-badge ${allLit ? 'ph-badge-lit' : ''}`}>
+                    {allLit ? '已点亮' : litPrefixes.length > 0 ? `点亮 ${litPrefixes.length} 专业` : '占位'}
+                  </span>
+                  <span className="ph-title">{p.title}</span>
+                </div>
+                <p className="ph-desc">{p.desc}</p>
+                {p.disciplinePrefixes && (
+                  <div className="ph-disciplines">
+                    {p.disciplinePrefixes.map((pref, i) => {
+                      const discLabel = p.domain.split('/')[i] || pref;
+                      const lit = litPrefixes.includes(pref);
+                      return (
+                        <span key={pref} className={`ph-disc ${lit ? 'ph-disc-lit' : ''}`}>
+                          {lit ? '●' : '○'} {discLabel}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="ph-domain">{p.domain}</div>
               </div>
-              <p className="ph-desc">{p.desc}</p>
-              <div className="ph-domain">{p.domain}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </footer>
     </div>

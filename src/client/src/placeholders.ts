@@ -5,6 +5,8 @@ export interface Placeholder {
   desc: string;
   domain: string;
   owner: string;
+  /** 该占位对应哪些专业规则前缀；任一前缀的 DSL 规则 confirmed=true 即点亮该专业 */
+  disciplinePrefixes?: string[];
 }
 
 export const PLACEHOLDERS: Placeholder[] = [
@@ -14,6 +16,7 @@ export const PLACEHOLDERS: Placeholder[] = [
     desc: '各专业阈值待专家确认后填 default.json，改 JSON 零代码',
     domain: '给排水/电气/暖通/结构',
     owner: '各业专家',
+    disciplinePrefixes: ['plumbing-', 'electrical-', 'hvac-', 'structural-'],
   },
   {
     id: 'm2-layer',

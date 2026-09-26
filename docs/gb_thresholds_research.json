@@ -1,0 +1,183 @@
+{
+  "_meta": {
+    "purpose": "电气/暖通 default.json 规范阈值回填研究",
+    "author_note": "本环境外网检索/抓取全部被拦截, 数值基于现行国标通行设计做法整理, 逐条标注 confidence 与适用边界。回填前请电气/暖通专家按真实条文号复核 —— 八荣八耻: 以认真查询为荣, 以瞎猜接口为耻。",
+    "generated_at": "2026-09-26"
+  },
+
+  "electrical": {
+    "outlet_height": {
+      "low_position": {
+        "value": 0.3,
+        "unit": "m",
+        "spec_source": "GB 50303 / 行业通行做法 (TBD, 无强制单一条文)",
+        "confidence": "low",
+        "notes": "低位插座(距地)通常 0.3m 或 0.1m/0.05m(厨卫/踢脚线内)。国标未对普通插座安装高度设统一强制值, 属设计自由, 需业务确认具体项目取值。住宅厨卫多为低位 0.3m。"
+      },
+      "conventional": {
+        "value": 0.3,
+        "unit": "m",
+        "spec_source": "GB 50096-2011 第8.3.1条 参照 / 行业通行 (TBD)",
+        "confidence": "low",
+        "notes": "『常规插座』在住宅实际有两种: 低位 0.3m(沙发/床头旁, 现代主流) 或 高位 1.3m(旧式)。现行趋势以 0.3m 为常规, 但 1.3m 仍合法。此为设计自由项, 非强制阈值, 需业务定夺。"
+      },
+      "kitchen": {
+        "value": 1.1,
+        "unit": "m",
+        "spec_source": "GB 50096-2011 第8.3.2条 厨房电器插座 参照 (TBD)",
+        "confidence": "medium",
+        "notes": "厨房操作台上方电器插座(台面电器)通常距地 1.1~1.5m, 操作台面上方; 落地插座(冰箱/烤箱/洗碗机)为低位。住宅厨房台面电器插座常见 1.4~1.5m。1.1m 为台面低位下限, 需业务确认。"
+      },
+      "bathroom": {
+        "value": 0.3,
+        "unit": "m",
+        "spec_source": "GB 50096-2011 第8.3.2条 / 卫生间防溅要求 (TBD)",
+        "confidence": "low",
+        "notes": "卫生间插座通常低位 0.3m 并配防溅盒(带盖); 浴霸/镜前灯位另计。卫生间属潮湿场所, 插座须就近设带保护地线回路并防溅。具体高度为设计自由, 需业务确认。"
+      }
+    },
+
+    "switch_height": {
+      "residential": {
+        "value": 1.3,
+        "unit": "m",
+        "spec_source": "GB 50096-2011 第8.3.1条 开关安装高度 参照 (TBD)",
+        "confidence": "high",
+        "notes": "住宅开关(单极)安装高度通行取 1.3m(距地), 是行业高度一致的标准值。允许 1.2~1.4m 浮动。default.json 现有占位 [1.0,1.5] 与此吻合。"
+      },
+      "commercial": {
+        "value": 1.4,
+        "unit": "m",
+        "spec_source": "GB 50303 / 商业建筑通行做法 (TBD)",
+        "confidence": "medium",
+        "notes": "商业/公共建筑开关常用 1.4m(距地), 住宅 1.3m。双控/多控另计。国标未对商业设单一强制值, 属设计自由, 需业务确认。"
+      }
+    },
+
+    "installation_tolerance": {
+      "switch_outlet_height_deviation": {
+        "value": 5,
+        "unit": "mm",
+        "spec_source": "GB 50303-2015 第20.2.4条 插座/开关安装允许偏差 参照 (TBD)",
+        "confidence": "medium",
+        "notes": "同一房间内, 同类插座/开关安装高度允许偏差一般为 5mm; 不同房间允许偏差 10mm(同房间 5mm / 建筑楼层间另有规定)。此为施工验收偏差, 非设计高度, 需业务确认条文号。"
+      }
+    }
+  },
+
+  "hvac": {
+    "duct_velocity": {
+      "supply_rectangular": {
+        "value": [3, 5],
+        "unit": "m/s",
+        "spec_source": "GB 50736-2012 第7.1.2条 / 暖通设计手册 推荐风速 (TBD)",
+        "confidence": "high",
+        "notes": "送风管(矩形)推荐风速按管径/面积分档: 小管(短边<200mm) 2~3 m/s; 中管(200~400) 3~5 m/s; 大管(400~1000) 5~8 m/s; 主管 8~10 m/s。default.json 现有 [1.5,8.0] 偏保守, 可按管径分级细化。"
+      },
+      "return_round": {
+        "value": [3, 4],
+        "unit": "m/s",
+        "spec_source": "GB 50736-2012 / 暖通设计手册 回风管推荐风速 (TBD)",
+        "confidence": "high",
+        "notes": "回风管推荐风速一般 3~4 m/s(圆形), 静压控制后略低于送风。排风管 4~6 m/s。"
+      },
+      "by_diameter_supply": {
+        "value": {
+          "<200mm": [2, 3],
+          "200-400mm": [3, 5],
+          "400-1000mm": [5, 8],
+          ">1000mm": [8, 10]
+        },
+        "unit": "m/s",
+        "spec_source": "暖通设计手册 推荐风速表 / GB 50736-2012 (TBD)",
+        "confidence": "high",
+        "notes": "送/排风管按经济风速设计, 常用 4~8 m/s。具体分档随管径递增。此为设计手册经验值, 非强制条文, 需业务确认是否分级。"
+      },
+      "by_diameter_return": {
+        "value": {
+          "<200mm": [1.5, 2],
+          "200-400mm": [2, 3],
+          "400-1000mm": [3, 4],
+          ">1000mm": [4, 5]
+        },
+        "unit": "m/s",
+        "spec_source": "暖通设计手册 回风管推荐风速 / GB 50736-2012 (TBD)",
+        "confidence": "high",
+        "notes": "回风比送风低 1~2 m/s 档, 控制末端静压。经验值, 需业务确认。"
+      },
+
+      "min_diameter": {
+        "value": 40,
+        "unit": "mm",
+        "spec_source": "GB 50736-2012 第7.1.4条 / 矩形风管最小边长 (TBD)",
+        "confidence": "medium",
+        "notes": "最小风管边长: 圆形最小 40~50mm; 矩形最小短边 20mm(薄板) 至 40mm 常规。实际送风口接管常取 80~100mm 以上。此为施工/制作下限, 需业务确认。"
+      },
+      "max_velocity": {
+        "value": 10,
+        "unit": "m/s",
+        "spec_source": "GB 50736-2012 / 噪声限制 (TBD)",
+        "confidence": "high",
+        "notes": "送/排风主管最大一般 10~12 m/s, 末端 3~5 m/s。default.json 现有上限 8.0 m/s 偏严, 对主管会误报。建议放宽至 10 或按管径分级。需业务确认。"
+      },
+
+      "outdoor_unit_placement": {
+        "distance_to_wall_min": {
+          "value": 0.5,
+          "unit": "m",
+          "spec_source": "GB 50189 / 空调机组安装要求 (TBD)",
+          "confidence": "low",
+          "notes": "空调室外机距外墙/相邻设备的最小间距无统一国标条文, 多由厂家手册规定(常 0.5m 起)及当地环保/城管规范。距地面: 落地安装或挂架, 挂架一般离地 0.3~0.6m。需业务/厂家确认。室内安装: 不允许(室外机必须室外, 与 default.json 现规则一致)。"
+        },
+        "distance_to_ground_min": {
+          "value": 0.3,
+          "unit": "m",
+          "spec_source": "厂家手册 / 通行做法 (TBD)",
+          "confidence": "low",
+          "notes": "室外机挂架离地一般 0.3m 起(防积水), 落地则 0m。此为安装施工惯例, 非强制国标, 需业务/厂家确认。"
+        },
+        "allow_indoor_install": {
+          "value": false,
+          "unit": "bool",
+          "spec_source": "GB 50189 / 制冷机组安装通用要求 (TBD)",
+          "confidence": "medium",
+          "notes": "空调室外机(冷凝器)不得室内安装, 须室外或专用机房。室内机/新风机组可室内。default.json 现有规则 (unit_type==outdoor 且 location!=outdoor → error) 逻辑正确, 需业务确认是否含机房特例。"
+        }
+      },
+
+      "grille_height": {
+        "supply_grille": {
+          "value": [2.0, 3.0],
+          "unit": "m",
+          "spec_source": "GB 50736-2012 风口布置 / 通行做法 (TBD)",
+          "confidence": "medium",
+          "notes": "送风口(侧送/顶送)一般 2.0~3.0m(常 吊顶下), 高位送风 3.0~3.5m。default.json 现有 [2.0,3.5] 基本合理, 对高位送风偏紧, 建议放宽到 3.5。需业务确认。"
+        },
+        "return_grille": {
+          "value": [2.0, 3.0],
+          "unit": "m",
+          "spec_source": "GB 50736-2012 风口布置 / 通行做法 (TBD)",
+          "confidence": "medium",
+          "notes": "回风口与送风口同区或对称布置, 高度同送风 2.0~3.0m; 回风口常与送风口错开避免短路。需业务确认。"
+        }
+      },
+
+      "duct_noise": {
+        "supply_duct_noise_limit": {
+          "value": 45,
+          "unit": "dB(A)",
+          "spec_source": "GB 50736-2012 第8.4.1条 / 房间噪声限值 参照 (TBD)",
+          "confidence": "low",
+          "notes": "风管噪声: 末端出风口噪声级一般 ≤ 40~45 dB(A); 房间背景噪声限值 卧室 ≤30dB(A), 客厅/办公 ≤40dB(A) (GB 50118 民用建筑隔声/噪声)。风管风速是噪声主因, 控制风速即可控噪。此为限值经验, 需业务确认目标 dB 值。"
+        },
+        "room_noise_limit": {
+          "value": 40,
+          "unit": "dB(A)",
+          "spec_source": "GB 50118-2010 民用建筑隔声设计规范 / 通行做法 (TBD)",
+          "confidence": "low",
+          "notes": "一般房间空调运行噪声限值: 客房/办公室 40dB(A), 卧室 30~35dB(A), 机房另计。需业务确认具体房间目标值。"
+        }
+      }
+    }
+  }
+}

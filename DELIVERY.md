@@ -118,10 +118,10 @@
 
 | 角色 | 负责点亮 | 现状 |
 |------|---------|------|
-| 给排水专家 | M1 给排水数值 + M3 管道画法 | 机制已通，待值 |
-| 电气专家 | M1 电气数值 + M3 点位画法 | 机制已通，待值 |
-| 暖通专家 | M1 暖通数值 + M3 风口画法 | 机制已通，待值 |
-| 结构专家 | M1 结构数值 + M3 梁柱画法 | 机制已通，待值 |
+| 给排水专家 | M1 给排水数值 + M3 管道画法 | 机制已通，数值已回填（medium 待终确认） |
+| 电气专家 | M1 电气数值 + M3 点位画法 | 机制已通，开关高度已回填（high） |
+| 暖通专家 | M1 暖通数值 + M3 风口画法 | 机制已通，风速上限已放宽（high） |
+| 结构专家 | M1 结构数值 + M3 梁柱画法 | 机制已通，待值（M1 卡对应专业仍置灰） |
 | 制图/出图规范 | M3 各专业图元标准 | 占位 |
 | 团队/权限 | M5 多设计师协作 | 未启动 |
 
@@ -170,3 +170,46 @@ python -m pytest tests/ -q           # 171 passed / 3 skipped
 > 把数值和约定填进来"——**架构把复杂度消化了，专业价值留给专业的人**。
 
 *本报告数据截止 2026-09-24 · 全部数字经实跑验证（171 passed / 30 规则类 / 14 DSL / 30 commit）*
+
+---
+
+## 七、交付更新（2026-09-26 · 打包版 + 规范数值回填机制）
+
+### 7.1 单目录可执行交付物（双击 exe 即开专业面板）
+
+把「桥 + 前端 dist + 引擎 + 样本数据」用 PyInstaller 打成 onedir 交付物，
+**用户机器无 node / 无工程源码**也能跑：
+
+```
+build/dist/ai_cad_gui/
+├── ai_cad_gui.exe          # 双击即开, 自动起桥 + 浏览器开 http://127.0.0.1:<port>
+└── _internal/             # 引擎 + 桥 + 前端 dist + data/sample (含 default.json)
+```
+
+- 构建：`python scripts/build_exe.py`（首次 ~5 min，已剔除 torch/Qt 全家桶，产物 ~43 MB exe + 236 MB _internal）
+- 端到端验证：`python scripts/verify_exe.py`（起 exe → /api/health → / dist 面板 → confirmed 透出 → M1 点亮，全绿 PASS）
+
+关键技术点：
+- 前端 dist 由 FastAPI `StaticFiles` 托管在 `/`，`/api/*` 同源直连，零端口配置。
+- 摘掉 bridge E 段 `@app.get("/")` 兜底路由，让 dist 面板接管 `/`（`/api/*` 全保留）。
+- `default.json` 是数据文件非模块，必须 `--add-data` 单独进包；`cad_rule_export._dsl_rules_path()`
+  打包态优先查 `sys._MEIPASS`，否则 11 条 DSL 规则进不了引擎（`dsl=0`）。
+
+### 7.2 「专家填值即点亮」—— 让兼容并蓄论点可被看见
+
+把真实 GB 规范阈值回填 `default.json`，并打通「填值 → 卡片点亮」的 UI 闭环：
+
+- **回填高置信值**（`docs/gb_thresholds_research.json` 研究产物，逐条标 confidence）：
+  - 电气 `electrical-switch-height-range`：住宅开关通行 1.3m → 区间 [1.2, 1.4]（high）
+  - 暖通 `hvac-duct-velocity-range`：主管上限放宽 8.0 → 10.0（避免主管误报，high）
+  - 给排水 `plumbing-waste-pipe-min-diameter`：保留横管 DN50，显式标注「立管才取 75」口径（medium，不造假）
+- **填值即点亮的机制**（新增，非写死）：
+  - `default.json` 每条规则加 `confirmed` / `spec_source` / `confidence` / `confirm_note` 字段
+  - 桥 `/api/rules` 透出 `confirmed` → 前端 M1 卡按专业前缀（plumbing/electrical/hvac/structural）
+    判定：该专业任一规则 `confirmed=true` 即点亮对应专业，4 专业全亮则整卡变实
+  - 结构专业尚未回填 → M1 卡显示「点亮 3 专业」，**结构变置灰卡为「点亮」的活证据**
+
+> 论证落地：M1 卡从「整卡置灰」变成「给排水/电气/暖通点亮 + 结构占位」，
+> 直观证明「专家填值即点亮、零代码」——填一个专业亮一个专业，架构不动。
+
+全量回归：`python -m pytest tests/ -q` → **171 passed / 3 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0）。

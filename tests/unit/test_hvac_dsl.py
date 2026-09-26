@@ -43,13 +43,13 @@ def test_hvac_rules_loaded_from_dsl():
 
 
 def test_duct_velocity_out_of_range_violation():
-    """风速 9.0 m/s 超占位上限 8.0 → 违规"""
+    """风速 12.0 m/s 超上限 10.0 → 违规 (上限已按专家回填从 8.0 放宽到 10.0)"""
     engine = _engine_with_rules()
     duct = HvacDuct(id="d1", duct_type="supply", diameter_mm=100,
-                    airflow_m3h=500.0, velocity_ms=9.0)
+                    airflow_m3h=500.0, velocity_ms=12.0)
     violations = engine.check([duct], rule_ids=["hvac-duct-velocity-range"])
     assert len(violations) == 1
-    # 风速 4.0 m/s 在占位区间 [1.5, 8.0] 内 → 合规
+    # 风速 4.0 m/s 在区间 [1.5, 10.0] 内 → 合规
     duct_ok = HvacDuct(id="d2", duct_type="supply", diameter_mm=100,
                        airflow_m3h=500.0, velocity_ms=4.0)
     assert len(engine.check([duct_ok], rule_ids=["hvac-duct-velocity-range"])) == 0

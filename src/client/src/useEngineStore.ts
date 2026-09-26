@@ -7,6 +7,7 @@ export interface RuleItem {
   severity: string;
   source: 'hardcoded' | 'dsl';
   enabled: boolean;
+  confirmed?: boolean;
 }
 
 export interface Violation {

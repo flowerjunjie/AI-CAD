@@ -412,3 +412,14 @@ body {
 .ph-title { font-size: 12px; font-weight: 600; color: #ccc; }
 .ph-desc { font-size: 11px; color: #888; margin-bottom: 4px; }
 .ph-domain { font-size: 10px; color: #555; }
+
+/* ── M1 规范数值回填 · 按专业点亮 (专家填值即点亮) ── */
+.placeholder-card-lit {
+  opacity: 1; filter: none;
+  border-style: solid; border-color: #2e7d32;
+  background: #0d1a12;
+}
+.ph-badge-lit { background: #4caf50; color: #0d1a12; }
+.ph-disciplines { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.ph-disc { font-size: 10px; color: #666; }
+.ph-disc-lit { color: #4caf50; font-weight: 700; }

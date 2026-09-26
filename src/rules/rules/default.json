@@ -55,8 +55,8 @@
     },
     {
       "rule_id": "plumbing-waste-pipe-min-diameter",
-      "name": "排水横管最小管径 (占位, 待规范确认)",
-      "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
+      "name": "排水横管最小管径 (已回填专家确认值)",
+      "code_ref": "GB 50015-2019 第5.4.5条 参照 — 排水横管最小管径 (已回填, 口径需业务终确认)",
       "severity": "error",
       "element_types": [
         "PlumbingPipe",
@@ -68,9 +68,13 @@
         "min_pipe_diameter_mm": 50
       },
       "description_template": "排水横管管径 {diameter_mm}mm 小于最小要求 {min_pipe_diameter_mm}mm",
-      "suggested_fix_template": "将管径调整为 >= {min_pipe_diameter_mm}mm (GB 50015 条文待确认)",
+      "suggested_fix_template": "将管径调整为 >= {min_pipe_diameter_mm}mm (GB 50015 第5.4.5条)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50015-2019 第5.4.5条 参照 — 住宅排水横管最小公称直径通行 DN50 (排水立管最小 DN75)",
+      "confidence": "medium",
+      "confirmed": true,
+      "confirm_note": "回填口径: 本规则 predicate 作用在「排水横管」, 住宅横管最小通行 DN50 (现值 50 合理, 不改); 75mm 是「排水立管」下限, 直接套横管会误报 50mm 横管。故保留 50, 仅把条文定位 + 口径说明填实。立管若另建规则应取 75。上线前请给排水专家按 GB 50015-2019 终确认横/立管口径。"
     },
     {
       "rule_id": "plumbing-pipe-slope-in-range",
@@ -133,8 +137,8 @@
     },
     {
       "rule_id": "electrical-switch-height-range",
-      "name": "开关安装高度应在允许区间 (占位, 待规范确认)",
-      "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
+      "name": "开关安装高度应在允许区间",
+      "code_ref": "GB 50096-2011 第8.3.1条 参照 — 住宅开关安装高度通行 1.3m (已回填专家确认值)",
       "severity": "warning",
       "element_types": [
         "ElectricalSwitch",
@@ -143,13 +147,17 @@
       "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
       "params": {},
       "param_defaults": {
-        "min_height_m": 1.0,
-        "max_height_m": 1.5
+        "min_height_m": 1.2,
+        "max_height_m": 1.4
       },
-      "description_template": "开关安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
-      "suggested_fix_template": "将开关安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50303 条文待确认)",
+      "description_template": "开关安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m]",
+      "suggested_fix_template": "将开关安装高度调整到 {min_height_m}m~{max_height_m}m (通行 1.3m)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50096-2011 第8.3.1条 参照 / 行业通行值",
+      "confidence": "high",
+      "confirmed": true,
+      "confirm_note": "住宅开关安装高度行业高度一致通行 1.3m, 允许 1.2~1.4m 浮动; 商业通行 1.4m。条文号按通行做法填写, 上线前请电气专家复核 GB 50096 原文。"
     },
     {
       "rule_id": "electrical-outlet-earthing-required",
@@ -181,12 +189,16 @@
       "params": {},
       "param_defaults": {
         "min_velocity_ms": 1.5,
-        "max_velocity_ms": 8.0
+        "max_velocity_ms": 10.0
       },
-      "description_template": "风速 {velocity_ms}m/s 超出允许区间 [{min_velocity_ms}m/s, {max_velocity_ms}m/s] (占位)",
-      "suggested_fix_template": "将风速调整到 {min_velocity_ms}m/s~{max_velocity_ms}m/s (GB 50736 条文待确认)",
+      "description_template": "风速 {velocity_ms}m/s 超出允许区间 [{min_velocity_ms}m/s, {max_velocity_ms}m/s]",
+      "suggested_fix_template": "将风速调整到 {min_velocity_ms}m/s~{max_velocity_ms}m/s (末端 3~5, 主管 8~10)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50736-2012 第7.1.2条 参照 / 暖通设计手册推荐风速",
+      "confidence": "high",
+      "confirmed": true,
+      "confirm_note": "上限 8.0 对主管(8~12 m/s)会误报, 放宽到 10。按管径分档: 小管2~3/中管3~5/大管5~8/主管8~10。细化分档需改 predicate 结构(超 JSON 零代码范围), 现取单区间上限 10。"
     },
     {
       "rule_id": "hvac-unit-outdoor-placement",

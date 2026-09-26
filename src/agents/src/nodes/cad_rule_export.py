@@ -3,6 +3,7 @@ Agent 节点 — CAD执行 + 规则校验 + 成果输出
 消费 raw_data 几何数据（zones/doors/windows），不再用硬编码坐标
 """
 import os
+import sys
 from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
@@ -25,12 +26,26 @@ from src.rules.src.dsl import load_dsl_rules
 
 
 def _dsl_rules_path() -> str:
-    """default.json 绝对路径（__file__ 回 5 层 dirname 到项目根）。"""
-    # __file__ = .../AI-CAD/src/agents/src/nodes/cad_rule_export.py
+    """default.json 绝对路径。
+
+    打包态优先: PyInstaller 把 default.json 作为数据文件 --add-data 进 RESOURCE_ROOT
+    (onedir=_internal), 落到 <RESOURCE_ROOT>/src/rules/rules/default.json; 这里先查它,
+    命中即用。源码态 / 打包态但数据缺失时回退 __file__ 上溯 5 层到项目根。
+    """
+    candidates = []
+    # 打包态资源根 (onedir=_internal, onefile=临时解压目录); 源码态没有 _MEIPASS
+    resource_root = getattr(sys, "_MEIPASS", None)
+    if resource_root:
+        candidates.append(os.path.join(resource_root, "src", "rules", "rules", "default.json"))
+    # 源码态: __file__ = .../AI-CAD/src/agents/src/nodes/cad_rule_export.py
     # 5 层 dirname 回项目根 (nodes→src→agents→src→AI-CAD)
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-    return os.path.join(root, "src", "rules", "rules", "default.json")
+    candidates.append(os.path.join(root, "src", "rules", "rules", "default.json"))
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return candidates[-1]  # 都不在就回源码态路径 (调用方 _ensure 会 try/except 兜底)
 
 
 def _ensure_dsl_rules_loaded(engine) -> None:
