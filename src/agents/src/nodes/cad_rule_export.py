@@ -4,7 +4,12 @@ Agent 节点 — CAD执行 + 规则校验 + 成果输出
 """
 import os
 import sys
-from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point, Pipe as CADPipe
+from src.agents.src.tools.cad_tools import (
+    DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point,
+    Pipe as CADPipe, Beam as CADBeam, Column as CADColumn,
+    Outlet as CADOutlet, Switch as CADSwitch,
+    HvacDuct as CADHvacDuct, HvacUnit as CADHvacUnit, HvacGrille as CADHvacGrille,
+)
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
 from src.agents.src.numbering import assign_door_numbers, assign_window_numbers
@@ -448,6 +453,96 @@ def cad_execute_node(state: dict) -> dict:
                     ))
                 results.append({"task_id": task_id, "status": "completed",
                                 "count": len(raw_pipes)})
+
+            elif task_type == "beam":
+                # 结构梁段: 消费 raw_data 的 structural 梁 (对齐 _ELEMENT_CHECKS
+                # structural_beams 键), 每段 add_beam 画 BEAM 层 LWPOLYLINE
+                # + BEAM_LABEL 层 "宽x高" 截面标注。坐标来自样本, 不走布局。
+                raw_beams = (state.get("raw_data", {}) or {}).get("structural_beams", [])
+                for b in raw_beams:
+                    sx, sy = b.get("start", (0.0, 0.0))
+                    ex, ey = b.get("end", (0.0, 0.0))
+                    writer.add_beam(CADBeam(
+                        start=Point(float(sx), float(sy)),
+                        end=Point(float(ex), float(ey)),
+                        width_mm=int(b.get("width_mm", 300)),
+                        depth_mm=int(b.get("depth_mm", 0)),
+                        layer=b.get("layer", "BEAM"),
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(raw_beams)})
+
+            elif task_type == "column":
+                # 结构柱: 消费 raw_data 的 structural 柱 (对齐 structural_columns 键),
+                # 每柱 add_column 画 COLUMN 层截面矩形 + COLUMN_LABEL 层 "短边x短边"。
+                raw_columns = (state.get("raw_data", {}) or {}).get("structural_columns", [])
+                for c in raw_columns:
+                    writer.add_column(CADColumn(
+                        position=Point(float(c.get("x", 0.0)), float(c.get("y", 0.0))),
+                        section_mm=int(c.get("section_mm", 400)),
+                        layer=c.get("layer", "COLUMN"),
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(raw_columns)})
+
+            elif task_type == "outlet":
+                # 电气插座点位: 消费 raw_data 的 outlets 键 (对齐 _ELEMENT_CHECKS),
+                # 每点 add_outlet 画 ELEC_OUTLET 正方形 + ELEC_LABEL 层 "H{高度}" 标注。
+                # 坐标/高度来自样本, 不走布局（与 pipe/beam 同款点位范式）。
+                raw_outlets = (state.get("raw_data", {}) or {}).get("outlets", [])
+                for o in raw_outlets:
+                    writer.add_outlet(CADOutlet(
+                        position=Point(float(o.get("x", 0.0)), float(o.get("y", 0.0))),
+                        height_m=float(o.get("height_m", 0.3)),
+                        layer=o.get("layer", "ELEC_OUTLET"),
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(raw_outlets)})
+
+            elif task_type == "switch":
+                # 电气开关点位: 消费 raw_data 的 switches 键, 每点 add_switch 画
+                # ELEC_SWITCH 正方形 + ELEC_LABEL 层 "H{高度}" 标注（照 outlet 范式）。
+                raw_switches = (state.get("raw_data", {}) or {}).get("switches", [])
+                for s in raw_switches:
+                    writer.add_switch(CADSwitch(
+                        position=Point(float(s.get("x", 0.0)), float(s.get("y", 0.0))),
+                        height_m=float(s.get("height_m", 1.3)),
+                        layer=s.get("layer", "ELEC_SWITCH"),
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(raw_switches)})
+
+            elif task_type == "hvac":
+                # 暖通三元素: 风管=线段 (照 add_pipe 范式), 机组/风口=点位
+                # (照 add_column 范式)。消费 raw_data 的 hvac_ducts / hvac_units /
+                # hvac_grilles 键 (对齐 _ELEMENT_CHECKS)。
+                raw_data = state.get("raw_data", {}) or {}
+                raw_ducts = raw_data.get("hvac_ducts", [])
+                raw_units = raw_data.get("hvac_units", [])
+                raw_grilles = raw_data.get("hvac_grilles", [])
+                for d in raw_ducts:
+                    sx, sy = d.get("start", (0.0, 0.0))
+                    ex, ey = d.get("end", (0.0, 0.0))
+                    writer.add_hvac_duct(CADHvacDuct(
+                        start=Point(float(sx), float(sy)),
+                        end=Point(float(ex), float(ey)),
+                        diameter_mm=int(d.get("diameter_mm", 100)),
+                        layer=d.get("layer", "HVAC_DUCT"),
+                    ))
+                for u in raw_units:
+                    writer.add_hvac_unit(CADHvacUnit(
+                        position=Point(float(u.get("x", 0.0)), float(u.get("y", 0.0))),
+                        cooling_kw=float(u.get("cooling_kw", 0.0)),
+                        layer=u.get("layer", "HVAC_UNIT"),
+                    ))
+                for g in raw_grilles:
+                    writer.add_hvac_grille(CADHvacGrille(
+                        position=Point(float(g.get("x", 0.0)), float(g.get("y", 0.0))),
+                        height_m=float(g.get("height_m", 2.5)),
+                        layer=g.get("layer", "HVAC_GRILLE"),
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(raw_ducts) + len(raw_units) + len(raw_grilles)})
 
             elif task_type == "dimension":
                 if rooms:

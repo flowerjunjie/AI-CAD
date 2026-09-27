@@ -40,6 +40,31 @@
     {"id": "p2", "layer": "PIPE", "start": [0.8, 1.0], "end": [0.8, 3.0], "diameter_mm": 50, "pipe_type": "drain"},
     {"id": "p3", "layer": "PIPE_WASTE", "start": [3.0, 2.5], "end": [3.0, 4.0], "diameter_mm": 110, "pipe_type": "waste"}
   ],
+  "structural_beams": [
+    {"id": "sb1", "layer": "BEAM", "start": [0.0, 0.0], "end": [4.0, 0.0], "beam_type": "main", "width_mm": 300, "depth_mm": 600},
+    {"id": "sb2", "layer": "BEAM", "start": [0.0, 4.0], "end": [4.0, 4.0], "beam_type": "secondary", "width_mm": 250, "depth_mm": 500}
+  ],
+  "structural_columns": [
+    {"id": "sc1", "layer": "COLUMN", "x": 0.0, "y": 4.0, "column_type": "frame", "section_mm": 400},
+    {"id": "sc2", "layer": "COLUMN", "x": 4.0, "y": 4.0, "column_type": "frame", "section_mm": 400},
+    {"id": "sc3", "layer": "COLUMN", "x": 0.0, "y": 0.0, "column_type": "construction", "section_mm": 200}
+  ],
+  "outlets": [
+    {"id": "o1", "layer": "ELEC_OUTLET", "x": 1.0, "y": 1.0, "height_m": 0.3, "room_type": "living", "has_earthing": true},
+    {"id": "o2", "layer": "ELEC_OUTLET", "x": 2.0, "y": 3.0, "height_m": 1.3, "room_type": "bedroom", "has_earthing": true}
+  ],
+  "switches": [
+    {"id": "s1", "layer": "ELEC_SWITCH", "x": 0.5, "y": 2.0, "height_m": 1.3, "room_type": "living"}
+  ],
+  "hvac_ducts": [
+    {"id": "hd1", "layer": "HVAC_DUCT", "start": [1.0, 1.5], "end": [4.0, 1.5], "duct_type": "supply", "diameter_mm": 100, "velocity_ms": 2.0, "airflow_m3h": 300}
+  ],
+  "hvac_units": [
+    {"id": "hu1", "layer": "HVAC_UNIT", "x": 0.5, "y": 0.5, "unit_type": "room", "cooling_kw": 3.5, "location_type": "indoor"}
+  ],
+  "hvac_grilles": [
+    {"id": "hg1", "layer": "HVAC_GRILLE", "x": 3.0, "y": 3.0, "grille_type": "supply", "height_m": 2.5, "airflow_m3h": 300, "room_type": "living"}
+  ],
   "applicable_codes": [
     "GB 50096-2011《住宅设计规范》",
     "GB 50016-2014《建筑设计防火规范》"

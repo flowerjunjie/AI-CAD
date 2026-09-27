@@ -48,18 +48,21 @@ def test_cad_node_consumes_raw_data():
 
 
 def test_rule_check_uses_raw_elements():
-    """规则校验按 raw_data 元素：样本含 1 条真违规（d5 厨房门 0.8m < 0.9m）"""
+    """规则校验按 raw_data 元素：样本含 d5 门宽违规 + d5×w5 碰撞 + sc3 构造柱小截面
+    (structural_columns sc3 section_mm=200 < 300 下限, Phase 6 结构接线后样本自带)"""
     from src.agents.src.nodes.cad_rule_export import rule_check_node
 
     state = _make_state()
     result = rule_check_node(state)
     # 样本：d5 厨房门 0.8m < 户内门 0.9m（门宽违规）+ d5 门 × w5 窗 同墙碰撞
-    # 卫生间门 0.8m 合规、面积达标 → 应检出 2 条（1 门宽 + 1 碰撞）
-    assert len(result["rule_violations"]) == 2, \
-        f"应检出 2 条(d5门宽 + d5xw5碰撞)，实际 {len(result['rule_violations'])} 条"
+    #       + sc3 构造柱 200mm < 300mm 下限 (structural-column-min-section)
+    # 卫生间门 0.8m 合规、面积达标 → 应检出 3 条
+    assert len(result["rule_violations"]) == 3, \
+        f"应检出 3 条(d5门宽 + d5xw5碰撞 + sc3构造柱小截面)，实际 {len(result['rule_violations'])} 条"
     rule_ids = [v["rule_id"] for v in result["rule_violations"]]
     assert "residential-door-interior-width" in rule_ids, "应含 d5 门宽违规"
     assert "layout-opening-collision" in rule_ids, "应含 d5×w5 门窗碰撞"
+    assert "structural-column-min-section" in rule_ids, "应含 sc3 构造柱最小截面违规"
 
 
 def test_rule_check_detects_violation():

@@ -51,6 +51,65 @@ class Pipe:
     layer: str = "PIPE"
 
 
+@dataclass
+class Beam:
+    """结构梁元素（线段，仿 Pipe；截面宽/高 mm）"""
+    start: Point
+    end: Point
+    width_mm: int = 300
+    depth_mm: int = 600
+    layer: str = "BEAM"
+
+
+@dataclass
+class Column:
+    """结构柱元素（块/矩形，仿 INSERT 点位；截面短边 mm）"""
+    position: Point
+    section_mm: int = 400
+    layer: str = "COLUMN"
+
+
+@dataclass
+class Outlet:
+    """电气插座点位（点位类，仿 Column；高度 m）"""
+    position: Point
+    height_m: float = 0.3
+    layer: str = "ELEC_OUTLET"
+
+
+@dataclass
+class Switch:
+    """电气开关点位（点位类，仿 Column；高度 m）"""
+    position: Point
+    height_m: float = 1.3
+    layer: str = "ELEC_SWITCH"
+
+
+@dataclass
+class HvacDuct:
+    """暖通风管元素（线段类，仿 Pipe；截面/管径 mm）"""
+    start: Point
+    end: Point
+    diameter_mm: int = 100
+    layer: str = "HVAC_DUCT"
+
+
+@dataclass
+class HvacUnit:
+    """空调机组点位（点位类，仿 Column；制冷量 kW）"""
+    position: Point
+    cooling_kw: float = 0.0
+    layer: str = "HVAC_UNIT"
+
+
+@dataclass
+class HvacGrille:
+    """风口点位（点位类，仿 Column；安装高度 m）"""
+    position: Point
+    height_m: float = 2.5
+    layer: str = "HVAC_GRILLE"
+
+
 class DXFReader:
     """ezdxf DWG 读取器"""
 
@@ -482,6 +541,184 @@ class DXFWriter:
         )
         txt.dxf.insert = (mid_x, mid_y + label_offset)
         return 1
+
+    def add_beam(self, beam: Beam, label_offset: float = 0.15) -> int:
+        """添加结构梁线段 + 截面标注，返回标注条数（0 或 1）。
+
+        出图范式照 add_pipe（线段类 LWPOLYLINE + 独立标注层 TEXT）：
+        - 梁本体: BEAM 图层 LWPOLYLINE，端点序列 (start, end) 两点（不闭合）。
+        - 截面标注: 仿 PIPE_LABEL 范式, BEAM_LABEL 层 TEXT "{宽}x{高}"
+          画在梁段中点上方 offset 处。
+
+        显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
+        """
+        if beam.layer not in self.doc.layers:
+            self.doc.layers.new(beam.layer)
+        if "BEAM_LABEL" not in self.doc.layers:
+            self.doc.layers.new("BEAM_LABEL")
+        # 梁本体: LWPOLYLINE 两点（不闭合）
+        self.msp.add_lwpolyline(
+            [(beam.start.x, beam.start.y), (beam.end.x, beam.end.y)],
+            close=False,
+            dxfattribs={"layer": beam.layer},
+        )
+        # 截面标注: 中点上方 offset 处 TEXT "{宽}x{高}"
+        mid_x = (beam.start.x + beam.end.x) / 2.0
+        mid_y = (beam.start.y + beam.end.y) / 2.0
+        txt = self.msp.add_text(
+            f"{beam.width_mm}x{beam.depth_mm}",
+            dxfattribs={"height": 0.15, "layer": "BEAM_LABEL"},
+        )
+        txt.dxf.insert = (mid_x, mid_y + label_offset)
+        return 1
+
+    def add_column(self, col: Column, label_offset: float = 0.15) -> int:
+        """添加结构柱（截面矩形）+ 截面标注，返回标注条数（0 或 1）。
+
+        出图范式照 add_opening_marker 的点位范式（以 point 定位）：
+        - 柱本体: COLUMN 图层 LWPOLYLINE 正方形（闭合, insert 点为左下顶角,
+          边长 = 截面短边 mm/1000 m）, 读回走与 pipe/beam 相同的 polyline 通道。
+        - 截面标注: 仿 BEAM_LABEL 范式, COLUMN_LABEL 层 TEXT "{短边}x{短边}"
+          画在柱心（插入点上方半边长）上方 offset 处。
+
+        显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
+        """
+        if col.layer not in self.doc.layers:
+            self.doc.layers.new(col.layer)
+        if "COLUMN_LABEL" not in self.doc.layers:
+            self.doc.layers.new("COLUMN_LABEL")
+        half = col.section_mm / 1000.0 / 2.0
+        x0, y0 = col.position.x - half, col.position.y - half
+        # 柱本体: 闭合正方形 LWPOLYLINE
+        self.msp.add_lwpolyline(
+            [(x0, y0), (x0 + 2 * half, y0),
+             (x0 + 2 * half, y0 + 2 * half), (x0, y0 + 2 * half)],
+            close=True,
+            dxfattribs={"layer": col.layer},
+        )
+        # 截面标注: 柱心上方 offset 处 TEXT "{短边}x{短边}"
+        txt = self.msp.add_text(
+            f"{col.section_mm}x{col.section_mm}",
+            dxfattribs={"height": 0.15, "layer": "COLUMN_LABEL"},
+        )
+        txt.dxf.insert = (col.position.x, col.position.y + label_offset)
+        return 1
+
+    def _add_point_symbol(
+        self,
+        position: Point,
+        layer: str,
+        side_mm: int,
+        label: str,
+        label_layer: str,
+        label_offset: float,
+    ) -> int:
+        """点位类通用底座：闭合正方形 LWPOLYLINE（点位符号）+ 高度/编号 TEXT 标注。
+
+        照 add_column 范式（点位画在 position 为中心的正方形 + 独立标注层 TEXT）。
+        电气插座/开关、暖通机组/风口共此一份（点位符号几何一致，仅边长/标注文案不同）。
+        显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
+        """
+        if layer not in self.doc.layers:
+            self.doc.layers.new(layer)
+        if label_layer not in self.doc.layers:
+            self.doc.layers.new(label_layer)
+        half = side_mm / 1000.0 / 2.0
+        x0, y0 = position.x - half, position.y - half
+        # 点位符号: 闭合正方形 LWPOLYLINE
+        self.msp.add_lwpolyline(
+            [(x0, y0), (x0 + 2 * half, y0),
+             (x0 + 2 * half, y0 + 2 * half), (x0, y0 + 2 * half)],
+            close=True,
+            dxfattribs={"layer": layer},
+        )
+        # 标注: 点位心上方 offset 处 TEXT
+        txt = self.msp.add_text(label, dxfattribs={"height": 0.15, "layer": label_layer})
+        txt.dxf.insert = (position.x, position.y + label_offset)
+        return 1
+
+    def add_outlet(self, outlet: Outlet, label_offset: float = 0.15) -> int:
+        """添加电气插座点位（ELEC_OUTLET 正方形 + ELEC_LABEL "H{高度}" 标注）。
+
+        出图范式照 add_column 点位类（点位画成闭合正方形 + 独立标注层 TEXT）。
+        边长 0.1m（电气点位符号惯例），标注 "H{height_m:.1f}"（安装高度，如 H1.3）。
+        """
+        return self._add_point_symbol(
+            position=outlet.position,
+            layer=outlet.layer,
+            side_mm=100,
+            label=f"H{outlet.height_m:.1f}",
+            label_layer="ELEC_LABEL",
+            label_offset=label_offset,
+        )
+
+    def add_switch(self, sw: Switch, label_offset: float = 0.15) -> int:
+        """添加电气开关点位（ELEC_SWITCH 正方形 + ELEC_LABEL "H{高度}" 标注）。
+
+        出图范式照 add_outlet / add_column 点位类，共用 _add_point_symbol 底座。
+        """
+        return self._add_point_symbol(
+            position=sw.position,
+            layer=sw.layer,
+            side_mm=100,
+            label=f"H{sw.height_m:.1f}",
+            label_layer="ELEC_LABEL",
+            label_offset=label_offset,
+        )
+
+    def add_hvac_duct(self, duct: HvacDuct, label_offset: float = 0.15) -> int:
+        """添加暖通风管线段 + 管径标注，返回标注条数（0 或 1）。
+
+        出图范式照 add_pipe 线段类（HVAC_DUCT 层 LWPOLYLINE 两点不闭合
+        + HVAC_LABEL 层 "DN{管径}" TEXT，画在管段中点上方 offset 处）。
+        """
+        if duct.layer not in self.doc.layers:
+            self.doc.layers.new(duct.layer)
+        if "HVAC_LABEL" not in self.doc.layers:
+            self.doc.layers.new("HVAC_LABEL")
+        self.msp.add_lwpolyline(
+            [(duct.start.x, duct.start.y), (duct.end.x, duct.end.y)],
+            close=False,
+            dxfattribs={"layer": duct.layer},
+        )
+        mid_x = (duct.start.x + duct.end.x) / 2.0
+        mid_y = (duct.start.y + duct.end.y) / 2.0
+        txt = self.msp.add_text(
+            f"DN{duct.diameter_mm}",
+            dxfattribs={"height": 0.15, "layer": "HVAC_LABEL"},
+        )
+        txt.dxf.insert = (mid_x, mid_y + label_offset)
+        return 1
+
+    def add_hvac_unit(self, unit: HvacUnit, label_offset: float = 0.15) -> int:
+        """添加空调机组点位（HVAC_UNIT 正方形 + HVAC_LABEL "K{制冷量}" 标注）。
+
+        出图范式照 add_hvac_grille / add_column 点位类，共用 _add_point_symbol 底座。
+        边长 0.3m（机组符号略大于风口），标注 "K{cooling_kw:.1f}"（制冷量 kW）。
+        """
+        return self._add_point_symbol(
+            position=unit.position,
+            layer=unit.layer,
+            side_mm=300,
+            label=f"K{unit.cooling_kw:.1f}",
+            label_layer="HVAC_LABEL",
+            label_offset=label_offset,
+        )
+
+    def add_hvac_grille(self, grille: HvacGrille, label_offset: float = 0.15) -> int:
+        """添加风口点位（HVAC_GRILLE 正方形 + HVAC_LABEL "H{高度}" 标注）。
+
+        出图范式照 add_hvac_unit / add_column 点位类，共用 _add_point_symbol 底座。
+        边长 0.15m（风口符号），标注 "H{height_m:.1f}"（安装高度，如 H2.5）。
+        """
+        return self._add_point_symbol(
+            position=grille.position,
+            layer=grille.layer,
+            side_mm=150,
+            label=f"H{grille.height_m:.1f}",
+            label_layer="HVAC_LABEL",
+            label_offset=label_offset,
+        )
 
     def save(self, path: str) -> bool:
         """保存 DWG"""

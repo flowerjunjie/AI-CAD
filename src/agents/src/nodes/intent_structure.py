@@ -144,6 +144,19 @@ def structure_design_node(state: dict) -> dict:
         # 让 _generate_task_list 据此追加 pipe task。坐标 cad 节点仍从 raw_data 读,
         # 这里只透传「有几段管」的计数驱动任务生成。
         "pipe_count": len((state.get("raw_data", {}) or {}).get("pipes", [])),
+        # 结构梁/柱透传 (Phase 6, 与 pipe_count 同款修法): structure_design_node 会
+        # 无条件重建 task_list, 不透传计数则 beam/column task 被抹掉。
+        "beam_count": len((state.get("raw_data", {}) or {}).get("structural_beams", [])),
+        "column_count": len((state.get("raw_data", {}) or {}).get("structural_columns", [])),
+        # 电气点位透传 (Phase 4, 照 beam_count 同款修法): structure_design_node 无条件
+        # 重建 task_list, 不透传计数则 outlet/switch task 被抹掉。坐标 cad 节点仍从
+        # raw_data.outlets / switches 读, 这里只透传「有几个点位」的计数驱动任务生成。
+        "outlet_count": len((state.get("raw_data", {}) or {}).get("outlets", [])),
+        "switch_count": len((state.get("raw_data", {}) or {}).get("switches", [])),
+        # 暖通点位透传 (Phase 5): 风管/机组/风口三键计数, 驱动 hvac task。
+        "hvac_duct_count": len((state.get("raw_data", {}) or {}).get("hvac_ducts", [])),
+        "hvac_unit_count": len((state.get("raw_data", {}) or {}).get("hvac_units", [])),
+        "hvac_grille_count": len((state.get("raw_data", {}) or {}).get("hvac_grilles", [])),
     }
 
     return {
@@ -210,6 +223,64 @@ def _generate_task_list(structure: dict) -> list[dict]:
             "category": "plumbing",
             "params": {"count": structure.get("pipe_count")},
             "description": f"绘制给排水管线 ({structure.get('pipe_count')}段)",
+        })
+
+    # 结构梁/柱任务 (Phase 6): 有元素才追加; 坐标 cad 节点从
+    # raw_data.structural_beams / structural_columns 读（与 pipe 同款范式）
+    if structure.get("beam_count"):
+        tasks.append({
+            "id": "beam-structural",
+            "type": "beam",
+            "category": "structural",
+            "params": {"count": structure.get("beam_count")},
+            "description": f"绘制结构梁 ({structure.get('beam_count')}根)",
+        })
+
+    if structure.get("column_count"):
+        tasks.append({
+            "id": "column-structural",
+            "type": "column",
+            "category": "structural",
+            "params": {"count": structure.get("column_count")},
+            "description": f"绘制结构柱 ({structure.get('column_count')}根)",
+        })
+
+    # 电气插座/开关任务 (Phase 4): 有点位才追加; 坐标 cad 节点从
+    # raw_data.outlets / switches 读（与 pipe 同款范式）
+    if structure.get("outlet_count"):
+        tasks.append({
+            "id": "outlet-elec",
+            "type": "outlet",
+            "category": "electrical",
+            "params": {"count": structure.get("outlet_count")},
+            "description": f"绘制电气插座 ({structure.get('outlet_count')}个)",
+        })
+
+    if structure.get("switch_count"):
+        tasks.append({
+            "id": "switch-elec",
+            "type": "switch",
+            "category": "electrical",
+            "params": {"count": structure.get("switch_count")},
+            "description": f"绘制电气开关 ({structure.get('switch_count')}个)",
+        })
+
+    # 暖通任务 (Phase 5): 风管/机组/风口任一存在即追加; 坐标 cad 节点从
+    # raw_data.hvac_* 读（与 pipe 同款范式）
+    hvac_total = (structure.get("hvac_duct_count", 0)
+                  + structure.get("hvac_unit_count", 0)
+                  + structure.get("hvac_grille_count", 0))
+    if hvac_total:
+        tasks.append({
+            "id": "hvac-system",
+            "type": "hvac",
+            "category": "hvac",
+            "params": {"ducts": structure.get("hvac_duct_count", 0),
+                       "units": structure.get("hvac_unit_count", 0),
+                       "grilles": structure.get("hvac_grille_count", 0)},
+            "description": (f"绘制暖通 (风管{structure.get('hvac_duct_count', 0)} "
+                            f"机组{structure.get('hvac_unit_count', 0)} "
+                            f"风口{structure.get('hvac_grille_count', 0)})"),
         })
 
     # 标注任务

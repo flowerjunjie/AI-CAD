@@ -85,7 +85,66 @@ def parse_json_input(file_path: str) -> dict:
             'description': f'绘制给排水管线 ({len(pipes)}段)',
         })
 
-    # 7. 标注
+    # 7. 结构梁/柱（Phase 6）— 样本带 structural_beams / structural_columns 键
+    #    即出图；缺 keys 时零改动回归安全（与 pipe 分支同款兜底）
+    beams = data.get('structural_beams', [])
+    if beams:
+        tasks.append({
+            'id': 'beam-structural',
+            'type': 'beam',
+            'category': 'structural',
+            'params': {'count': len(beams)},
+            'description': f'绘制结构梁 ({len(beams)}根)',
+        })
+
+    columns = data.get('structural_columns', [])
+    if columns:
+        tasks.append({
+            'id': 'column-structural',
+            'type': 'column',
+            'category': 'structural',
+            'params': {'count': len(columns)},
+            'description': f'绘制结构柱 ({len(columns)}根)',
+        })
+
+    # 8. 电气插座/开关（Phase 4）— 样本带 outlets / switches 键即出图；缺 keys 回归安全
+    outlets = data.get('outlets', [])
+    if outlets:
+        tasks.append({
+            'id': 'outlet-elec',
+            'type': 'outlet',
+            'category': 'electrical',
+            'params': {'count': len(outlets)},
+            'description': f'绘制电气插座 ({len(outlets)}个)',
+        })
+
+    switches = data.get('switches', [])
+    if switches:
+        tasks.append({
+            'id': 'switch-elec',
+            'type': 'switch',
+            'category': 'electrical',
+            'params': {'count': len(switches)},
+            'description': f'绘制电气开关 ({len(switches)}个)',
+        })
+
+    # 9. 暖通风管/机组/风口（Phase 5）— 三键任一存在即出图; 坐标 cad 节点从
+    #    raw_data.hvac_* 读（与 pipe/beam 同款范式）
+    hvac_ducts = data.get('hvac_ducts', [])
+    hvac_units = data.get('hvac_units', [])
+    hvac_grilles = data.get('hvac_grilles', [])
+    hvac_total = len(hvac_ducts) + len(hvac_units) + len(hvac_grilles)
+    if hvac_total:
+        tasks.append({
+            'id': 'hvac-system',
+            'type': 'hvac',
+            'category': 'hvac',
+            'params': {'ducts': len(hvac_ducts), 'units': len(hvac_units),
+                       'grilles': len(hvac_grilles)},
+            'description': f'绘制暖通 (风管{len(hvac_ducts)} 机组{len(hvac_units)} 风口{len(hvac_grilles)})',
+        })
+
+    # 10. 标注
     tasks.append({'id': 'dim-axis', 'type': 'dimension', 'category': 'annotation',
                   'params': {'style': 'axis'}, 'description': '轴线标注'})
     tasks.append({'id': 'dim-opening', 'type': 'dimension', 'category': 'annotation',
