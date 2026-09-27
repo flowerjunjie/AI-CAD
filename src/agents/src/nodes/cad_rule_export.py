@@ -7,6 +7,7 @@ import sys
 from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
+from src.agents.src.numbering import assign_door_numbers, assign_window_numbers
 from src.agents.src.tools.wall_topology import partition_rooms
 from src.rules.src.engine import get_engine
 from src.rules.src.residential.doors import Door
@@ -361,6 +362,10 @@ def cad_execute_node(state: dict) -> dict:
 
     layout = _layout_from_state(state)
     rooms, door_pos, window_pos = layout["rooms"], layout["doors"], layout["windows"]
+    # 门窗出图带编号: 对布局出的门窗列表按出现序编 M/C 号, 贯穿到图面 TEXT。
+    # 与 door_by_id 共用同一编号空间 (id 与 number 对齐), 避免二次编号错位。
+    door_pos = assign_door_numbers(door_pos)
+    window_pos = assign_window_numbers(window_pos)
 
     tasks = state.get("task_list", [])
     results = []
@@ -397,6 +402,11 @@ def cad_execute_node(state: dict) -> dict:
                         width=d["width"],
                         rotation=d["rotation"],
                     ))
+                    # 编号文字: 门洞旁画 M 号 (offset 洞口下方 0.3m)
+                    writer.add_opening_marker(
+                        d.get("number", task_id),
+                        (d["position"][0], d["position"][1] - 0.3),
+                    )
                 results.append({"task_id": task_id, "status": "pending_confirm",
                                 "description": task.get("description", "")})
                 confirmations[task_id] = False
@@ -408,6 +418,10 @@ def cad_execute_node(state: dict) -> dict:
                         end=Point(wp["end"][0], wp["end"][1]),
                         sill_height=wp["sill_height"],
                     ))
+                    # 编号文字: 窗段中点旁画 C 号
+                    cx = (wp["start"][0] + wp["end"][0]) / 2
+                    cy = (wp["start"][1] + wp["end"][1]) / 2 + 0.3
+                    writer.add_opening_marker(wp.get("number", task_id), (cx, cy))
                 results.append({"task_id": task_id, "status": "completed",
                                 "count": len(window_pos)})
 

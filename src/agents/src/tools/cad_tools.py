@@ -368,6 +368,19 @@ class DXFWriter:
             dxfattribs={"layer": window.layer}
         )
 
+    def add_opening_marker(self, mark: str, position: tuple[float, float],
+                           layer: str = "OPENING_TAG") -> None:
+        """在门窗旁画编号文字 (M1 / C1 ...) — OPENING_TAG 层。
+
+        P0 最小版: 不真 INSERT 块, 用 TEXT 图例带编号贯穿 layout→出图→标注。
+        mark 直接来自 numbering.py 的 number/mark 键, 写在哪由调用方定
+        (门在洞口中点旁, 窗在段中点旁), 本方法只负责「画字」。
+        """
+        if layer not in self.doc.layers:
+            self.doc.layers.new(layer)
+        txt = self.msp.add_text(mark, dxfattribs={"height": 0.2, "layer": layer})
+        txt.dxf.insert = (position[0], position[1])
+
     def add_dimension(self, start: Point, end: Point, offset: float = 0.3, text: str = "") -> None:
         """添加尺寸标注（简化为带文字的引线）"""
         # 标注线

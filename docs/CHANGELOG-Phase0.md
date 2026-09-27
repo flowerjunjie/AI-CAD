@@ -24,7 +24,7 @@
 - LLM 适配器：**5 个**（Agnes 默认 / MiniMax / Kimi / GLM），统一 `LLMFactory` 接口。
 - 全量测试：**196 passed / 3 skipped**（28 个测试文件，含 Phase 1 墙体厚度 4 单测）。
 
-> 遗留隐患（不阻塞）：`test_direct_run.py` 护栏测试靠 subprocess 串行直跑 20 个测试文件（约 69s），全量并发时偶发 flaky。已验证单独/连跑全绿，建议后续把护栏改为「只直跑带 `__main__` 的文件 + 单进程」或设超时上限。
+> 遗留隐患（已解除）：`test_direct_run.py` 护栏测试原靠 subprocess 串行直跑 20 个测试文件（timeout=120s），全量并发时 CPU 抢占偶发 flaky。已将单文件超时提到 300s + 显式 catch `TimeoutExpired` 打印超时文件，连跑 3 次全绿（20-30s/次）。
 
 ---
 
