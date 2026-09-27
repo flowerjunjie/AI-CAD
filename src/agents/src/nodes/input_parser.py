@@ -74,7 +74,18 @@ def parse_json_input(file_path: str) -> dict:
             'description': f"插入窗户 (共{len(windows)}个)",
         })
 
-    # 6. 标注
+    # 6. 给排水管段（Phase 3）— 样本带 pipes 键即出图；缺 keys 时零改动回归安全
+    pipes = data.get('pipes', [])
+    if pipes:
+        tasks.append({
+            'id': 'pipe-plumbing',
+            'type': 'pipe',
+            'category': 'plumbing',
+            'params': {'count': len(pipes)},
+            'description': f'绘制给排水管线 ({len(pipes)}段)',
+        })
+
+    # 7. 标注
     tasks.append({'id': 'dim-axis', 'type': 'dimension', 'category': 'annotation',
                   'params': {'style': 'axis'}, 'description': '轴线标注'})
     tasks.append({'id': 'dim-opening', 'type': 'dimension', 'category': 'annotation',

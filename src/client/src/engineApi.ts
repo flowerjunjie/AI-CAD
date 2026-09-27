@@ -1,5 +1,5 @@
 import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult,
-        type DslRuleItem, type DslValidateResp } from './useEngineStore';
+        type DslRuleItem, type DslValidateResp, type DslApplyResp } from './useEngineStore';
 
 // 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
 // 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
@@ -88,6 +88,17 @@ export async function validateDslRules(rules: DslRuleItem[]): Promise<DslValidat
     { rules },
   );
   return resp;
+}
+
+// 写回端点 (bridge.py B3 段): 设计器「应用」落盘 default.json, 带人工确认闸。
+// confirm=false → 服务端先 validate + 回 diff 预览, 不落盘 (status=pending_confirm)。
+// confirm=true  → 备份 + 写盘 + fail-fast 重载兜底 (status=applied)。
+// 服务端对非法 rules 直接 422 拒写, 前端拿到 null (postJson 断连/非 2xx 降级)。
+export async function applyDslRules(rules: DslRuleItem[], confirm: boolean): Promise<DslApplyResp | null> {
+  return postJson<DslApplyResp, { rules: DslRuleItem[]; confirm: boolean }>(
+    '/api/rules/dsl/apply',
+    { rules, confirm },
+  );
 }
 
 export { API };

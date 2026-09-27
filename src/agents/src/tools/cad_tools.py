@@ -42,6 +42,15 @@ class Window:
     layer: str = "WINDOW"
 
 
+@dataclass
+class Pipe:
+    """给排水管元素（线段，仿 Wall）"""
+    start: Point
+    end: Point
+    diameter_mm: int = 50   # 公称管径 DN
+    layer: str = "PIPE"
+
+
 class DXFReader:
     """ezdxf DWG 读取器"""
 
@@ -441,6 +450,38 @@ class DXFWriter:
             txt.dxf.insert = (ax, ay)
             count += 1
         return count
+
+    def add_pipe(self, pipe: Pipe, label_offset: float = 0.15) -> int:
+        """添加给排水管线段 + 管径标注，返回标注条数（0 或 1）。
+
+        出图范式照 add_wall_thickness（线段类元素 LWPOLYLINE 偏置双线）：
+        - 管线本体: PIPE 图层 LWPOLYLINE，端点序列 (start, end) 两点（不闭合，
+          单条线管段 = 2 顶点 LWPOLYLINE，等价 LINE 但可复用 polyline 读回通道）。
+        - 管径标注: 仿 add_opening_dimensions 的「文字 + DIMENSION 层」风格，
+          在管段中点上方 offset 处画 TEXT "DN{diameter_mm}"。
+
+        管段支持任意方向（给排水管路可斜走，不做横平竖直限制）。
+        显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
+        """
+        if "PIPE" not in self.doc.layers:
+            self.doc.layers.new("PIPE")
+        if "PIPE_LABEL" not in self.doc.layers:
+            self.doc.layers.new("PIPE_LABEL")
+        # 管线本体: LWPOLYLINE 两点（不闭合）
+        self.msp.add_lwpolyline(
+            [(pipe.start.x, pipe.start.y), (pipe.end.x, pipe.end.y)],
+            close=False,
+            dxfattribs={"layer": pipe.layer},
+        )
+        # 管径标注: 中点上方 offset 处 TEXT "DN{管径}"
+        mid_x = (pipe.start.x + pipe.end.x) / 2.0
+        mid_y = (pipe.start.y + pipe.end.y) / 2.0
+        txt = self.msp.add_text(
+            f"DN{pipe.diameter_mm}",
+            dxfattribs={"height": 0.15, "layer": "PIPE_LABEL"},
+        )
+        txt.dxf.insert = (mid_x, mid_y + label_offset)
+        return 1
 
     def save(self, path: str) -> bool:
         """保存 DWG"""

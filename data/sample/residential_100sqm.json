@@ -35,6 +35,11 @@
     {"id": "wall_outer", "thickness_m": 0.24, "type": "outer", "total_length_m": 32},
     {"id": "wall_inner", "thickness_m": 0.12, "type": "inner", "total_length_m": 18}
   ],
+  "pipes": [
+    {"id": "p1", "layer": "PIPE", "start": [2.5, 2.5], "end": [6.0, 2.5], "diameter_mm": 50, "pipe_type": "drain"},
+    {"id": "p2", "layer": "PIPE", "start": [0.8, 1.0], "end": [0.8, 3.0], "diameter_mm": 50, "pipe_type": "drain"},
+    {"id": "p3", "layer": "PIPE_WASTE", "start": [3.0, 2.5], "end": [3.0, 4.0], "diameter_mm": 110, "pipe_type": "waste"}
+  ],
   "applicable_codes": [
     "GB 50096-2011《住宅设计规范》",
     "GB 50016-2014《建筑设计防火规范》"

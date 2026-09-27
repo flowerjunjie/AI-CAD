@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRuleEditorStore, isRuleModified } from './useRuleEditorStore';
 import { useEngineStore } from './useEngineStore';
-import { loadDslRules, validateDslRules } from './engineApi';
+import { loadDslRules, validateDslRules, applyDslRules } from './engineApi';
 import { localCheckAllRules } from './localPredicateCheck';
-import type { DslRuleItem } from './useEngineStore';
+import type { DslRuleItem, DslApplyDiff } from './useEngineStore';
 
 /**
  * 规则 DSL 编辑器面板 (Phase 2) — 设计器不写代码改 default.json。
@@ -16,6 +16,8 @@ function RuleEditorPanel() {
     useRuleEditorStore();
   const { engineConnected } = useEngineStore();
   const store = useRuleEditorStore;
+  const [pendingDiff, setPendingDiff] = useState<DslApplyDiff | null>(null);
+  const [applyMsg, setApplyMsg] = useState<string>('');
 
   useEffect(() => {
     if (!loaded && engineConnected) {
@@ -29,6 +31,30 @@ function RuleEditorPanel() {
   }, [loaded, engineConnected]);
 
   const selected: DslRuleItem | null = rules.find((r) => r.rule_id === selectedRuleId) || null;
+  const canApply = isAnyModified(originalRules, rules) && validateStatus === 'validated-ok' && engineConnected;
+
+  /** 应用 (人工确认闸): 先 confirm=false 拿 diff 预览, 用户二次点击才 confirm=true 落盘。 */
+  const onApply = async () => {
+    setApplyMsg('');
+    if (pendingDiff === null) {
+      const preview = await applyDslRules(rules, false);
+      if (!preview || preview.status !== 'pending_confirm') {
+        setApplyMsg(preview ? '服务端校验未通过, 未落盘' : '无法连接写回端点');
+        return;
+      }
+      setPendingDiff(preview.diff); // 展示 diff, 等用户二次确认
+      return;
+    }
+    // 二次确认: 已拿到 diff, 带 confirm=true 真写盘
+    const res = await applyDslRules(rules, true);
+    if (res && res.status === 'applied') {
+      setApplyMsg(`已写盘 (${res.applied_rule_count} 条) · 备份 ${res.backup}`);
+      setPendingDiff(null);
+      store.getState().setRules(rules.map((r) => ({ ...r }))); // 刷新 originalRules 基线
+    } else {
+      setApplyMsg(res ? '写盘失败, 未落盘' : '无法连接写回端点');
+    }
+  };
 
   return (
     <div className="dsl-editor">
@@ -44,6 +70,14 @@ function RuleEditorPanel() {
           校验
         </button>
         <button
+          className="btn-primary btn-sm"
+          onClick={onApply}
+          disabled={!canApply}
+          title="先预览 diff, 二次点击确认落盘"
+        >
+          {pendingDiff === null ? '应用' : '确认落盘'}
+        </button>
+        <button
           className="btn-sm dsl-editor-reset"
           onClick={() => store.getState().reset()}
           disabled={isAnyModified(originalRules, rules)}
@@ -51,6 +85,20 @@ function RuleEditorPanel() {
           重置
         </button>
       </div>
+
+      {pendingDiff !== null && (
+        <div className="dsl-apply-preview">
+          <div className="dsl-apply-preview-title">待落盘 diff (二次点击「确认落盘」写回 default.json):</div>
+          <ul>
+            {pendingDiff.changed.map((id) => <li key={`c-${id}`}><span className="chg">改</span> {id}</li>)}
+            {pendingDiff.added.map((id) => <li key={`a-${id}`}><span className="add">新增</span> {id}</li>)}
+            {pendingDiff.removed.map((id) => <li key={`r-${id}`}><span className="del">删</span> {id}</li>)}
+            {pendingDiff.changed.length + pendingDiff.added.length + pendingDiff.removed.length === 0 &&
+              <li className="dsl-apply-none">当前无字段改动 (与 default.json 一致)</li>}
+          </ul>
+        </div>
+      )}
+      {applyMsg !== '' && <div className="dsl-apply-msg">{applyMsg}</div>}
 
       {!engineConnected ? (
         <div className="empty-hint">引擎未连接，无法拉取 DSL 规则 (启动 start_gui.bat)</div>

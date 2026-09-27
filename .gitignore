@@ -69,3 +69,6 @@ __pycache__/
 *.temp
 *.spec
 background-info/
+
+# 规则 DSL 写回备份 (bridge.py /api/rules/dsl/apply 生成, 供回滚, 不追踪)
+src/rules/rules/default.json.bak.*

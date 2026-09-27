@@ -398,6 +398,142 @@ def api_rules_validate(req: DslRulesValidateReq) -> dict:
     }
 
 
+# ─── B3 规则 DSL 写回域段: 设计器「应用」落盘 default.json (Phase 2 闭环) ───
+# 人工确认闸: 先 validate (与 /api/rules/validate 同判据), 不合法 4xx 拒写;
+# confirm=False → 只回 diff 预览不落盘; confirm=True → 备份 + 写盘 + fail-fast 重载兜底,
+# 写后 DslRuleProvider.load() 仍会炸则回滚到备份。守 34 类零改动 (只写 DSL 数据文件)。
+
+import shutil
+from datetime import datetime
+
+
+class DslRulesApplyReq(BaseModel):
+    """POST /api/rules/dsl/apply 入参: 整份 DSL 规则 JSON + 人工确认开关。"""
+
+    rules: list
+    confirm: bool = False
+
+
+def _diff_rules(old_rules: list, new_rules: list) -> dict:
+    """对比现 default.json 的 rules 与入参 rules, 出「改了/新增/删」三类预览。
+
+    以 rule_id 为键; old/new 只收 list (端点已保证), 字段级差异直接整条比 —
+    编辑器可改的字段 (params/enabled/severity/predicate) 任一动到就记 changed。
+    """
+    old_map = {r.get("rule_id"): r for r in old_rules if isinstance(r, dict)}
+    new_ids = {r.get("rule_id") for r in new_rules if isinstance(r, dict)}
+    old_ids = set(old_map.keys())
+
+    changed = []
+    for r in new_rules:
+        if not isinstance(r, dict):
+            continue
+        rid = r.get("rule_id")
+        if rid in old_map and r != old_map[rid]:
+            changed.append(rid)
+    added = sorted(rid for rid in (new_ids - old_ids) if rid)
+    removed = sorted(rid for rid in (old_ids - new_ids) if rid)
+    return {"changed": sorted(changed), "added": added, "removed": removed}
+
+
+def _validate_rules_raise(rules: list) -> None:
+    """跑 editor_validate (同 /api/rules/validate 判据); 有错 422 拒写, 不落盘。"""
+    import tempfile
+    from dataclasses import asdict
+    from src.rules.src.editor_validate import validate_dsl_json
+
+    payload = {"rules": rules}
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as fh:
+        json.dump(payload, fh, ensure_ascii=False)
+        tmp = fh.name
+    try:
+        errors = validate_dsl_json(tmp)
+    finally:
+        os.unlink(tmp)
+    if errors:
+        raise HTTPException(
+            422,
+            detail={"reason": "validation_failed", "error_count": len(errors),
+                    "errors": [asdict(e) for e in errors]},
+        )
+
+
+@app.post("/api/rules/dsl/apply")
+def api_rules_dsl_apply(req: DslRulesApplyReq) -> dict:
+    """设计器「应用」落盘 default.json — 带人工确认闸 + 备份回滚。
+
+    流程 (写盘慎重, 每步都可拒):
+      1. 先 validate: 不合法 → 422 拒写 (绝不动 default.json)。
+      2. confirm=False → 校验通过但**不落盘**, 返回 {status:'pending_confirm', diff}
+         让设计器先看改了/新增/删哪些规则再决定。
+      3. confirm=True → 备份原文件 (default.json.bak.<ts>) 写盘; 写后用
+         DslRuleProvider.load() fail-fast 兜底, 重载失败 → 用备份回滚 + 500。
+    响应:
+      pending_confirm: {status, diff, valid:True, error_count:0}
+      applied:         {status:'applied', diff, backup, applied_rule_count}
+    """
+    p = _dsl_default_path()
+    if not os.path.exists(p):
+        raise HTTPException(404, f"DSL 规则文件不存在: {p}")
+
+    # ── 1. 先 validate (不合法 422 拒写, 绝不动盘) ──
+    _validate_rules_raise(req.rules)
+
+    # ── 读原文件出 diff ──
+    try:
+        with open(p, encoding="utf-8") as fh:
+            old_data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(500, f"原 default.json 不可读, 拒绝写回: {e}")
+    old_rules = old_data.get("rules", []) if isinstance(old_data, dict) else []
+    diff = _diff_rules(old_rules, req.rules)
+
+    # ── 2. 人工确认闸: 未确认 → 只回 diff 预览, 不落盘 ──
+    if not req.confirm:
+        return {
+            "status": "pending_confirm",
+            "valid": True,
+            "error_count": 0,
+            "diff": diff,
+            "message": "校验通过, 待人工确认。请带 confirm=true 再调本端点落盘。",
+        }
+
+    # ── 3. 备份 → 写盘 → fail-fast 重载兜底, 失败回滚 ──
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    backup = f"{p}.bak.{ts}"
+    shutil.copyfile(p, backup)  # 备份先成, 写盘才可回滚
+
+    try:
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump({"rules": req.rules}, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+    except OSError as e:
+        # 写盘本身失败 → 清备份 (原文件未动), 诚实报错
+        if os.path.exists(backup):
+            os.unlink(backup)
+        raise HTTPException(500, f"default.json 写盘失败: {e}")
+
+    # fail-fast 兜底: 写后必能重载, 否则回滚 (红线一: 不留坏盘)
+    from src.rules.src.dsl import DslRuleProvider
+    try:
+        DslRuleProvider(p).load()
+    except Exception as e:
+        try:
+            shutil.copyfile(backup, p)  # 回滚到备份
+        except OSError as rb:
+            raise HTTPException(500, f"写盘后重载失败且回滚也失败: load={e} rollback={rb}")
+        raise HTTPException(500, f"default.json 写盘后 DslRuleProvider 重载失败, 已回滚: {e}")
+
+    return {
+        "status": "applied",
+        "valid": True,
+        "error_count": 0,
+        "diff": diff,
+        "backup": backup,
+        "applied_rule_count": len(req.rules),
+    }
+
+
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
 from fastapi.responses import HTMLResponse

@@ -140,6 +140,10 @@ def structure_design_node(state: dict) -> dict:
         "floors": base_structure.get("floors", 1),
         "zones": zones,
         "applicable_codes": unique_codes[:5],  # 最多5条相关规范
+        # plumbing 线段透传 (Phase 3 第二专业): 样本 raw_data 的 pipes 键进 structure,
+        # 让 _generate_task_list 据此追加 pipe task。坐标 cad 节点仍从 raw_data 读,
+        # 这里只透传「有几段管」的计数驱动任务生成。
+        "pipe_count": len((state.get("raw_data", {}) or {}).get("pipes", [])),
     }
 
     return {
@@ -197,6 +201,16 @@ def _generate_task_list(structure: dict) -> list[dict]:
         "params": {"sill_height": 0.9},
         "description": "插入窗户",
     })
+
+    # 给排水管线任务 (Phase 3 第二专业): 有管段才追加; 坐标 cad 节点从 raw_data.pipes 读
+    if structure.get("pipe_count"):
+        tasks.append({
+            "id": "pipe-plumbing",
+            "type": "pipe",
+            "category": "plumbing",
+            "params": {"count": structure.get("pipe_count")},
+            "description": f"绘制给排水管线 ({structure.get('pipe_count')}段)",
+        })
 
     # 标注任务
     tasks.append({

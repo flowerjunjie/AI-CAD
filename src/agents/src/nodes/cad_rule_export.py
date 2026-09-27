@@ -4,7 +4,7 @@ Agent 节点 — CAD执行 + 规则校验 + 成果输出
 """
 import os
 import sys
-from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point
+from src.agents.src.tools.cad_tools import DXFWriter, Wall, Door as CADDoor, Window as CADWindow, Point, Pipe as CADPipe
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
 from src.agents.src.numbering import assign_door_numbers, assign_window_numbers
@@ -431,6 +431,23 @@ def cad_execute_node(state: dict) -> dict:
                     writer.add_opening_marker(wp.get("number", task_id), (cx, cy))
                 results.append({"task_id": task_id, "status": "completed",
                                 "count": len(window_pos)})
+
+            elif task_type == "pipe":
+                # 给排水管段: 直接消费 raw_data 的 plumbing 线段 (不经布局引擎),
+                # 每段调 add_pipe 画 PIPE 图层 LWPOLYLINE + PIPE_LABEL 层管径标注。
+                # 与 wall/door/window 的区别: 管段坐标来自样本 pipes 键, 不走布局。
+                raw_pipes = (state.get("raw_data", {}) or {}).get("pipes", [])
+                for p in raw_pipes:
+                    sx, sy = p.get("start", (0.0, 0.0))
+                    ex, ey = p.get("end", (0.0, 0.0))
+                    writer.add_pipe(CADPipe(
+                        start=Point(float(sx), float(sy)),
+                        end=Point(float(ex), float(ey)),
+                        diameter_mm=int(p.get("diameter_mm", 50)),
+                        layer=p.get("layer", "PIPE"),
+                    ))
+                results.append({"task_id": task_id, "status": "completed",
+                                "count": len(raw_pipes)})
 
             elif task_type == "dimension":
                 if rooms:

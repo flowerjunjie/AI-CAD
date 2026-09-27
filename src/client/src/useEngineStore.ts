@@ -78,6 +78,24 @@ export interface DslValidateResp {
   errors: DslValidationError[];
 }
 
+/** DSL 写回端点的 diff 预览 (改了/新增/删 各 rule_id 列表)。 */
+export interface DslApplyDiff {
+  changed: string[];
+  added: string[];
+  removed: string[];
+}
+
+/** POST /api/rules/dsl/apply 响应 (bridge.py B3 段, 带人工确认闸)。 */
+export interface DslApplyResp {
+  status: 'pending_confirm' | 'applied';
+  valid: boolean;
+  error_count: number;
+  diff: DslApplyDiff;
+  backup?: string;
+  applied_rule_count?: number;
+  message?: string;
+}
+
 interface EngineState {
   engineConnected: boolean;
   phase: string;
