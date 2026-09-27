@@ -370,6 +370,7 @@ def cad_execute_node(state: dict) -> dict:
     tasks = state.get("task_list", [])
     results = []
     confirmations = {}
+    _door_markers_done = False  # 门编号只画一次 (样本 task_list 含 7 个 door task, 逐个画会重复 49 条)
 
     for task in tasks:
         task_id = task.get("id", "unknown")
@@ -402,14 +403,20 @@ def cad_execute_node(state: dict) -> dict:
                         width=d["width"],
                         rotation=d["rotation"],
                     ))
-                    # 编号文字: 门洞旁画 M 号 (offset 洞口下方 0.3m)
-                    writer.add_opening_marker(
-                        d.get("number", task_id),
-                        (d["position"][0], d["position"][1] - 0.3),
-                    )
                 results.append({"task_id": task_id, "status": "pending_confirm",
                                 "description": task.get("description", "")})
                 confirmations[task_id] = False
+                # 编号文字: 遍历布局出的全部门画 M 号 (与窗分支同范式, 保证编号
+                # 不随 task_id 是否匹配而丢)。task_id 与布局门 id 对齐时才命中
+                # 单门几何; 编号按 door_pos 顺序补全。仅首个 door task 画, 避免
+                # 样本 7 个 door task 重复画 49 条。
+                if not _door_markers_done:
+                    for dd in door_pos:
+                        writer.add_opening_marker(
+                            dd.get("number", dd.get("id", "")),
+                            (dd["position"][0], dd["position"][1] - 0.3),
+                        )
+                    _door_markers_done = True
 
             elif task_type == "window":
                 for wp in window_pos:

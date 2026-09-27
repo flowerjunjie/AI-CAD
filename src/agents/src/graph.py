@@ -53,6 +53,7 @@ class DesignState(TypedDict, total=False):
     final_dwg_path: str | None
     export_format: str
     material_tables: list[dict]
+    export_status: str | None  # export_node 产出；声明进 schema 才随 state 持久化
 
 
 # ─── Edge Functions ─────────────────────────────────────────────
@@ -72,10 +73,46 @@ def should_continue_confirmation(state: DesignState) -> str:
     return "rule_check" if all_confirmed else "awaiting_confirmation"
 
 
+def pending_confirmation_ids(state: DesignState) -> list[str]:
+    """待确认 task_id 列表（human_confirmations 中值为 False 的键）"""
+    return [tid for tid, ok in state.get("human_confirmations", {}).items() if not ok]
+
+
+# ─── Confirmation Node ──────────────────────────────────────────
+
+def awaiting_confirmation_node(state: DesignState) -> dict:
+    """人在回路暂停点：仍有未确认 task 时调用 interrupt() 挂起，
+    把待确认 task_id 列表作为 interrupt 值暴露给调用方。
+
+    恢复 (resume) 语义：
+      - 首次 invoke 在本节点挂起；resume 时 LangGraph 从本节点起点重跑，
+        interrupt() 返回调用方 Command(resume=...) 传入的值（= 已更新的全量
+        human_confirmations，确认项已置 True）。
+      - 节点把该值写回 state["human_confirmations"]；随后条件边
+        should_continue_confirmation 读到「全部确认」→ 路由到 rule_check。
+      - 若 resume 值仍有 pending → 条件边路由回 awaiting_confirmation（可逐批确认）。
+    挂起/恢复依赖 checkpointer（compile 时传入）。"""
+    pending = pending_confirmation_ids(state)
+    if not pending:
+        return {}
+    from langgraph.types import interrupt
+    # 挂起并暴露待确认 task_id；resume 时返回传入的确认映射（或首次为 None）。
+    resumed = interrupt({"pending_task_ids": pending, "message": "请确认 CAD 执行结果后放行"})
+    if not resumed:
+        # 首次挂起尚未 resume：什么都不改，等调用方传值回来
+        return {}
+    # resumed 是调用方更新后的 human_confirmations（确认项已 True）
+    return {"human_confirmations": resumed}
+
+
 # ─── Graph Construction ─────────────────────────────────────────
 
-def build_agent_graph() -> "StateGraph":
-    """构建 Agent 执行图"""
+def build_agent_graph(checkpointer=None) -> "StateGraph":
+    """构建 Agent 执行图
+
+    checkpointer: 传入 MemorySaver（或持久 checkpointer）启用人在回路暂停/resume。
+                  默认 None — auto_mode=True 的直跑路径保持不变（run.py 依赖此路径）。
+    """
     from langgraph.graph import StateGraph, END
 
     graph = StateGraph(DesignState)
@@ -84,6 +121,7 @@ def build_agent_graph() -> "StateGraph":
     graph.add_node("intent", intent_understanding_node)
     graph.add_node("structure", structure_design_node)
     graph.add_node("cad_execute", cad_execute_node)
+    graph.add_node("awaiting_confirmation", awaiting_confirmation_node)
     graph.add_node("rule_check", rule_check_node)
     graph.add_node("export", export_node)
 
@@ -94,11 +132,24 @@ def build_agent_graph() -> "StateGraph":
     graph.add_edge("intent", "structure")
     graph.add_edge("structure", "cad_execute")
 
-    # 人机协作分支（直接到规则检查）
-    graph.add_edge("cad_execute", "rule_check")
+    # 人机协作分支：cad_execute 后按 auto_mode + 确认状态路由
+    graph.add_conditional_edges(
+        "cad_execute",
+        should_request_confirmation,
+        {"awaiting_confirmation": "awaiting_confirmation", "rule_check": "rule_check"},
+    )
+    # 暂停点：确认完 → 放行 rule_check；仍有 pending → 重回暂停点（可逐批确认）
+    graph.add_conditional_edges(
+        "awaiting_confirmation",
+        should_continue_confirmation,
+        {"rule_check": "rule_check", "awaiting_confirmation": "awaiting_confirmation"},
+    )
+
     graph.add_edge("rule_check", "export")
     graph.add_edge("export", END)
 
+    # 保留 checkpointer 引用：compile 时透传（见 run_agent_with_confirmation）
+    graph._checkpointer = checkpointer  # type: ignore[attr-defined]
     return graph
 
 
@@ -151,3 +202,79 @@ if __name__ == "__main__":
     print(f"规范违规: {len(result.get('rule_violations', []))} 条")
     print(f"DWG路径: {result.get('final_dwg_path')}")
     print("\nAgent 演示完成!")
+
+
+# ─── 人在回路：暂停 → 确认 → 恢复 ───────────────────────────────
+
+def run_agent_with_confirmation(
+    sample_path: str | None = None,
+    auto_mode: bool = False,
+    confirm_all: bool = True,
+    thread_id: str | None = None,
+    output_path: str | None = None,
+    inject_sample_structure: bool = True,
+    confirm_fn=None,
+) -> dict:
+    """演示「跑到 cad_execute 后暂停 → 模拟人工确认 → 继续到 export」。
+
+    依赖 langgraph checkpointer（MemorySaver 起步）+ interrupt() 暂停点：
+      1. 首次 invoke（auto_mode=False, 有 pending 确认）→ 在 awaiting_confirmation
+         挂起，返回的是「挂起前的 state 快照」，此时 CAD 已出图但规则/export 未跑。
+      2. 读取挂起值里的 pending_task_ids，按 confirm_fn(confirm_ids) 决定放行哪些
+         （默认 confirm_all=True 全放行）。
+      3. 用相同 thread_id resume：把 human_confirmations 对应项置 True，
+         再 invoke(None, config) 让图从暂停点重跑 → 条件边路由到 rule_check → export。
+
+    返回最终完整 state（含 rule_violations / final_dwg_path）。
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.types import Command
+
+    saver = MemorySaver()
+    graph = build_agent_graph(checkpointer=saver)
+    # 暂停/resume 依赖 checkpointer 落盘线程状态 → compile 时必须传同一实例
+    app = graph.compile(checkpointer=saver)
+    config = {"configurable": {"thread_id": thread_id or "ai-cad-hil-demo"}}
+
+    initial_state: DesignState = {
+        "project_input": "三室一厅住宅，建筑面积约100平米，需要生成施工图",
+        "output_path": output_path or "/tmp/ai_cad_demo_result.dwg",
+        "auto_mode": auto_mode,
+    }
+    if sample_path:
+        from src.agents.src.nodes.input_parser import parse_json_input
+        parsed = parse_json_input(sample_path)
+        initial_state["raw_data"] = parsed.get("raw_data", {})
+        if inject_sample_structure:
+            initial_state["task_list"] = parsed.get("task_list", [])
+            initial_state["project_structure"] = parsed.get("project_structure", {})
+            initial_state["project_type"] = parsed.get("project_type", "住宅")
+
+    # 首跑：在确认点挂起。挂起时 invoke 返回「当前 state 快照」（非最终态）。
+    result = app.invoke(initial_state, config)
+
+    # 若仍有待确认（未挂起=auto_mode 或无 pending → 已跑到底），直接返回
+    pending = pending_confirmation_ids(result)
+    if not pending:
+        return result
+
+    # 决定放行哪些 task：confirm_fn(pending)→bool（自定义）；默认全放行
+    release_all = confirm_fn(pending) if confirm_fn else confirm_all
+    return _resume_with_confirmations(result, pending, release_all, app, config)
+
+
+def _resume_with_confirmations(
+    snapshot: dict, pending: list[str], release_all: bool, app, config: dict,
+) -> dict:
+    """resume 辅助：把 human_confirmations 对应项置 True 后 invoke 续跑。
+
+    release_all=True 放行全部 pending；False 不新增放行（图会再次停在确认点，
+    等待下一轮 resume 时调用方自行挑选 task 确认 — 逐批确认语义）。"""
+    from langgraph.types import Command
+    new_confirms = dict(snapshot.get("human_confirmations", {}))
+    if release_all:
+        for tid in pending:
+            new_confirms[tid] = True
+    # Command(resume=...) 传入全量确认映射；awaiting_confirmation_node 写回 state，
+    # 条件边据此路由到 rule_check（全部确认）或回到确认点（仍有 pending）。
+    return app.invoke(Command(resume=new_confirms), config)
