@@ -28,6 +28,8 @@ function App() {
   const [useLlm, setUseLlm] = useState(false);
   // Phase 2 规则编辑器: 右侧规则面板加「编辑器」子 tab (列表 / DSL 编辑器)
   const [rulesPane, setRulesPane] = useState<'list' | 'editor'>('list');
+  // 列表态源过滤 tab (原 rulesTab, 挪进列表子面板)
+  const [shownTab, setShownTab] = useState<'hardcoded' | 'dsl' | 'all'>('all');
 
   // 启动 + 周期性探测引擎可达性
   useEffect(() => {
@@ -36,7 +38,7 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const shownRules = rules;
+  const shownRules = shownTab === 'all' ? rules : rules.filter((r) => r.source === shownTab);
   const previewSrc = `${API}/api/preview?sample=${encodeURIComponent(lastSample)}`;
 
   const handleRun = useCallback(async () => {
@@ -189,6 +191,19 @@ function App() {
           {rulesPane === 'list' ? (
             <>
             <div className="rules-list">
+              <div className="panel-head-row rules-pane-toggle">
+                <div className="tabs">
+                  {(['all', 'hardcoded', 'dsl'] as const).map((t) => (
+                    <button
+                      key={t}
+                      className={`tab ${shownTab === t ? 'tab-active' : ''}`}
+                      onClick={() => setShownTab(t)}
+                    >
+                      {t === 'all' ? '全部' : t === 'hardcoded' ? '硬编码' : 'DSL'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {shownRules.length === 0 && <div className="empty-hint">{engineConnected ? '无' : '引擎未连接，规则列表暂空'}</div>}
               {shownRules.map((rule) => (
                 <div key={rule.rule_id} className="rule-item">
