@@ -363,6 +363,24 @@ class DXFWriter:
         self.doc = ezdxf.new(dxfver)
         self.msp = self.doc.modelspace()
 
+    # ── 制图惯例线型 (幂等: 已有同名则跳过, 重复调用安全) ──────
+    # ezdxf 新建文档只自带 ByBlock/ByLayer/Continuous, 自定义线型须显式建,
+    # 否则实体 dxfattribs 写 'DASHED' 读回会变 ByLayer。实测 1.4.4 双写
+    # dxf/dwg 均可读回 (见 tests/unit/test_linetypes_dwg_export.py)。
+    _LINETYPE_PATTERNS: dict[str, list] = {
+        # 管道/管井制图惯例: 虚线
+        "DASHED": [0.5, 0.25, -0.25],
+        # 轴线制图惯例: 点划线 (长划-点-长划)
+        "CENTERLINE": [1.25, 0.75, -0.25, 0.125, -0.25],
+    }
+
+    def _ensure_linetypes(self) -> None:
+        """幂等确保 DASHED/CENTERLINE 线型存在 (同 layers.new 范式, 先查后建)。"""
+        existing = {lt.dxf.name for lt in self.doc.linetypes}
+        for name, pattern in self._LINETYPE_PATTERNS.items():
+            if name not in existing:
+                self.doc.linetypes.add(name, pattern=pattern)
+
     def add_wall(self, wall: Wall) -> None:
         """添加墙体（中心线）"""
         self.msp.add_line(
@@ -464,7 +482,8 @@ class DXFWriter:
         mid_x = (start.x + end.x) / 2
         mid_y = start.y + offset + 0.1
         if text:
-            self.msp.add_text(text, dxfattribs={"height": 0.15, "layer": "DIMENSION"})
+            txt = self.msp.add_text(text, dxfattribs={"height": 0.15, "layer": "DIMENSION"})
+            txt.dxf.insert = (mid_x, mid_y)
 
     def add_opening_dimensions(
         self,
@@ -516,21 +535,23 @@ class DXFWriter:
         出图范式照 add_wall_thickness（线段类元素 LWPOLYLINE 偏置双线）：
         - 管线本体: PIPE 图层 LWPOLYLINE，端点序列 (start, end) 两点（不闭合，
           单条线管段 = 2 顶点 LWPOLYLINE，等价 LINE 但可复用 polyline 读回通道）。
+          线型 DASHED (管道制图惯例虚线) — 经 _ensure_linetypes 幂等建线型后引用。
         - 管径标注: 仿 add_opening_dimensions 的「文字 + DIMENSION 层」风格，
           在管段中点上方 offset 处画 TEXT "DN{diameter_mm}"。
 
         管段支持任意方向（给排水管路可斜走，不做横平竖直限制）。
         显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
         """
+        self._ensure_linetypes()
         if "PIPE" not in self.doc.layers:
             self.doc.layers.new("PIPE")
         if "PIPE_LABEL" not in self.doc.layers:
             self.doc.layers.new("PIPE_LABEL")
-        # 管线本体: LWPOLYLINE 两点（不闭合）
+        # 管线本体: LWPOLYLINE 两点（不闭合, 虚线 DASHED 符合管道制图惯例）
         self.msp.add_lwpolyline(
             [(pipe.start.x, pipe.start.y), (pipe.end.x, pipe.end.y)],
             close=False,
-            dxfattribs={"layer": pipe.layer},
+            dxfattribs={"layer": pipe.layer, "linetype": "DASHED"},
         )
         # 管径标注: 中点上方 offset 处 TEXT "DN{管径}"
         mid_x = (pipe.start.x + pipe.end.x) / 2.0
@@ -542,13 +563,16 @@ class DXFWriter:
         txt.dxf.insert = (mid_x, mid_y + label_offset)
         return 1
 
-    def add_beam(self, beam: Beam, label_offset: float = 0.15) -> int:
+    def add_beam(self, beam: Beam, label_offset: float = 0.15, hatch: bool = False) -> int:
         """添加结构梁线段 + 截面标注，返回标注条数（0 或 1）。
 
         出图范式照 add_pipe（线段类 LWPOLYLINE + 独立标注层 TEXT）：
         - 梁本体: BEAM 图层 LWPOLYLINE，端点序列 (start, end) 两点（不闭合）。
         - 截面标注: 仿 PIPE_LABEL 范式, BEAM_LABEL 层 TEXT "{宽}x{高}"
           画在梁段中点上方 offset 处。
+        - hatch=True: 在梁段 (start,end) 处补一个实填充 (BEAM_FILL 层),
+          按 截面宽×截面高 比例生成填充区域。最小深化 — 默认 False
+          不画填充 (避免全量填充, 保持既有 dwg_export 验收测试不破)。
 
         显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
         """
@@ -570,7 +594,38 @@ class DXFWriter:
             dxfattribs={"height": 0.15, "layer": "BEAM_LABEL"},
         )
         txt.dxf.insert = (mid_x, mid_y + label_offset)
+        # 最小深化: 按需给梁段补一个实填充 (截面宽×高 比例), BEAM_FILL 层
+        if hatch:
+            self._add_beam_hatch(beam)
         return 1
+
+    def _add_beam_hatch(self, beam: Beam) -> None:
+        """梁段实填充 (BEAM_FILL 层, 按 截面宽×深 比例生成封闭 polygon)。
+
+        用 ezdxf 的 HATCH 实体 (set_solid_fill + add_polyline_path),
+        填充区域 = 梁段 (start→end) 两侧各偏移 截面宽/2 形成的矩形。
+        深度 (depth_mm) 仅影响标注文案与截面比例示意, 填充几何不画
+        3D 深 (2D 平面图惯例, 填充=梁在地面投影面积, 宽=beam 截面宽)。
+        显式建 BEAM_FILL 图层 + _ensure_linetypes (实线用 ByLayer)。
+        """
+        if "BEAM_FILL" not in self.doc.layers:
+            self.doc.layers.new("BEAM_FILL")
+        # 梁段两侧各偏移 截面宽/2 → 4 顶点矩形 (与 add_wall_thickness 同范式)
+        eps = 1e-9
+        dx = beam.end.x - beam.start.x
+        dy = beam.end.y - beam.start.y
+        h = beam.width_mm / 1000.0 / 2.0  # 截面宽/2 (m)
+        if abs(dy) < eps:  # 水平梁: 沿 y 偏移
+            x0, x1, y = beam.start.x, beam.end.y, beam.start.y
+            pts = [(x0, y + h), (x1, y + h), (x1, y - h), (x0, y - h)]
+        elif abs(dx) < eps:  # 竖直梁: 沿 x 偏移
+            x, y0, y1 = beam.start.x, beam.start.y, beam.end.y
+            pts = [(x + h, y0), (x + h, y1), (x - h, y1), (x - h, y0)]
+        else:  # 斜梁: 跳过填充 (与 add_wall_thickness MVP 同款限制)
+            return
+        hatch = self.msp.add_hatch(color=8, dxfattribs={"layer": "BEAM_FILL"})
+        hatch.set_solid_fill()
+        hatch.paths.add_polyline_path(pts, is_closed=True)
 
     def add_column(self, col: Column, label_offset: float = 0.15) -> int:
         """添加结构柱（截面矩形）+ 截面标注，返回标注条数（0 或 1）。
@@ -671,7 +726,9 @@ class DXFWriter:
 
         出图范式照 add_pipe 线段类（HVAC_DUCT 层 LWPOLYLINE 两点不闭合
         + HVAC_LABEL 层 "DN{管径}" TEXT，画在管段中点上方 offset 处）。
+        线型 DASHED (风管制图惯例虚线, 同 add_pipe)。
         """
+        self._ensure_linetypes()
         if duct.layer not in self.doc.layers:
             self.doc.layers.new(duct.layer)
         if "HVAC_LABEL" not in self.doc.layers:
@@ -679,7 +736,7 @@ class DXFWriter:
         self.msp.add_lwpolyline(
             [(duct.start.x, duct.start.y), (duct.end.x, duct.end.y)],
             close=False,
-            dxfattribs={"layer": duct.layer},
+            dxfattribs={"layer": duct.layer, "linetype": "DASHED"},
         )
         mid_x = (duct.start.x + duct.end.x) / 2.0
         mid_y = (duct.start.y + duct.end.y) / 2.0
@@ -719,6 +776,53 @@ class DXFWriter:
             label_layer="HVAC_LABEL",
             label_offset=label_offset,
         )
+
+    def add_axis_grid(
+        self,
+        x_axes: list,
+        y_axes: list,
+        layer: str = "AXIS",
+    ) -> int:
+        """添加轴网 (X 轴 + Y 轴 点划线网格) + 轴号标注，返回轴线条数。
+
+        出图范式照 add_dimension 的「图层先建 + TEXT 标注」；轴线本身用
+        CENTERLINE 点划线 (建筑轴网制图惯例)。X/Y 轴各是一条贯穿的 LINE:
+        - x_axes = [(号, x坐标, 端点y0, 端点y1), ...] 竖直轴线 (沿 y 走, 固定 x)
+          轴号 TEXT 画在轴线下端 (y0 - 0.2) 处, 如 "①②③"。
+        - y_axes = [(号, y坐标, 端点x0, 端点x1), ...] 水平轴线 (沿 x 走, 固定 y)
+          轴号 TEXT 画在轴线左端 (x0 - 0.2) 处, 如 "A B C"。
+
+        轴线延伸出各房间外轮廓 (y0/y1 由调用方按布局 min/max 外扩),
+        与 add_dimension 标注线同理。返回 x_axes + y_axes 总条数。
+        显式建图层 + _ensure_linetypes (CENTERLINE 点划线)。
+        """
+        self._ensure_linetypes()
+        if layer not in self.doc.layers:
+            self.doc.layers.new(layer)
+        count = 0
+        for ax in x_axes:
+            label, x, y0, y1 = ax
+            self.msp.add_line(
+                (x, y0), (x, y1),
+                dxfattribs={"layer": layer, "linetype": "CENTERLINE"},
+            )
+            txt = self.msp.add_text(
+                label, dxfattribs={"height": 0.2, "layer": layer}
+            )
+            txt.dxf.insert = (x, y0 - 0.2)
+            count += 1
+        for ay in y_axes:
+            label, y, x0, x1 = ay
+            self.msp.add_line(
+                (x0, y), (x1, y),
+                dxfattribs={"layer": layer, "linetype": "CENTERLINE"},
+            )
+            txt = self.msp.add_text(
+                label, dxfattribs={"height": 0.2, "layer": layer}
+            )
+            txt.dxf.insert = (x0 - 0.2, y)
+            count += 1
+        return count
 
     def save(self, path: str) -> bool:
         """保存 DWG"""

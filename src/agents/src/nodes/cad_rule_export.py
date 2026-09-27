@@ -545,6 +545,7 @@ def cad_execute_node(state: dict) -> dict:
                                 "count": len(raw_ducts) + len(raw_units) + len(raw_grilles)})
 
             elif task_type == "dimension":
+                axis_count = 0
                 if rooms:
                     x0 = min(r["x"] for r in rooms)
                     y0 = min(r["y"] for r in rooms)
@@ -556,10 +557,25 @@ def cad_execute_node(state: dict) -> dict:
                     writer.add_dimension(
                         Point(x0, y0), Point(x0, y1), offset=-0.5,
                         text=str(int((y1 - y0) * 1000)))
+                    # 轴线深化: 轴网点划线 (CENTERLINE) + 轴号 ①②③/A/B,
+                    # 延伸出外轮廓 0.5m (示意性轴网, 不依赖外部轴网数据)
+                    x_mid = (x0 + x1) / 2.0
+                    pad = 0.5  # 轴线延伸出外轮廓的距离
+                    x_axes = [
+                        ("①", x0, y0 - pad, y1 + pad),
+                        ("②", x_mid, y0 - pad, y1 + pad),
+                        ("③", x1, y0 - pad, y1 + pad),
+                    ]
+                    y_axes = [
+                        ("A", y0, x0 - pad, x1 + pad),
+                        ("B", y1, x0 - pad, x1 + pad),
+                    ]
+                    axis_count = writer.add_axis_grid(x_axes, y_axes)
                 # 洞口标注: 每门/窗 1 条宽度数字 (DIMENSION 层, 在洞口下方)
                 opening_count = writer.add_opening_dimensions(door_pos, window_pos, offset=0.5)
                 results.append({"task_id": task_id, "status": "completed",
-                                "openings": opening_count})
+                                "openings": opening_count,
+                                "axes": axis_count})
 
         except Exception as e:
             results.append({"task_id": task_id, "status": "error", "error": str(e)})
