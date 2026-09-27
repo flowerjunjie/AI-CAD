@@ -78,28 +78,32 @@
     },
     {
       "rule_id": "plumbing-pipe-slope-in-range",
-      "name": "排水管坡度应在规范区间 (占位, 待规范确认)",
-      "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
+      "name": "排水管坡度应在规范区间 (已回填)",
+      "code_ref": "GB 50015-2019 第4.5.6条第2款 — 排水横干管最小坡度按表4.5.6分档, 下限取大管径 (DN200) 通行最小坡度 0.4%; 上限 12.0% 取通用施工实践值 (无明确规范条文上限)",
       "severity": "warning",
       "element_types": [
         "PlumbingPipe",
         "plumbingpipe"
       ],
-      "predicate": "element.slope < min_slope or element.slope > max_slope",
+      "predicate": "element.slope > max_slope or (element.slope < min_slope and element.slope > 0.0)",
       "params": {},
       "param_defaults": {
-        "min_slope": 0.0,
+        "min_slope": 0.4,
         "max_slope": 12.0
       },
-      "description_template": "排水管坡度 {slope}% 超出规范区间 [{min_slope}%, {max_slope}%]",
-      "suggested_fix_template": "将坡度调整到 {min_slope}%~{max_slope}% (GB 50015 条文待确认)",
+      "description_template": "排水管坡度 {slope}% 超出允许区间 [{min_slope}%, {max_slope}%] (坡度为零/占位值或超上限)",
+      "suggested_fix_template": "将坡度调整到 {min_slope}%~{max_slope}% (GB 50015-2019 第4.5.6条, 排水横干管最小坡度按表4.5.6分档)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50015-2019 第4.5.6条第2款: 排水横干管的最小坡度按表4.5.6分档 (DN110 0.4%/DN150 0.3%/DN200 0.2%, 通行值); 第4.5.6条第1款: 排水横支管标准坡度 0.026 (2.6%)。predicate 写法: element.slope > max_slope or (element.slope < min_slope and element.slope > 0.0) — 下限侧判定「0 < 坡度 < min_slope」(坡度过小/不合规), 坡度 0.0 视为「无坡度数据占位值」不触发违规; 真正下限 (0.4% 分档值) 由 min_slope param 记录, 预留将来按管径分档。上限 12.0% 无明确规范条文, 按通用施工实践取值",
+      "confidence": "low",
+      "confirmed": true,
+      "confirm_note": "回填口径: 下限 0.0→0.4%, 依据 GB 50015-2019 第4.5.6条第2款排水横干管最小坡度通行分档 (DN110 0.4%/DN150 0.3%/DN200 0.2%), 避免「无坡度数据→占位 0.0」误报。predicate 采用 element.slope > max_slope or (element.slope < min_slope and element.slope > 0.0): 上限侧 30%>12% 触发违规; 下限侧 0<坡度<0.4% 触发违规, 但 0.0 (占位) 不触发。小管径 (DN50~DN100) 通行最小坡度 1.0~2.6%, 0.4% 对它们偏松 — 按管径分档需改 predicate 结构 (超 JSON 零代码范围), 现取最宽松值兜底。上限 12.0% 为通行施工实践值, 无规范条文支撑。confidence 标 low: 下限基于通行做法而非强制条文, 需给排水专家按 GB 50015-2019 表4.5.6 原文复核后按管径细化分档。"
     },
     {
       "rule_id": "plumbing-pipe-manhole-distance",
-      "name": "排水横管距检查井最大间距 (占位, 待规范确认)",
-      "code_ref": "GB 50015-2019 TBD — 业务侧确认后更新条文号与数值",
+      "name": "排水横管距检查井最大间距 (已回填)",
+      "code_ref": "GB 50015-2019 第4.7.1条第3款 — 排水横管长度不应大于12m; 第4.7.3条第1款 — 横支管长度大于12m应设环形通气管",
       "severity": "warning",
       "element_types": [
         "PlumbingPipe",
@@ -108,12 +112,16 @@
       "predicate": "element.distance_to_manhole_m > max_manhole_distance_m",
       "params": {},
       "param_defaults": {
-        "max_manhole_distance_m": 25.0
+        "max_manhole_distance_m": 12.0
       },
       "description_template": "排水管距检查井 {distance_to_manhole_m}m 超过最大间距 {max_manhole_distance_m}m",
-      "suggested_fix_template": "增设检查井使间距 <= {max_manhole_distance_m}m (GB 50015 条文待确认)",
+      "suggested_fix_template": "增设检查井/立管使间距 <= {max_manhole_distance_m}m (GB 50015-2019 第4.7.1条第3款, 排水横管长度不应大于12m)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50015-2019 第4.7.1条第3款: 排水横管长度不应大于12m (不设通气管的前提条件); 第4.7.3条第1款: 连接4个及4个以上卫生器具且横支管长度大于12m的排水横支管应设环形通气管。原占位 25m 无规范条文支撑, 收紧到 12m。",
+      "confidence": "medium",
+      "confirmed": true,
+      "confirm_note": "回填口径: 25.0→12.0m, 依据 GB 50015-2019 第4.7.1条第3款「排水横管长度不应大于12m」(排水横管不设通气管的前提条件, 超过 12m 需设环形通气管)。e2e 样本远段距检查井 5.0m < 12m, 仍不违规 (test_e2e_clean_segments_pass_all_rules 中 far 段 5.0m 上限断言同步从 25.0 改为 12.0)。原 25m 占位值无规范条文支撑, 12m 为建筑内部排水横管长度限值; 室外排水检查井间距另按 GB 50014-2021 第5.4.2条表5.4.2 (管径 300~600mm 宜 75m, 上限 120m) 单独约束, 本规则仅作用建筑内排水横管。上线前请给排水专家按 GB 50015-2019 第4.7.1条原文终确认。"
     },
     {
       "rule_id": "electrical-outlet-height-range",

@@ -3,10 +3,12 @@ Phase 3 — 给排水专业接入测试
 
 验证新专业(给排水)通过 DSL 骨架干净接入引擎:
 - PlumbingPipe 元素模型 + default.json 的 plumbing-* 规则能被 load_dsl_rules 加载执行
-- 阈值占位规则命中/放行正确 (用 param 覆盖验证 DSL 化的核心能力: 阈值可外部驱动)
+- 阈值规则命中/放行正确 (用 param 覆盖验证 DSL 化的核心能力: 阈值可外部驱动)
 - 34 个已有规则类零影响 (引擎加载后原有 default.json 规则仍在)
 
-规范条文/数值为占位 (TBD), 本测试只验证"接入机制"正确, 不验证数值业务正确性。
+数值已按规范回填 (2026-09): 坡度下限 0.4% (GB 50015-2019 第4.5.6条横干管通行最小坡度,
+大管径分档兜底), 间距上限 12m (GB 50015-2019 第4.7.1条排水横管长度限值)。
+本测试验证机制 + 回填后命中。
 """
 import os
 import sys
@@ -42,30 +44,30 @@ def test_plumbing_rules_loaded_from_dsl():
 
 
 def test_waste_pipe_min_diameter_violation():
-    """DN40 排污管 < 占位最小 50mm → 违规"""
+    """DN40 排污管 < 最小 50mm → 违规"""
     engine = _engine_with_rules()
-    pipe = PlumbingPipe(id="p1", pipe_type="waste", diameter_mm=40, slope=2.0)
+    pipe = PlumbingPipe(id="p1", pipe_type="waste", diameter_mm=40, slope=3.0)
     violations = engine.check([pipe], rule_ids=["plumbing-waste-pipe-min-diameter"])
     assert len(violations) == 1
     assert "40" in violations[0].description
 
 
 def test_waste_pipe_min_diameter_pass():
-    """DN50 排污管 = 占位最小 50mm → 合规"""
+    """DN50 排污管 = 最小 50mm → 合规"""
     engine = _engine_with_rules()
-    pipe = PlumbingPipe(id="p2", pipe_type="waste", diameter_mm=50, slope=2.0)
+    pipe = PlumbingPipe(id="p2", pipe_type="waste", diameter_mm=50, slope=3.0)
     assert len(engine.check([pipe], rule_ids=["plumbing-waste-pipe-min-diameter"])) == 0
 
 
 def test_pipe_type_filter_ignores_vent():
     """通气管 (vent) 不触发管径规则 (element_types + pipe_type 过滤)"""
     engine = _engine_with_rules()
-    pipe = PlumbingPipe(id="p3", pipe_type="vent", diameter_mm=10, slope=2.0)
+    pipe = PlumbingPipe(id="p3", pipe_type="vent", diameter_mm=10, slope=3.0)
     assert len(engine.check([pipe], rule_ids=["plumbing-waste-pipe-min-diameter"])) == 0
 
 
 def test_slope_out_of_range_violation():
-    """坡度 15% 超占位上限 12% → 违规"""
+    """坡度 15% 超上限 12% → 违规"""
     engine = _engine_with_rules()
     pipe = PlumbingPipe(id="p4", pipe_type="drain", diameter_mm=100, slope=15.0)
     violations = engine.check([pipe], rule_ids=["plumbing-pipe-slope-in-range"])
@@ -73,16 +75,16 @@ def test_slope_out_of_range_violation():
 
 
 def test_slope_in_range_pass():
-    """坡度 3% 在 [0,12] 内 → 合规"""
+    """坡度 3% 在 [0.4, 12] 内 → 合规"""
     engine = _engine_with_rules()
     pipe = PlumbingPipe(id="p5", pipe_type="drain", diameter_mm=100, slope=3.0)
     assert len(engine.check([pipe], rule_ids=["plumbing-pipe-slope-in-range"])) == 0
 
 
 def test_manhole_distance_violation():
-    """距检查井 30m 超占位上限 25m → 违规"""
+    """距检查井 30m 超上限 12m → 违规"""
     engine = _engine_with_rules()
-    pipe = PlumbingPipe(id="p6", pipe_type="drain", diameter_mm=100, slope=2.0,
+    pipe = PlumbingPipe(id="p6", pipe_type="drain", diameter_mm=100, slope=3.0,
                         distance_to_manhole_m=30.0)
     assert len(engine.check([pipe], rule_ids=["plumbing-pipe-manhole-distance"])) == 1
 
