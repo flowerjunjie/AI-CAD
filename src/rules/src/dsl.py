@@ -257,3 +257,21 @@ class DslRuleProvider:
 def load_dsl_rules(path: str | Path) -> list[ParametricRule]:
     """便捷入口：创建 DslRuleProvider 并 load。"""
     return DslRuleProvider(path).load()
+
+
+def validate_and_load_dsl_rules(
+    path: str | Path,
+) -> tuple[list[ParametricRule], list[Any]]:
+    """编辑器工作流入口：先校验 schema + predicate 白名单, 有错不 load。
+
+    返回 (rules, errors)：
+      合法 → (全部 ParametricRule, [])
+      非法 → ([], 全部 DslJsonError) —— 调用方一次拿到字段级错误清单,
+      不用等 load 时炸。
+    """
+    from .editor_validate import validate_dsl_json
+
+    errors = validate_dsl_json(path)
+    if errors:
+        return [], list(errors)
+    return load_dsl_rules(path), []
