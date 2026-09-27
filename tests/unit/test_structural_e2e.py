@@ -136,6 +136,24 @@ def test_e2e_no_extraneous_structural_hits():
         f"结构违规集合不符: 实际 {bad_ids}, 预期 {expected}"
 
 
+def test_e2e_beams_carry_real_span_m():
+    """补 span_m 后: 两梁跨度由线段端点几何算出 (均 (0,?)→(4,?), 跨度 4.0m),
+    跨度类规则不再是「缺字段安全放行」而是真按数值判定。"""
+    beams, _cols, _v = _run()
+    assert all(b.span_m == 4.0 for b in beams), \
+        f"两梁跨度应由端点距离算出 4.0m, 实际 {[b.span_m for b in beams]}"
+
+
+def test_e2e_span_depth_ratio_actively_evaluates():
+    """样本梁 span_m=4.0 时, 跨高比规则真判定 (非前置放行):
+      扁梁 4*1000/300=13.3 在 [5,20] → 合规; 合规梁 4*1000/600=6.67 → 合规。
+    断言两梁都不命中 (数值落在区间内), 证明规则在「真带 span_m」下运行。"""
+    _beams, _cols, violations = _run()
+    hits = [v for v in violations if v.rule_id == "structural-beam-span-depth-ratio"]
+    assert hits == [], \
+        f"样本两梁跨高比 13.3 / 6.67 均在 [5,20], 不应命中, 实际 {[v.element_id for v in hits]}"
+
+
 if __name__ == "__main__":
     test_sample_dxf_exists()
     test_e2e_flat_beam_hits_ratio_rule()
@@ -143,4 +161,6 @@ if __name__ == "__main__":
     test_e2e_small_column_hits_min_section()
     test_e2e_compliant_column_passes()
     test_e2e_no_extraneous_structural_hits()
+    test_e2e_beams_carry_real_span_m()
+    test_e2e_span_depth_ratio_actively_evaluates()
     print("\nStructural E2E tests passed!")

@@ -28,6 +28,8 @@ class StructuralBeam:
         depth_mm: 截面高 (mm, 占位, 梁高宽比 / 最小截面检查用)
         x: 平面坐标 x (m, 占位, 供后续定位类规则用)
         y: 平面坐标 y (m, 占位)
+        span_m: 跨度 (m, 上游从线段端点几何算出, 缺省 0 → 跨度类规则
+          structural-beam-min-height / span-depth-ratio 因前置 span_m>0 安全放行)
     """
 
     id: str
@@ -36,6 +38,7 @@ class StructuralBeam:
     depth_mm: int
     x: float = 0.0
     y: float = 0.0
+    span_m: float = 0.0
 
 
 @dataclass

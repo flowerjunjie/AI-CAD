@@ -53,12 +53,17 @@ class Pipe:
 
 @dataclass
 class Beam:
-    """结构梁元素（线段，仿 Pipe；截面宽/高 mm）"""
+    """结构梁元素（线段，仿 Pipe；截面宽/高 mm）
+
+    span_m: 跨度 (m)。默认 0.0 保持回归安全；出图侧 add_beam 若见 0 会
+    按 start/end 端点几何补算 (上游契约 §2.1 物理来源)。
+    """
     start: Point
     end: Point
     width_mm: int = 300
     depth_mm: int = 600
     layer: str = "BEAM"
+    span_m: float = 0.0
 
 
 @dataclass
@@ -576,6 +581,12 @@ class DXFWriter:
 
         显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
         """
+        # span_m 缺省 (未传/传 0) 时按端点几何补算 (上游契约 §2.1 物理来源),
+        # 让出图侧也带真实跨度; 纯增量, 不影响既有 dwg_export 验收测试。
+        if beam.span_m <= 0:
+            beam.span_m = math.hypot(
+                beam.end.x - beam.start.x, beam.end.y - beam.start.y,
+            )
         if beam.layer not in self.doc.layers:
             self.doc.layers.new(beam.layer)
         if "BEAM_LABEL" not in self.doc.layers:

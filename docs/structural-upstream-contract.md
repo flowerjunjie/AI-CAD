@@ -14,13 +14,14 @@
 
 ## 1. 结构元素两族（元素模型，先定字段再定契约）
 
-| 族 | 元素 | dataclass（拟 `src/rules/src/structural/__init__.py`） | 关键字段 | 上游来源 |
+| 族 | 元素 | dataclass（`src/rules/src/structural/__init__.py`） | 关键字段 | 上游来源 |
 |----|------|------|---------|---------|
-| 线段类 | 梁 / 承重墙 | `StructuralBeam` | `id / beam_type(主梁/次梁) / width_mm / depth_mm` | LINE/LWPOLYLINE 图层 |
+| 线段类 | 梁 / 承重墙 | `StructuralBeam` | `id / beam_type(主梁/次梁) / width_mm / depth_mm / span_m` | LINE/LWPOLYLINE 图层 |
 | 块类 | 柱 / 基础 / 节点 | `StructuralColumn` | `id / column_type(框架柱/构造柱) / section_mm(截面短边) / x / y` | INSERT 块 图层 |
 
 - 数值一律 **TBD 占位**，`code_ref` 标 GB 50010（混凝土结构设计规范）/ GB 50011（建筑抗震设计规范）待业务确认。
 - 字段名与 DSL predicate 引用名**必须对齐**（SOP 第 1 步坑：`_evaluate_predicate` 引用元素没有的属性 → `AttributeError`）。
+- **`span_m`（跨度，m）已补齐**：`StructuralBeam` 新增 `span_m: float = 0.0` 字段，让 default.json 里引用 `element.span_m` 的两条跨度类规则（`structural-beam-min-height` / `structural-beam-span-depth-ratio`）真正生效。物理来源见 §2.1。缺省 0.0 保证「上游未给跨度」时两规则因前置 `span_m > 0` 安全放行、不误报（回归安全）。
 
 ## 2. 上游解析契约（两个新接口，加在 `DXFReader`）
 
@@ -32,6 +33,8 @@ def get_structural_segments(self, layer_names=("BEAM","WALL_SHEAR"), include_lay
     # include_layer=True → [{"start","end","layer"}, ...] 供按图层映射 beam_type
 ```
 - 数据流：`get_structural_segments(include_layer=True)` → `structural_extractor` 按图层映射 `beam_type`/`width_mm` → `StructuralBeam`。
+- **跨度来源（`span_m`）**：梁/承重墙是线段，其**跨度 = 线段两端点欧氏距离**（`_span_from_segment`，纯 2D 平面坐标直接取距离）。extractor 在 `extract_structural_beams` 里对每段算出 `span_m` 填进 `StructuralBeam`——上游无需额外标注，几何天然自带。端点非数值时兜 0.0（跨度类规则前置 `span_m>0` 仍放行）。出图侧 `Beam` 元素 + `DXFWriter.add_beam` 同样带 `span_m`：缺省时按 start/end 端点几何补算（`math.hypot`），保证上下游一致。
+- **`structural_beams` 样本键**：`residential_100sqm.json` 的 `structural_beams` 项可显式带 `span_m` 字段（主链路 `_build_structural_beam` 透传给 `StructuralBeam`；出图 `beam` task 也读该字段传给 `CADBeam`）。DXF 抽取路径（e2e）则不依赖样本键，跨度由线段端点算出。
 
 ### 2.2 块类 — 新增底座（ezdxf 已实测，ezdxf 1.4.4）
 ```python

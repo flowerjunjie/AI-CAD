@@ -166,6 +166,7 @@ def _build_structural_beam(raw: dict, idx: int) -> StructuralBeam:
         depth_mm=int(raw.get("depth_mm", 0)),
         x=float(raw.get("x", 0.0)),
         y=float(raw.get("y", 0.0)),
+        span_m=float(raw.get("span_m", 0.0)),
     )
 
 
@@ -468,6 +469,7 @@ def cad_execute_node(state: dict) -> dict:
                         width_mm=int(b.get("width_mm", 300)),
                         depth_mm=int(b.get("depth_mm", 0)),
                         layer=b.get("layer", "BEAM"),
+                        span_m=float(b.get("span_m", 0.0)),
                     ))
                 results.append({"task_id": task_id, "status": "completed",
                                 "count": len(raw_beams)})

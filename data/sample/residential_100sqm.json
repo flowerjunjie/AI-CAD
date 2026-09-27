@@ -41,8 +41,8 @@
     {"id": "p3", "layer": "PIPE_WASTE", "start": [3.0, 2.5], "end": [3.0, 4.0], "diameter_mm": 110, "pipe_type": "waste"}
   ],
   "structural_beams": [
-    {"id": "sb1", "layer": "BEAM", "start": [0.0, 0.0], "end": [4.0, 0.0], "beam_type": "main", "width_mm": 300, "depth_mm": 600},
-    {"id": "sb2", "layer": "BEAM", "start": [0.0, 4.0], "end": [4.0, 4.0], "beam_type": "secondary", "width_mm": 250, "depth_mm": 500}
+    {"id": "sb1", "layer": "BEAM", "start": [0.0, 0.0], "end": [4.0, 0.0], "beam_type": "main", "width_mm": 300, "depth_mm": 600, "span_m": 4.0},
+    {"id": "sb2", "layer": "BEAM", "start": [0.0, 4.0], "end": [4.0, 4.0], "beam_type": "secondary", "width_mm": 250, "depth_mm": 500, "span_m": 4.0}
   ],
   "structural_columns": [
     {"id": "sc1", "layer": "COLUMN", "x": 0.0, "y": 4.0, "column_type": "frame", "section_mm": 400},

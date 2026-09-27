@@ -55,6 +55,21 @@ def _depth_from_annotations(ann, start, end) -> int:
     return 0
 
 
+def _span_from_segment(start, end) -> float:
+    """跨度 = 线段两端点欧氏距离 (m)。
+
+    上游契约 §2.1 物理来源: 梁/承重墙线段 (LINE/LWPOLYLINE 展开段) 的
+    端点距离即该段跨度。端点坐标本就是平面 (m), 直接取 2D 距离。
+    端点非数值 (缺省/占位) 时兜 0.0 → 跨度类规则因 span_m>0 前置安全放行。
+    """
+    try:
+        dx = float(end[0]) - float(start[0])
+        dy = float(end[1]) - float(start[1])
+    except (TypeError, ValueError, IndexError):
+        return 0.0
+    return (dx * dx + dy * dy) ** 0.5
+
+
 def extract_structural_beams(segs, annotations=None) -> list[StructuralBeam]:
     """把结构梁/承重墙线段配对成 StructuralBeam 实例列表。
 
@@ -63,7 +78,8 @@ def extract_structural_beams(segs, annotations=None) -> list[StructuralBeam]:
       - include_layer=True  → {"start","end","layer"} dict 按各自图层映射
     顺序与入参一致。截面深缺省占位 0; 有 annotations (端点/中点 → 截面深 mm)
     才按标注取深, 否则保持占位 0 (镜像 plumbing 高程标注范式, 见
-    _depth_from_annotations)。平面坐标取中点占位。
+    _depth_from_annotations)。平面坐标取中点占位。跨度由线段两端点距离算出
+    (上游契约 §2.1), 填进 span_m 供跨度类规则使用。
     """
     beams = []
     for idx, item in enumerate(segs):
@@ -82,6 +98,7 @@ def extract_structural_beams(segs, annotations=None) -> list[StructuralBeam]:
             depth_mm=_depth_from_annotations(annotations, start, end),
             x=x,
             y=y,
+            span_m=_span_from_segment(start, end),
         ))
     return beams
 
