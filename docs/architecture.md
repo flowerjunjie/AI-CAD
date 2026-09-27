@@ -227,11 +227,12 @@ def window_sill(room: Room) -> bool:
 
 | 模型 | 用途 | 理由 |
 |------|------|------|
-| MiniMax-M2.7 | 主模型 | 中文理解强，API 成本低，数据不出境 |
+| Agnes (agnes-2.0-flash) | **默认主模型** | Anthropic 兼容接口，`run.py` 默认走 Agnes（`AI_CAD_LLM_PROVIDER=agnes`），密钥从 `.env` 读取 |
+| MiniMax-M2.7 | 备用 | 中文理解强，API 成本低，数据不出境 |
 | Kimi k3 | 备用 | 长上下文能力强，适合处理大图纸 |
 | GLM-4 | 规范问答 | 国内模型，对中文规范理解好 |
 
-**切换策略**：通过配置文件指定主模型，支持运行时切换。
+**切换策略**：通过 `AI_CAD_LLM_PROVIDER` 环境变量 / 配置文件指定适配器（Agnes / MiniMax / Kimi / GLM 四选一，统一 `LLMFactory` 接口），默认 Agnes，支持运行时切换。
 
 ### 5.4 RAG 知识库
 
@@ -281,7 +282,7 @@ graph.add_edge("rule_check", "plumbing")
 |--------|---------|--------|
 | ezdxf 读取 DWG | 能解析实体列表，提取墙/门/窗对象 | 后端工程师 |
 | COM 接口调用 | 能通过 Python 控制 AutoCAD 绘制 | CAD 开发 |
-| LLM API 接入 | MiniMax/Kimi 调用延迟 < 3s | 后端工程师 |
+| LLM API 接入 | Agnes(默认)/MiniMax/Kimi/GLM 适配器可切换，调用延迟 < 3s | 后端工程师 |
 | ChromaDB 查询 | 能回答规范条文问答 | 后端工程师 |
 | Electron 空壳 | 能打开并显示基本 UI | 前端工程师 |
 

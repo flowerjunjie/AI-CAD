@@ -2,7 +2,7 @@
 
 > 生成日期: 2026-09-24
 > 项目状态: **四专业接入 + 规则 DSL 引擎 + LLM Agent 全链路跑通** ✅
-> 测试: **171 passed / 3 skipped** · 冒烟脚本秒级验证
+> 测试: **192 passed / 3 skipped** · 冒烟脚本秒级验证
 
 > **本报告的定位**：一份能拿给决策者/投资人看的技术实力材料。
 > 原则——**已实现的如实展示，未实现的明确留占位符 + 写进发展计划，绝不假装有**。
@@ -46,6 +46,7 @@
 ```
 - **人在回路**：`auto_mode` 可开关，非自动模式关键节点暂停等设计师确认。
 - **LLM 真主导**：`run.py --llm` 走 LLM 意图生成方案；`--no-llm` 本地快验。两条路径边界清晰，LLM 是否参与**肉眼可验**（打印"LLM 实例就绪"）。
+- **5 个 LLM 适配器**：Agnes（默认，Anthropic 兼容接口）/ MiniMax / Kimi / GLM，统一 `LLMFactory` 接口（`src/agents/src/tools/llm_adapter.py`）。
 - 实测：喂"三室一厅 100㎡" → LLM 出方案 → 出 DWG + 违规清单 + 户型图渲染。
 
 ### 2.3 CAD 双引擎 + 出图可视化
@@ -59,9 +60,9 @@
 
 ### 2.5 工程质量护栏（可复现性证明）
 
-- **171 passed / 3 skipped** 全量测试；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
+- **192 passed / 3 skipped** 全量测试；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
 - 硬编码规则类 0 改动红线（git diff 校验）；新增测试"全量绿 + 单跑绿"双护栏（防假绿）。
-- **30 个 commit** 的完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交。
+- **40 个 commit** 的完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交。
 
 ---
 
@@ -148,7 +149,7 @@ python run.py --no-llm
 python run.py --llm --render         # 出 preview.png + report.html
 
 # ④ 完整测试（commit 前 / CI）
-python -m pytest tests/ -q           # 171 passed / 3 skipped
+python -m pytest tests/ -q           # 192 passed / 3 skipped
 ```
 
 ---
@@ -166,10 +167,10 @@ python -m pytest tests/ -q           # 171 passed / 3 skipped
 ---
 
 > **给决策者的一句话**：这套系统已证明"多专业接入可扩展"的工程底座是真实跑通的
-> （171 测试 / 四专业 / LLM 全链路出图），剩下的不是"能不能做"，而是"各专业专家
+> （192 测试 / 四专业 / LLM 全链路出图），剩下的不是"能不能做"，而是"各专业专家
 > 把数值和约定填进来"——**架构把复杂度消化了，专业价值留给专业的人**。
 
-*本报告数据截止 2026-09-24 · 全部数字经实跑验证（171 passed / 30 规则类 / 14 DSL / 30 commit）*
+*本报告数据截止 2026-09-26 · 全部数字经实跑验证（192 passed / 30 规则类 / 14 DSL / 40 commit）*
 
 ---
 
@@ -212,4 +213,4 @@ build/dist/ai_cad_gui/
 > 论证落地：M1 卡从「整卡置灰」变成「给排水/电气/暖通点亮 + 结构占位」，
 > 直观证明「专家填值即点亮、零代码」——填一个专业亮一个专业，架构不动。
 
-全量回归：`python -m pytest tests/ -q` → **171 passed / 3 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0）。
+全量回归：`python -m pytest tests/ -q` → **192 passed / 3 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0）。
