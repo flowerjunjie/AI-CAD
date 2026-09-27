@@ -7,6 +7,7 @@
 
 ## 里程碑（一句话一条）
 
+- **Phase 1 · 墙体厚度标注进主链路** — `cad_tools.add_wall_thickness` 对每条墙在 CENTERLINE 图层生成 LWPOLYLINE 双线墙轮廓（含厚度标注），由 `cad_rule_export` 主链路调用，新增 4 个单测。主链路出图实体 12→49，规范违规 2 条命中不变。
 - **20abbde** — 四专业专家团收口：给排水/电气/暖通/结构各自补齐 e2e 测试、上游 attrs 闸、结构阈值回填。
 - **f777285** — 单目录可执行交付物：PyInstaller onedir 打包 + 规范数值「填值即点亮」机制（`confirmed` 字段打通 UI 闭环）。
 - **e9c0694** — GUI 一键入口：`start_gui.bat` 双击即开专业面板，vite 代理根治端口漂移。
@@ -21,7 +22,9 @@
 - Agent 端到端：本地数据接线驱动，规范违规 2 条命中（户内门宽度、门窗碰撞），出 DWG + 报告。
 - 四专业 extractor：`plumbing` / `electrical` / `hvac` / `structural` 全接入（上游 INSERT 底座 + N 专业映射）。
 - LLM 适配器：**5 个**（Agnes 默认 / MiniMax / Kimi / GLM），统一 `LLMFactory` 接口。
-- 全量测试：**192 passed / 3 skipped**（27 个测试文件）。
+- 全量测试：**196 passed / 3 skipped**（28 个测试文件，含 Phase 1 墙体厚度 4 单测）。
+
+> 遗留隐患（不阻塞）：`test_direct_run.py` 护栏测试靠 subprocess 串行直跑 20 个测试文件（约 69s），全量并发时偶发 flaky。已验证单独/连跑全绿，建议后续把护栏改为「只直跑带 `__main__` 的文件 + 单进程」或设超时上限。
 
 ---
 

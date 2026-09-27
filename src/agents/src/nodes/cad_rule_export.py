@@ -69,8 +69,13 @@ def _ensure_dsl_rules_loaded(engine) -> None:
 
 
 def _build_door(raw: dict) -> Door:
+    # type: "entrance"/"bathroom" 保留规范原值（各由专属规则管辖）；
+    # 缺省/"interior" 才兜底成 "interior" 走户内门 0.9m 规则。
+    # 样本 d5 (type=interior, location=厨房) 即由此走户内门规则被检出。
+    rtype = raw.get("type", "interior")
+    room_type = rtype if rtype in ("entrance", "bathroom") else "interior"
     return Door(id=raw.get("id", "d0"), width_m=float(raw.get("width_m", 0.9)),
-                room_type=raw.get("type", "interior"), location=(0, 0))
+                room_type=room_type, location=(0, 0))
 
 
 def _build_window(raw: dict) -> Window:
@@ -372,11 +377,13 @@ def cad_execute_node(state: dict) -> dict:
                 if task_id == "wall-outer":
                     for w in _outer_walls(rooms, thickness):
                         writer.add_wall(w)
+                        writer.add_wall_thickness(w)
                     count = len(_outer_walls(rooms, thickness))
                 else:
                     inner = _inner_walls(rooms, thickness)
                     for w in inner:
                         writer.add_wall(w)
+                        writer.add_wall_thickness(w)
                     count = len(inner)
                 results.append({"task_id": task_id, "status": "completed", "count": count})
 
@@ -416,7 +423,10 @@ def cad_execute_node(state: dict) -> dict:
                     writer.add_dimension(
                         Point(x0, y0), Point(x0, y1), offset=-0.5,
                         text=str(int((y1 - y0) * 1000)))
-                results.append({"task_id": task_id, "status": "completed"})
+                # 洞口标注: 每门/窗 1 条宽度数字 (DIMENSION 层, 在洞口下方)
+                opening_count = writer.add_opening_dimensions(door_pos, window_pos, offset=0.5)
+                results.append({"task_id": task_id, "status": "completed",
+                                "openings": opening_count})
 
         except Exception as e:
             results.append({"task_id": task_id, "status": "error", "error": str(e)})

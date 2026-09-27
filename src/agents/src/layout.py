@@ -115,7 +115,8 @@ def place_doors_on_walls(doors: list[dict], rooms: list[dict]) -> list[dict]:
     - location "A→B" / "A到B"：A、B 共边 → 开在共边中点；不共边 → 退回 A 外侧边中点
     - location "外墙南侧" 等：开在建筑外围外墙中点
     - location 匹配到单个房间：开在该房间外侧边中点
-    返回 [{id, position:(x,y), width, rotation, room_type, location}]
+    返回 [{id, position:(x,y), width, rotation, room_type, location, width_m}]
+    width_m 透传样本门宽，供标注层画「洞口标注」(门宽数字) 复用，不重读样本。
     """
     by_name = {r["name"]: r for r in rooms if r.get("name")}
     placed: list[dict] = []
@@ -165,6 +166,7 @@ def place_doors_on_walls(doors: list[dict], rooms: list[dict]) -> list[dict]:
             "id": did,
             "position": pos,
             "width": width,
+            "width_m": width,
             "rotation": rotation,
             "room_type": room_type,
             "location": loc,

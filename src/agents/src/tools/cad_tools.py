@@ -296,7 +296,7 @@ class DXFWriter:
         self.msp = self.doc.modelspace()
 
     def add_wall(self, wall: Wall) -> None:
-        """添加墙体"""
+        """添加墙体（中心线）"""
         self.msp.add_line(
             (wall.start.x, wall.start.y),
             (wall.end.x, wall.end.y),
@@ -304,6 +304,40 @@ class DXFWriter:
                 "layer": wall.layer,
             }
         )
+
+    def add_wall_thickness(self, wall: Wall) -> None:
+        """添加墙体厚度标注 — 在 CENTERLINE 图层画「双线墙」偏置轮廓。
+
+        端点序列 (LWPOLYLINE, close=True):
+        水平墙 (|dy|<eps): 上偏置 y+th/2 两条端点 → 下偏置 y-th/2 两条端点
+        竖直墙 (|dx|<eps): 右偏置 x+th/2 两条端点 → 左偏置 x-th/2 两条端点
+        斜墙: 跳过 (MVP 仅横平竖直布局)
+        """
+        eps = 1e-9
+        dx = wall.end.x - wall.start.x
+        dy = wall.end.y - wall.start.y
+        t = wall.thickness / 2.0
+        if abs(dy) < eps:  # 水平墙: 偏置沿 y
+            x0, y0 = wall.start.x, wall.start.y
+            x1 = wall.end.x
+            pts = [
+                (x0, y0 + t), (x1, y0 + t),
+                (x0, y0 - t), (x1, y0 - t),
+            ]
+        elif abs(dx) < eps:  # 竖直墙: 偏置沿 x
+            x0, y0 = wall.start.x, wall.start.y
+            y1 = wall.end.y
+            pts = [
+                (x0 + t, y0), (x0 + t, y1),
+                (x0 - t, y0), (x0 - t, y1),
+            ]
+        else:  # 斜墙: MVP 不画
+            return
+        # 显式建图层 — DWG 二进制格式省略空图层 (零实体), 读回后
+        # doc.layers 不含 CENTERLINE, 下游按图层查询会失败
+        if "CENTERLINE" not in self.doc.layers:
+            self.doc.layers.new("CENTERLINE")
+        self.msp.add_lwpolyline(pts, dxfattribs={"layer": "CENTERLINE"})
 
     def add_door(self, door: Door) -> None:
         """添加门（简化表示为弧线）"""
@@ -350,6 +384,50 @@ class DXFWriter:
         mid_y = start.y + offset + 0.1
         if text:
             self.msp.add_text(text, dxfattribs={"height": 0.15, "layer": "DIMENSION"})
+
+    def add_opening_dimensions(
+        self,
+        doors: list[dict],
+        windows: list[dict],
+        offset: float = 0.5,
+    ) -> int:
+        """添加洞口标注（门宽/窗宽数字），返回标注数量。
+
+        洞口标注 = 「门/窗 宽多少米」，画在洞口上方 (offset) 的 DIMENSION 层。
+        - 门: door dict 有 position+width+rotation (来自 place_doors_on_walls)
+              rotation==0 → 竖直墙门 (沿 y 展开); 否则 → 水平墙门 (沿 x 展开)
+              标注画在洞口中点下方 offset, 文字 = f"{width:.1f}"
+        - 窗: window dict 有 start+end (来自 place_windows_on_walls)
+              水平窗 (dy≈0) 标在 (mid_x, y-offset); 竖直窗 标在 (x, mid_y-offset)
+              文字 = f"{跨度:.2f}"
+        文字层: DIMENSION (与 add_dimension 同层, 便于统一开关)
+        """
+        count = 0
+        for d in doors:
+            px, py = d.get("position", (0.0, 0.0))
+            w = float(d.get("width", 0.9))
+            rot = float(d.get("rotation", 0.0))
+            if rot == 0.0:
+                # 竖直墙门 (沿 y 展开): 洞口中点 (px, py), 标注放下方
+                ax, ay = px, py - offset
+            else:
+                # 水平墙门 (沿 x 展开): 洞口中点 (px, py), 标注放下方
+                ax, ay = px, py - offset
+            txt = self.msp.add_text(f"{w:.1f}", dxfattribs={"height": 0.15, "layer": "DIMENSION"})
+            txt.dxf.insert = (ax, ay)
+            count += 1
+        for wn in windows:
+            (x0, y0), (x1, y1) = wn.get("start", (0.0, 0.0)), wn.get("end", (1.0, 0.0))
+            if abs(y0 - y1) < 1e-6:
+                span = abs(x1 - x0)
+                ax, ay = (x0 + x1) / 2, y0 - offset
+            else:
+                span = abs(y1 - y0)
+                ax, ay = x0, (y0 + y1) / 2 - offset
+            txt = self.msp.add_text(f"{span:.2f}", dxfattribs={"height": 0.15, "layer": "DIMENSION"})
+            txt.dxf.insert = (ax, ay)
+            count += 1
+        return count
 
     def save(self, path: str) -> bool:
         """保存 DWG"""
