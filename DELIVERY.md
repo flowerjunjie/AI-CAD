@@ -1,8 +1,8 @@
 # AI-CAD · 技术实力展示与交付报告
 
-> 生成日期: 2026-09-24
-> 项目状态: **四专业接入 + 规则 DSL 引擎 + LLM Agent 全链路跑通** ✅
-> 测试: **192 passed / 3 skipped** · 冒烟脚本秒级验证
+> 生成日期: 2026-09-24 · 最后同步: 2026-09-28（Phase 3 收口）
+> 项目状态: **四专业出图 + 规则 DSL 引擎 + 写回落盘 + LLM Agent 全链路跑通** ✅
+> 测试: **249 passed / 5 skipped / 0 failed** · 冒烟脚本秒级验证
 
 > **本报告的定位**：一份能拿给决策者/投资人看的技术实力材料。
 > 原则——**已实现的如实展示，未实现的明确留占位符 + 写进发展计划，绝不假装有**。
@@ -25,13 +25,13 @@
 
 这是系统最硬的"兼容并蓄 + 可扩展"证据。一个引擎底座，四个专业照同一套范式接入：
 
-| 专业 | 元素模型 | DSL 规则 | 上游 DWG 解析 | 状态 |
-|------|---------|---------|--------------|------|
-| 建筑（本尊） | 30 条硬编码规则类（residential/fire_safety/accessibility） | — | 墙/门窗几何 | ✅ 已接 |
-| 给排水 | `PlumbingPipe` | 3 条 `plumbing-*` | `get_plumbing_segments`（线段） | ✅ 已接 |
-| 电气 | `ElectricalOutlet`/`ElectricalSwitch` | 3 条 `electrical-*` | `get_electrical_points`（INSERT 块） | ✅ 已接 |
-| 暖通 | `HvacDuct`/`HvacUnit`/`HvacGrille` | 3 条 `hvac-*` | `get_hvac_points`（INSERT 块） | ✅ 已接 |
-| 结构 | `StructuralBeam`/`StructuralColumn` | 2 条 `structural-*` | `get_structural_segments`/`blocks` | ✅ 已接 |
+| 专业 | 元素模型 | DSL 规则 | 上游 DWG 解析 | 出图 | 状态 |
+|------|---------|---------|--------------|------|------|
+| 建筑（本尊） | 30 条硬编码规则类（residential/fire_safety/accessibility） | — | 墙/门窗几何 | ✅ 已出图（CENTERLINE 双线墙 + OPENING_TAG 门窗编号） | ✅ 已接 |
+| 给排水 | `PlumbingPipe` | 3 条 `plumbing-*` | `get_plumbing_segments`（线段） | ✅ 已出图（`add_pipe`，PIPE 图层） | ✅ 已接 |
+| 电气 | `ElectricalOutlet`/`ElectricalSwitch` | 3 条 `electrical-*` | `get_electrical_points`（INSERT 块） | ✅ 已出图（`add_outlet`/`add_switch`，ELEC_OUTLET/ELEC_SWITCH 图层） | ✅ 已接 |
+| 暖通 | `HvacDuct`/`HvacUnit`/`HvacGrille` | 3 条 `hvac-*` | `get_hvac_points`（INSERT 块） | ✅ 已出图（`add_hvac_*`，HVAC_* 图层） | ✅ 已接 |
+| 结构 | `StructuralBeam`/`StructuralColumn` | 2 条 `structural-*` | `get_structural_segments`/`blocks` | ✅ 已出图（`add_beam`/`add_column`，BEAM/COLUMN 图层） | ✅ 已接 |
 
 **可扩展性的技术底座**（这是"兼容并蓄"的机制证明，不是口号）：
 - **开放封闭范式**：新专业一律走 `default.json` 的 DSL 规则（`dsl_only:true`），**不新建硬编码规则类**，主链路 `_ELEMENT_CHECKS` 分发表只加一项、循环体 0 改动。
@@ -60,9 +60,9 @@
 
 ### 2.5 工程质量护栏（可复现性证明）
 
-- **192 passed / 3 skipped** 全量测试；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
+- **249 passed / 5 skipped / 0 failed** 全量测试（36 个测试文件）；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
 - 硬编码规则类 0 改动红线（git diff 校验）；新增测试"全量绿 + 单跑绿"双护栏（防假绿）。
-- **40 个 commit** 的完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交。
+- **51 个 commit** 的完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交。
 
 ---
 
@@ -73,12 +73,12 @@
 
 ### 3.1 规范数值回填（需要各专业专家）
 
-| 专业 | 占位项 | 需要谁确认 | 参考规范 |
-|------|--------|-----------|---------|
-| 给排水 | 管径/坡度/检查井间距阈值 | 给排水专家 | GB 50015（数值 TBD） |
-| 电气 | 插座/开关安装高度区间、接地 | 电气专家 | GB 50096 / GB 50303（TBD） |
-| 暖通 | 风管风速区间、风口高度 | 暖通专家 | GB 50736 / GB 50189（TBD） |
-| 结构 | 梁深宽比、柱最小截面 | 结构专家 | GB 50010 / GB 50011（TBD） |
+| 专业 | 占位项 | 需要谁确认 | 参考规范 | 状态 |
+|------|--------|-----------|---------|------|
+| 给排水 | 管径 ✓ / 坡度区间 ✓ / 检查井间距 ✓ | 给排水专家 | GB 50015 | **已回填**（坡度区间/检查井间距为 Phase 3 回填，confidence 分别 low / medium，见 `default.json` 的 `confirmed`/`confidence` 字段） |
+| 电气 | 插座/开关安装高度区间 ✓、接地 | 电气专家 | GB 50096 / GB 50303 | 开关高度已回填（high）；插座高度/接地仍占位 |
+| 暖通 | 风管风速区间 ✓、风口高度 | 暖通专家 | GB 50736 / GB 50189 | 风速上限已放宽（high）；风口高度/室外机安装仍占位 |
+| 结构 | 梁深宽比 ✓、柱最小截面 ✓ | 结构专家 | GB 50010 / GB 50011 | 已回填（梁高宽比 high / 柱截面 medium，专家通行值） |
 
 > 机制已通（规则能命中/放行/参数覆盖），**只差真实规范数值**。专家确认后填 `default.json` 的 `param_defaults` 即可，零代码改动。
 
@@ -87,10 +87,10 @@
 - 结构/电气/暖通的"图层名 + INSERT 块名 → 元素种类"映射当前全 TBD 占位（`_LAYER`/`_BLOCK` dict）。
 - **各院 DWG 画法不统一**，需业务侧给"点位在哪些图层、用什么块表示"的约定，填映射 dict 即可。
 
-### 3.3 出图深化（当前偏简，属能力占位）
+### 3.3 出图深化（Phase 3 已出图基础图元，属能力占位）
 
-- 现状：Agent 出图以**几何校验为主**（线/门窗/标注），四专业的管/线/柱尚未在图上画出真实图元。
-- 占位：各专业"从元素模型 → DWG 图元"的画法（线型/填充/图层着色）待各专业制图规范落地。
+- **现状（Phase 3 收口）**：Agent 出图已接入 5 专业基础图元 —— 建筑（CENTERLINE 双线墙 + OPENING_TAG 门窗编号）、给排水（`add_pipe`，PIPE 图层）、结构（`add_beam`/`add_column`，BEAM/COLUMN 图层）、电气（`add_outlet`/`add_switch`，ELEC_OUTLET/ELEC_SWITCH 图层）、暖通（`add_hvac_*`，HVAC_* 图层），`run.py --no-llm` 全链路实测出图成功。
+- 占位：各专业"从元素模型 → 精细 DWG 图元"的画法（线型/填充/图层着色）仍偏简，待各专业制图规范落地。
 
 ### 3.4 LLM 主导深度（当前到 intent 节点）
 
@@ -103,13 +103,14 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  已达成                                                        │
-│  Phase 0-2  技术预研 → 建筑 MVP → 规则 DSL 化                 │
-│  Phase 3-6  给排水 → 电气 → 暖通 → 结构 (四专业范式吃到饱)    │
+│  Phase 0-1 技术预研 → 建筑 MVP (墙厚/门窗/人在回路)           │
+│  Phase 2   规则 DSL 化 + 编辑器 + 写回落盘                    │
+│  Phase 3   给排水 → 电气 → 暖通 → 结构 (四专业出图 + 条文回填)│
 ├─────────────────────────────────────────────────────────────────┤
 │  下一步（按"可扩展底座"逐个点亮，不需要重写架构）              │
-│  M1  规范数值回填      ← 各专业专家确认 TBD 阈值              │
+│  M1  规范数值终确认 ← 各专业专家复核 TBD 阈值 (已部分回填)    │
 │  M2  DWG 图层约定对齐  ← 各院制图规范                        │
-│  M3  出图深化          ← 各专业"元素→图元"画法               │
+│  M3  出图深化          ← 各专业"元素→精细图元"画法           │
 │  M4  多专业碰撞检测    ← 管线穿梁/插座撞梁 自动检测          │
 │  M5  团队协作          ← 多设计师 + 改动冲突检测 + 权限       │
 └─────────────────────────────────────────────────────────────────┘
@@ -122,7 +123,7 @@
 | 给排水专家 | M1 给排水数值 + M3 管道画法 | 机制已通，数值已回填（medium 待终确认） |
 | 电气专家 | M1 电气数值 + M3 点位画法 | 机制已通，开关高度已回填（high） |
 | 暖通专家 | M1 暖通数值 + M3 风口画法 | 机制已通，风速上限已放宽（high） |
-| 结构专家 | M1 结构数值 + M3 梁柱画法 | 机制已通，待值（M1 卡对应专业仍置灰） |
+| 结构专家 | M1 结构数值 + M3 梁柱画法 | 机制已通，梁/柱截面已回填（high/medium，M1 卡结构已点亮） |
 | 制图/出图规范 | M3 各专业图元标准 | 占位 |
 | 团队/权限 | M5 多设计师协作 | 未启动 |
 
@@ -149,7 +150,7 @@ python run.py --no-llm
 python run.py --llm --render         # 出 preview.png + report.html
 
 # ④ 完整测试（commit 前 / CI）
-python -m pytest tests/ -q           # 192 passed / 3 skipped
+python -m pytest tests/ -q           # 249 passed / 5 skipped / 0 failed
 ```
 
 ---
@@ -167,10 +168,10 @@ python -m pytest tests/ -q           # 192 passed / 3 skipped
 ---
 
 > **给决策者的一句话**：这套系统已证明"多专业接入可扩展"的工程底座是真实跑通的
-> （192 测试 / 四专业 / LLM 全链路出图），剩下的不是"能不能做"，而是"各专业专家
+> （249 测试 / 四专业出图 / LLM 全链路出图），剩下的不是"能不能做"，而是"各专业专家
 > 把数值和约定填进来"——**架构把复杂度消化了，专业价值留给专业的人**。
 
-*本报告数据截止 2026-09-26 · 全部数字经实跑验证（192 passed / 30 规则类 / 14 DSL / 40 commit）*
+*本报告数据截止 2026-09-28 · 全部数字经实跑验证（249 passed / 30 规则类 / 14 DSL / 51 commit）*
 
 ---
 
@@ -213,4 +214,4 @@ build/dist/ai_cad_gui/
 > 论证落地：M1 卡从「整卡置灰」变成「给排水/电气/暖通点亮 + 结构占位」，
 > 直观证明「专家填值即点亮、零代码」——填一个专业亮一个专业，架构不动。
 
-全量回归：`python -m pytest tests/ -q` → **192 passed / 3 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0）。
+全量回归：`python -m pytest tests/ -q` → **249 passed / 5 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0）。

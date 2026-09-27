@@ -29,7 +29,7 @@
 | api.md | API 接口设计 | Phase 0 | ⏳ 待创建 |
 | decisions.md | 架构决策记录 (ADR) | Phase 0 | ✅ 已有 — [decisions.md](decisions.md)（ADR-001~004） |
 | user-stories.md | 用户故事与用例 | Phase 1 | ⏳ 待创建 |
-| test-plan.md | 测试计划 | Phase 1 | ✅ 已有 — 测试实体在 [`tests/`](../tests/)（27 个测试文件：`tests/unit/` 23 + `tests/integration/` 4，192 passed / 3 skipped） |
+| test-plan.md | 测试计划 | Phase 1 | ✅ 已有 — 测试实体在 [`tests/`](../tests/)（36 个测试文件：`tests/unit/` 32 + `tests/integration/` 4，249 passed / 5 skipped） |
 
 ---
 
