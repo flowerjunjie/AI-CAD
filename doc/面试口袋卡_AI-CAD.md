@@ -10,12 +10,13 @@
 
 | 项 | 数值 | 出处 |
 |---|---|---|
+| 全量测试 | **237 passed / 5 skipped / 0 failed**（34 个测试文件） | `pytest tests/` 实测 |
 | AI-CAD 规范规则 | **30 条**（ERROR 21 / WARN 6 / INFO 3） | `run.py --no-llm` 实测 |
-| 户型样本 | 100 ㎡，7 功能区，7 门 5 窗 → **12 个 CAD 任务** | 同上 |
+| 主链路出图任务 | **13 个**（建筑 7 + 门窗编号 + 给排水 pipe） | 同上 |
 | 端到端检出违规 | **2 条**（门宽 + 门窗碰撞） | 同上 |
-| 测试文件 | **26 个** | `tests/` |
+| 四专业 extractor | 结构 / 给排水 / 暖通 / 电气 全接入 | `src/agents/src/tools/` |
 | LLM 适配器 | **5 个**（Agnes 默认 / MiniMax / Kimi / GLM） | `llm_adapter.py` |
-| 四专业 extractor | 结构 / 给排水 / 暖通 / 电气 | `src/agents/src/tools/` |
+| **已跑通的工程能力** | 墙体厚度双线墙 · 门窗编号 M/C · 给排水出图 · 人在回路(Agent 暂停+确认 API) · 规则 DSL 编辑器+写回落盘 | Phase 1/2/3 已收口 |
 | RuoYi-Vue_ICU | 生产就绪 **v3.0.0**，20+ 业务模块 | 项目 README |
 | 产科 ICU 后端 | **15 个微服务** + Go 设备网关 | W13B |
 
