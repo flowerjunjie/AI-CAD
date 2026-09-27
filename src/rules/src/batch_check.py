@@ -63,8 +63,46 @@ def run_batch_check(
     from .engine import get_engine  # 延迟 import: 全局引擎在 import 时构建
 
     eng = engine if engine is not None else get_engine()
-    violations = eng.check(elements, rule_ids)
+    violations = _safe_check(eng, elements, rule_ids)
     return _aggregate(violations)
+
+
+def _safe_check(
+    eng: RuleEngine, elements: list[Any], rule_ids: list[str] | None
+) -> list[RuleViolation]:
+    """跑 engine.check 但隔离单元素 × 单规则的 AttributeError。
+
+    34 个硬编码 @register_rule 类没有类型门禁 (与 DSL ParametricRule 的
+    _matches_type 不同) — 硬编码规则命中没有该属性的元素会 AttributeError
+    崩整条批量链。编排层兜住：某元素缺某规则所需属性 → 跳过该元素×该规则,
+    不静默吞掉违规, 也让批量扫描不因一条规则炸掉全部。规则类零改动。
+
+    缺属性跳过只在 verbose 时打 warning, 避免同一缺属性在多元素上刷屏。
+    """
+    target = (
+        [eng.get_rule(tid) for tid in rule_ids] if rule_ids else eng.list_rules()
+    )
+    out: list[RuleViolation] = []
+    import logging
+    logger = logging.getLogger(__name__)
+    seen_missing: set[tuple[str, str, str]] = set()
+    for element in elements:
+        for rule in target:
+            if rule is None:
+                continue
+            try:
+                out.extend(rule.check(element).violations)
+            except AttributeError as e:
+                key = (rule.rule_id, type(element).__name__,
+                       getattr(e, "arg", ""))
+                if key not in seen_missing:
+                    seen_missing.add(key)
+                    logger.warning(
+                        "规则 %s 在 %s 上缺属性 %s, 跳过: %s",
+                        rule.rule_id, type(element).__name__,
+                        getattr(e, "arg", None), e,
+                    )
+    return out
 
 
 def _aggregate(violations: list[RuleViolation]) -> BatchCheckReport:

@@ -41,6 +41,43 @@ export interface RAGResult {
   category: string;
 }
 
+// ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
+
+/** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
+export interface DslRuleItem {
+  rule_id: string;
+  name: string;
+  code_ref: string;
+  severity: string; // error / warning / info
+  element_types: string[];
+  predicate: string;
+  params: Record<string, unknown>;
+  param_defaults: Record<string, unknown>;
+  description_template?: string;
+  suggested_fix_template?: string;
+  enabled: boolean;
+  dsl_only?: boolean;
+  spec_source?: string;
+  confidence?: string;
+  confirmed?: boolean;
+  confirm_note?: string;
+}
+
+/** validate_dsl_json 单条错误 (对齐 DslJsonError + 桥端点补的 rule_id)。 */
+export interface DslValidationError {
+  path: string;          // "rules[2].predicate" 或文件级 "<top>"
+  message: string;
+  rule_index: number;    // -1 = 文件级错误
+  rule_id?: string;
+}
+
+/** POST /api/rules/validate 响应 (bridge.py B2 段)。 */
+export interface DslValidateResp {
+  valid: boolean;
+  error_count: number;
+  errors: DslValidationError[];
+}
+
 interface EngineState {
   engineConnected: boolean;
   phase: string;

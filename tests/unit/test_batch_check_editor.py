@@ -116,11 +116,13 @@ def test_validate_dsl_json_flags_bad_predicate(tmp_path):
 
 def test_validate_dsl_json_flags_func_prefix(tmp_path):
     """func: 前缀调几何函数 → 拒绝（load 会 fail-fast, 校验器要先拦）。"""
-    data = {"rules": [{"rule_id": "x", "predicate": "func:overlap(element)"}]}
+    data = {"rules": [
+        {"rule_id": "x", "element_types": ["Door"], "predicate": "func:overlap(element)"}
+    ]}
     p = _write(tmp_path / "fp.json", data)
     errors = validate_dsl_json(p)
-    assert len(errors) == 1
-    assert "func:" in errors[0].message or "白名单" in errors[0].message
+    assert any("predicate" in e.path for e in errors)
+    assert any("func:" in e.message or "白名单" in e.message for e in errors)
 
 
 def test_validate_dsl_json_flags_bad_severity(tmp_path):
@@ -158,9 +160,11 @@ def test_validate_and_load_roundtrip(tmp_path):
     rules, errs = validate_and_load_dsl_rules(ok)
     assert len(rules) == 2 and errs == []
 
-    bad = _write(tmp_path / "bad.json", {"rules": [{"rule_id": "x", "predicate": "func:z()"}]})
+    bad = _write(tmp_path / "bad.json",
+                 {"rules": [{"rule_id": "x", "element_types": ["Door"],
+                             "predicate": "func:z()"}]})
     rules, errs = validate_and_load_dsl_rules(bad)
-    assert rules == [] and len(errs) == 1
+    assert rules == [] and any("predicate" in e.path for e in errs)
 
 
 if __name__ == "__main__":

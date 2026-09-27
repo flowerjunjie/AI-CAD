@@ -1,0 +1,244 @@
+import React, { useEffect, useState } from 'react';
+import { useRuleEditorStore, isRuleModified } from './useRuleEditorStore';
+import { useEngineStore } from './useEngineStore';
+import { loadDslRules, validateDslRules } from './engineApi';
+import { localCheckAllRules } from './localPredicateCheck';
+import type { DslRuleItem } from './useEngineStore';
+
+/**
+ * 规则 DSL 编辑器面板 (Phase 2) — 设计器不写代码改 default.json。
+ * 布局: 左 = 规则列表 (severity/enabled/改没改), 右 = 选中规则详情 (阈值输入 + 开关 + severity)。
+ * 校验: 改完点「校验」→ 本地预检 (谓词键名) + 后端 /api/rules/validate (全白名单),
+ * 通过 → 可应用; 不过 → 红字逐条定位 (哪条规则哪个字段)。
+ */
+function RuleEditorPanel() {
+  const { rules, originalRules, loaded, selectedRuleId, validateStatus, backendErrors, localIssueRuleIds } =
+    useRuleEditorStore();
+  const { engineConnected } = useEngineStore();
+  const store = useRuleEditorStore;
+
+  useEffect(() => {
+    if (!loaded && engineConnected) {
+      loadDslRules()
+        .then((rs) => {
+          store.getState().setRules(rs);
+          if (rs.length > 0) store.getState().selectRule(rs[0].rule_id);
+        })
+        .catch(() => store.getState().setLoaded(true));
+    }
+  }, [loaded, engineConnected]);
+
+  const selected: DslRuleItem | null = rules.find((r) => r.rule_id === selectedRuleId) || null;
+
+  return (
+    <div className="dsl-editor">
+      <div className="dsl-editor-toolbar">
+        <span className={`dsl-editor-status status-${validateStatus}`}>
+          {validateStatusLabel(validateStatus, backendErrors.length)}
+        </span>
+        <button
+          className="btn-primary btn-sm"
+          onClick={() => runValidation(store, rules)}
+          disabled={rules.length === 0 || !engineConnected}
+        >
+          校验
+        </button>
+        <button
+          className="btn-sm dsl-editor-reset"
+          onClick={() => store.getState().reset()}
+          disabled={isAnyModified(originalRules, rules)}
+        >
+          重置
+        </button>
+      </div>
+
+      {!engineConnected ? (
+        <div className="empty-hint">引擎未连接，无法拉取 DSL 规则 (启动 start_gui.bat)</div>
+      ) : rules.length === 0 ? (
+        <div className="empty-hint">DSL 规则列表为空 (default.json 无 rules)</div>
+      ) : (
+        <div className="dsl-editor-body">
+          <div className="dsl-editor-list">
+            {rules.map((r) => {
+              const modified = isRuleModified(originalRules, rules, r.rule_id);
+              const hasIssue = localIssueRuleIds.includes(r.rule_id) ||
+                backendErrors.some((e) => e.rule_id === r.rule_id);
+              return (
+                <div
+                  key={r.rule_id}
+                  className={`dsl-rule-row ${selected?.rule_id === r.rule_id ? 'selected' : ''} ${modified ? 'modified' : ''}`}
+                  onClick={() => store.getState().selectRule(r.rule_id)}
+                >
+                  <div className="dsl-rule-row-main">
+                    <span className={`rule-sev sev-${r.severity}`}>{r.severity}</span>
+                    <span className="dsl-rule-name">{r.name}</span>
+                    {hasIssue && <span className="dsl-issue-dot" title="该规则有校验/预检问题" />}
+                  </div>
+                  <div className="dsl-rule-row-sub">
+                    <span className="rule-code">{r.rule_id}</span>
+                    {modified && <span className="dsl-mod-tag">已改</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {selected && (
+            <div className="dsl-editor-detail">
+              <div className="dsl-detail-head">
+                <span className="dsl-detail-name">{selected.name}</span>
+                <label className="chk">
+                  <input
+                    type="checkbox"
+                    checked={selected.enabled}
+                    onChange={(e) => store.getState().setEnabled(selected.rule_id, e.target.checked)}
+                  />
+                  启用
+                </label>
+              </div>
+              <div className="dsl-detail-code">{selected.code_ref}</div>
+
+              <label className="dsl-detail-label">severity</label>
+              <select
+                className="dsl-input dsl-input-sev"
+                value={selected.severity}
+                onChange={(e) => store.getState().setSeverity(selected.rule_id, e.target.value)}
+              >
+                <option value="error">error</option>
+                <option value="warning">warning</option>
+                <option value="info">info</option>
+              </select>
+
+              <label className="dsl-detail-label">predicate (只读 · 写白名单表达式)</label>
+              <div className="dsl-predicate">{selected.predicate}</div>
+
+              <label className="dsl-detail-label">params · 阈值 (不写代码只改值)</label>
+              <ParamsEditor rule={selected} />
+
+              <ParamIssues rule={selected} />
+              <BackendErrorsForRule ruleId={selected.rule_id} errors={backendErrors} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function validateStatusLabel(s: string, n: number): string {
+  switch (s) {
+    case 'idle': return '未校验';
+    case 'local-only': return '本地预检命中 (见下方红字)';
+    case 'validated-ok': return '校验通过 · 可应用';
+    case 'validated-bad': return `校验未通过 · ${n} 处`;
+    case 'unreachable': return '无法连接后端校验端点';
+    default: return '';
+  }
+}
+
+function isAnyModified(originals: DslRuleItem[], current: DslRuleItem[]): boolean {
+  return current.some((r) => isRuleModified(originals, current, r.rule_id));
+}
+
+/** 跑校验: 先本地预检 (谓词键名), 有命中就标黄; 再打后端全量校验 → 红字逐条。 */
+async function runValidation(store: typeof useRuleEditorStore, rules: DslRuleItem[]) {
+  const s = store.getState();
+  const localIssues = localCheckAllRules(rules);
+  s.setLocalIssueRuleIds([...localIssues.keys()]);
+  s.setValidateStatus(localIssues.size > 0 ? 'local-only' : 'idle');
+
+  const resp = await validateDslRules(rules);
+  if (!resp) {
+    store.getState().setValidateStatus('unreachable');
+    return;
+  }
+  store.getState().setBackendErrors(resp.errors);
+  store.getState().setValidateStatus(resp.valid ? 'validated-ok' : 'validated-bad');
+  if (resp.valid) store.getState().setLocalIssueRuleIds([]);
+}
+
+function ParamsEditor({ rule }: { rule: DslRuleItem }) {
+  const s = useRuleEditorStore;
+  const [newKey, setNewKey] = useState('');
+  const [newVal, setNewVal] = useState('');
+  const keys = Object.keys(rule.params);
+
+  return (
+    <div className="dsl-params">
+      {keys.length === 0 && <div className="dsl-empty-params">该规则无阈值 params (纯逻辑谓词)</div>}
+      {keys.map((k) => (
+        <div key={k} className="dsl-param-row">
+          <input
+            className="dsl-input dsl-input-key"
+            value={k}
+            readOnly
+          />
+          <input
+            className="dsl-input dsl-input-val"
+            type="number"
+            step="any"
+            value={String(rule.params[k])}
+            onChange={(e) => s.getState().updateParam(rule.rule_id, k, parseNumeric(e.target.value))}
+          />
+          <button
+            className="btn-sm dsl-param-del"
+            onClick={() => s.getState().removeParam(rule.rule_id, k)}
+            title="移除此阈值 (predicate 仍引用它会报「白名单外标识符」)"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <div className="dsl-param-row dsl-param-add">
+        <input className="dsl-input dsl-input-key" placeholder="新键名" value={newKey} onChange={(e) => setNewKey(e.target.value)} />
+        <input className="dsl-input dsl-input-val" placeholder="值" value={newVal} onChange={(e) => setNewVal(e.target.value)} />
+        <button
+          className="btn-sm"
+          disabled={!newKey.trim()}
+          onClick={() => {
+            s.getState().addParam(rule.rule_id, newKey.trim(), parseNumeric(newVal));
+            setNewKey('');
+            setNewVal('');
+          }}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function parseNumeric(v: string): number | string {
+  if (v === '' || Number.isNaN(Number(v))) return v; // 留字符串 (非数值型阈值)
+  return Number(v);
+}
+
+/** 该规则的本地预检问题 (黄字) — 在 ParamsEditor 下方实时提示。 */
+function ParamIssues({ rule }: { rule: DslRuleItem }) {
+  const issues = localCheckAllRules([rule]).get(rule.rule_id);
+  if (!issues || issues.length === 0) return null;
+  return (
+    <div className="dsl-local-issues">
+      {issues.map((m, i) => (
+        <div key={i} className="dsl-issue local">{m}</div>
+      ))}
+    </div>
+  );
+}
+
+/** 该规则的后端校验错误 (红字) — 校验未通过时逐条定位到字段。 */
+function BackendErrorsForRule({ ruleId, errors }: { ruleId: string; errors: { path: string; message: string; rule_id?: string }[] }) {
+  const mine = errors.filter((e) => e.rule_id === ruleId);
+  if (mine.length === 0) return null;
+  return (
+    <div className="dsl-backend-errors">
+      {mine.map((e, i) => (
+        <div key={i} className="dsl-issue backend">
+          <span className="dsl-issue-path">{e.path}</span> {e.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default RuleEditorPanel;

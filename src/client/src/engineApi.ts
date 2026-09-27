@@ -1,4 +1,5 @@
-import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult } from './useEngineStore';
+import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult,
+        type DslRuleItem, type DslValidateResp } from './useEngineStore';
 
 // 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
 // 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
@@ -66,6 +67,27 @@ export async function runRagSearch(query: string) {
   type RAGResp = { query: string; results: RAGResult[] };
   const resp = await postJson<RAGResp, { query: string; top_k: number }>('/api/rag/search', { query, top_k: 5 });
   store.setRagResults(query, resp?.results || []);
+}
+
+// ─── 规则 DSL 编辑器面板（Phase 2）—— 调用桥端点 (src/gui/bridge.py B2 段) ───
+// GET /api/rules/dsl: 拉 default.json 原文 (含 predicate/params/param_defaults/enabled)。
+// POST /api/rules/validate: 把改后的 JSON 走 validate_dsl_json (与 load fail-fast 同判据)。
+// 端点已实现 (bridge.py B2 段), 前端直连, 无需 TODO。
+
+export async function loadDslRules(): Promise<DslRuleItem[]> {
+  type DslJson = { rules: DslRuleItem[] };
+  const data = await getJson<DslJson>('/api/rules/dsl');
+  return data?.rules || [];
+}
+
+export async function validateDslRules(rules: DslRuleItem[]): Promise<DslValidateResp | null> {
+  // 契约: 桥端点收整份 {'rules': [...]} (bridge.py DslRulesValidateReq.rules 字段)。
+  // 响应 {valid, error_count, errors: [{path, message, rule_index, rule_id?}]}。
+  const resp = await postJson<DslValidateResp, { rules: DslRuleItem[] }>(
+    '/api/rules/validate',
+    { rules },
+  );
+  return resp;
 }
 
 export { API };

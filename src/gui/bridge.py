@@ -321,6 +321,83 @@ def api_preview(sample: str = "residential_100sqm.json") -> Response:
     return Response(content=png, media_type="image/png")
 
 
+# ─── B2 规则 DSL 编辑域段: 供「规则编辑器面板」使用 (Phase 2) ────────
+# 设计器不写代码改 default.json: GET 拿 DSL 原文, POST /api/rules/validate
+# 把改后的 JSON 走 validate_dsl_json (与 DslRuleProvider.load fail-fast 同判据)。
+# 只读 + 校验, 不落盘 (写 default.json 是设计器人工确认后手动/后续端点的事)。
+
+from pydantic import BaseModel
+
+
+class DslRulesValidateReq(BaseModel):
+    """POST /api/rules/validate 入参: 整份 DSL 规则 JSON (顶层须含 'rules' 数组)。"""
+
+    rules: list
+    # 可选: 直接传 {'rules': [...]} 也可 — 前端两种都收, 以 rules 为准
+
+
+def _dsl_default_path() -> str:
+    return os.path.join(_project_root(), "src", "rules", "rules", "default.json")
+
+
+@app.get("/api/rules/dsl")
+def api_rules_dsl() -> dict:
+    """default.json 原文 (DSL 规则全字段: predicate/params/param_defaults/enabled...)。
+    规则编辑器面板的数据源。文件不可读 → 404 + 诚实 detail, 不造假。"""
+    p = _dsl_default_path()
+    if not os.path.exists(p):
+        raise HTTPException(404, f"DSL 规则文件不存在: {p}")
+    with open(p, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+@app.post("/api/rules/validate")
+def api_rules_validate(req: DslRulesValidateReq) -> dict:
+    """校验设计器改完的 DSL 规则 JSON (schema + predicate 白名单)。
+
+    复用 editor_validate.validate_dsl_json 的判据 (与 DslRuleProvider.load
+    fail-fast 严格一致): validator 说合法 → load 必不炸。
+    响应: {valid, error_count, errors: [{path, message, rule_index, rule_id?}]}
+      - 文件级错误 (rule_index == -1): path 形如 "<top>" — 非 DSL 文档/JSON 语法错
+      - 规则级错误: path 形如 "rules[2].predicate", 带 rule_id 便于前端定位
+    """
+    import json
+    import tempfile
+    from dataclasses import asdict
+    from src.rules.src.editor_validate import validate_dsl_json
+
+    payload = {"rules": req.rules}
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", suffix=".json", delete=False
+    ) as fh:
+        json.dump(payload, fh, ensure_ascii=False)
+        tmp = fh.name
+    try:
+        errors = validate_dsl_json(tmp)
+        err_dicts = [asdict(e) for e in errors]
+    finally:
+        os.unlink(tmp)
+
+    # 给规则级错误补 rule_id (前端按 rule_id 定位高亮, 不靠 index 错位)
+    try:
+        rules_list = req.rules if isinstance(req.rules, list) else []
+        for ed in err_dicts:
+            if ed["rule_index"] >= 0 and ed["rule_index"] < len(rules_list):
+                r = rules_list[ed["rule_index"]]
+                if isinstance(r, dict):
+                    ed["rule_id"] = r.get("rule_id") or r.get("id") or ""
+            else:
+                ed.setdefault("rule_id", "")
+    except Exception:
+        pass  # 补 rule_id 失败不影响 errors 主体
+
+    return {
+        "valid": len(errors) == 0,
+        "error_count": len(errors),
+        "errors": err_dicts,
+    }
+
+
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
 from fastapi.responses import HTMLResponse

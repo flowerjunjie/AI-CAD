@@ -413,7 +413,98 @@ body {
 .ph-desc { font-size: 11px; color: #888; margin-bottom: 4px; }
 .ph-domain { font-size: 10px; color: #555; }
 
-/* ── M1 规范数值回填 · 按专业点亮 (专家填值即点亮) ── */
+/* ============================================================
+   规则 DSL 编辑器面板 (Phase 2) — 设计器不写代码改 default.json
+   ============================================================ */
+
+/* 面板根: 占满 rules-panel 右区, 纵向工具条 + 列表/详情两栏 */
+.dsl-editor { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+
+.dsl-editor-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: #16213e; border-radius: 6px; flex-shrink: 0;
+}
+.dsl-editor-status { font-size: 11px; font-weight: 600; flex: 1; }
+.dsl-editor-status.status-idle { color: #555; }
+.dsl-editor-status.status-local-only { color: #f0b429; }
+.dsl-editor-status.status-validated-ok { color: #2ecc71; }
+.dsl-editor-status.status-validated-bad { color: #e74c3c; }
+.dsl-editor-status.status-unreachable { color: #666; }
+
+.dsl-editor-reset {
+  background: #0f0f1a; border: 1px solid #0f3460; color: #888;
+}
+.dsl-editor-reset:hover:not(:disabled) { color: #eee; border-color: #e94560; }
+.dsl-editor-reset:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 列表 + 详情两栏 */
+.dsl-editor-body {
+  display: flex; flex: 1; min-height: 0; overflow: hidden;
+}
+.dsl-editor-list { flex: 1; overflow-y: auto; min-width: 0; }
+.dsl-editor-detail {
+  flex: 1; overflow-y: auto; min-width: 0;
+  background: #0f0f1a; border-radius: 8px; padding: 12px;
+  border: 1px solid #0f3460;
+}
+
+/* 左侧规则行 (复用 rule-sev / rule-code 配色) */
+.dsl-rule-row {
+  padding: 6px 10px; margin-bottom: 6px; cursor: pointer;
+  background: #16213e; border-radius: 6px; border: 1px solid transparent;
+}
+.dsl-rule-row.selected { border-color: #e94560; }
+.dsl-rule-row.modified { background: #1a2036; }
+.dsl-rule-row-main { display: flex; align-items: center; gap: 6px; }
+.dsl-rule-name { font-size: 11px; color: #ddd; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsl-issue-dot { width: 6px; height: 6px; border-radius: 50%; background: #e74c3c; flex-shrink: 0; }
+.dsl-rule-row-sub { display: flex; justify-content: space-between; margin-top: 3px; gap: 6px; }
+.dsl-mod-tag { font-size: 9px; color: #f0b429; background: #0f0f1a; padding: 0 5px; border-radius: 3px; }
+
+/* 右侧详情 */
+.dsl-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dsl-detail-name { font-size: 13px; font-weight: 600; color: #eee; }
+.dsl-detail-code { font-size: 10px; color: #555; margin-bottom: 10px; }
+.dsl-detail-label { display: block; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 4px; }
+
+.dsl-input {
+  background: #16213e; border: 1px solid #0f3460; border-radius: 4px;
+  color: #eee; font-size: 12px; padding: 5px 8px;
+}
+.dsl-input:focus { outline: none; border-color: #e94560; }
+.dsl-input-sev { width: 100%; }
+
+.dsl-predicate {
+  background: #0f0f1a; border: 1px solid #0f3460; border-radius: 4px;
+  padding: 8px; font-size: 11px; color: #3498db; font-family: 'Consolas', monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* params 阈值 */
+.dsl-params { display: flex; flex-direction: column; gap: 4px; }
+.dsl-param-row { display: flex; gap: 4px; }
+.dsl-input-key { flex: 1.2; }
+.dsl-input-val { flex: 1; }
+.dsl-param-del {
+  background: #0f0f1a; border: 1px solid #0f3460; color: #e74c3c;
+  padding: 0 8px; cursor: pointer;
+}
+.dsl-param-del:hover { border-color: #e74c3c; }
+.dsl-param-add { margin-top: 6px; }
+.dsl-empty-params { font-size: 11px; color: #555; }
+
+/* 校验结果 — 黄字本地预检 + 红字后端错误 */
+.dsl-local-issues, .dsl-backend-errors { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.dsl-issue {
+  font-size: 11px; padding: 6px 8px; border-radius: 4px;
+  border-left: 3px solid; background: #0f0f1a;
+}
+.dsl-issue.local { border-left-color: #f0b429; color: #f0b429; }
+.dsl-issue.backend { border-left-color: #e74c3c; color: #ff8a80; }
+.dsl-issue-path { font-family: 'Consolas', monospace; color: #aaa; }
+
+/* rules-panel 内部 tab 切换 (列表 vs 编辑器) */
+.rules-pane-toggle { margin-bottom: 8px; }
 .placeholder-card-lit {
   opacity: 1; filter: none;
   border-style: solid; border-color: #2e7d32;

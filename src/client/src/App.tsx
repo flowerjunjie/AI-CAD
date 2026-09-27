@@ -3,6 +3,7 @@ import './App.css';
 import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
+import RuleEditorPanel from './RuleEditorPanel';
 
 declare global {
   interface Window {
@@ -24,8 +25,9 @@ function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [previewKey, setPreviewKey] = useState(0);
-  const [rulesTab, setRulesTab] = useState<'hardcoded' | 'dsl' | 'all'>('all');
   const [useLlm, setUseLlm] = useState(false);
+  // Phase 2 规则编辑器: 右侧规则面板加「编辑器」子 tab (列表 / DSL 编辑器)
+  const [rulesPane, setRulesPane] = useState<'list' | 'editor'>('list');
 
   // 启动 + 周期性探测引擎可达性
   useEffect(() => {
@@ -34,7 +36,7 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const shownRules = rulesTab === 'all' ? rules : rules.filter((r) => r.source === rulesTab);
+  const shownRules = rules;
   const previewSrc = `${API}/api/preview?sample=${encodeURIComponent(lastSample)}`;
 
   const handleRun = useCallback(async () => {
@@ -175,55 +177,58 @@ function App() {
           <div className="panel-head-row">
             <h2>规范规则 · {rules.length}</h2>
             <div className="tabs">
-              {(['all', 'hardcoded', 'dsl'] as const).map((t) => (
-                <button
-                  key={t}
-                  className={`tab ${rulesTab === t ? 'tab-active' : ''}`}
-                  onClick={() => setRulesTab(t)}
-                >
-                  {t === 'all' ? '全部' : t === 'hardcoded' ? '硬编码' : 'DSL'}
-                </button>
-              ))}
+              <button className={`tab ${rulesPane === 'list' ? 'tab-active' : ''}`} onClick={() => setRulesPane('list')}>
+                列表
+              </button>
+              <button className={`tab ${rulesPane === 'editor' ? 'tab-active' : ''}`} onClick={() => setRulesPane('editor')}>
+                DSL 编辑器
+              </button>
             </div>
           </div>
 
-          <div className="rules-list">
-            {shownRules.length === 0 && <div className="empty-hint">{engineConnected ? '无' : '引擎未连接，规则列表暂空'}</div>}
-            {shownRules.map((rule) => (
-              <div key={rule.rule_id} className="rule-item">
-                <div className="rule-main">
-                  <span className="rule-name">{rule.name}</span>
-                  <span className={`rule-sev sev-${rule.severity}`}>{rule.severity}</span>
+          {rulesPane === 'list' ? (
+            <>
+            <div className="rules-list">
+              {shownRules.length === 0 && <div className="empty-hint">{engineConnected ? '无' : '引擎未连接，规则列表暂空'}</div>}
+              {shownRules.map((rule) => (
+                <div key={rule.rule_id} className="rule-item">
+                  <div className="rule-main">
+                    <span className="rule-name">{rule.name}</span>
+                    <span className={`rule-sev sev-${rule.severity}`}>{rule.severity}</span>
+                  </div>
+                  <div className="rule-sub">
+                    <span className="rule-code">{rule.code_ref}</span>
+                    <span className="rule-src">{rule.source}</span>
+                  </div>
                 </div>
-                <div className="rule-sub">
-                  <span className="rule-code">{rule.code_ref}</span>
-                  <span className="rule-src">{rule.source}</span>
-                </div>
+              ))}
+            </div>
+
+            <h2>知识检索 · RAG</h2>
+            <div className="search-box">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="输入规范问题，如：疏散走道最小宽度"
+                onKeyDown={(e) => e.key === 'Enter' && handleRag()}
+              />
+              <button onClick={handleRag} disabled={!engineConnected}>检索</button>
+            </div>
+            {ragResults.length > 0 && (
+              <div className="search-results">
+                <div className="rag-hit-line">「{ragQuery}」命中 {ragResults.length} 条</div>
+                {ragResults.map((r, i) => (
+                  <div key={i} className="result-item">
+                    <p>{r.text}</p>
+                    <span className="rag-meta">{r.category} · 相关度 {r.score}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-
-          <h2>知识检索 · RAG</h2>
-          <div className="search-box">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="输入规范问题，如：疏散走道最小宽度"
-              onKeyDown={(e) => e.key === 'Enter' && handleRag()}
-            />
-            <button onClick={handleRag} disabled={!engineConnected}>检索</button>
-          </div>
-          {ragResults.length > 0 && (
-            <div className="search-results">
-              <div className="rag-hit-line">「{ragQuery}」命中 {ragResults.length} 条</div>
-              {ragResults.map((r, i) => (
-                <div key={i} className="result-item">
-                  <p>{r.text}</p>
-                  <span className="rag-meta">{r.category} · 相关度 {r.score}</span>
-                </div>
-              ))}
-            </div>
+            )}
+            </>
+          ) : (
+            <RuleEditorPanel />
           )}
         </section>
       </main>

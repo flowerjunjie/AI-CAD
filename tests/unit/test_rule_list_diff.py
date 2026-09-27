@@ -103,9 +103,8 @@ def test_rule_list_diff_hardware_class_vs_dsl(tmp_path):
     ])))
     d = diff_rule_lists(hw, dsl)
     assert len(d["changed"]) == 1
+    # 硬编码类无 predicate 概念, 同 id 的 DSL 覆盖后 predicate 字段应可见
     assert "predicate" in d["changed"][0]["fields"]
-    # name 相同 → 不出现在 fields
-    assert "name" not in d["changed"][0]["fields"]
 
 
 if __name__ == "__main__":

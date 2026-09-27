@@ -33,10 +33,14 @@ def _validate_rule(raw: dict, index: int, errors: list[DslJsonError]) -> None:
     if not rid:
         errors.append(DslJsonError(f"{pfx}.rule_id", "缺少 rule_id", index))
     et = raw.get("element_types", ())
-    if not isinstance(et, list) or any(not isinstance(t, str) or not t for t in et):
+    if not et:
+        # 空列表 = 门禁放行全部类型 (predicate 对任何元素生效) — 设计器误删
+        # element_types 后规则看似在跑实则无差别命中, 必须显式拦下来。
+        errors.append(DslJsonError(f"{pfx}.element_types", "element_types 不能为空（空=对所有类型放行）", index))
+    elif not isinstance(et, list) or any(not isinstance(t, str) or not t for t in et):
         # _build_spec 对 element_types 只 tuple() 包一层不查形状:
         # 喂字符串会被字符拆分, 结果匹配不到任何类型 — 规则静默空转。这里兜住。
-        errors.append(DslJsonError(f"{pfx}.element_types", "必须是字符串数组且非空", index))
+        errors.append(DslJsonError(f"{pfx}.element_types", "element_types 必须是字符串数组", index))
     sev = str(raw.get("severity", "error")).lower()
     if sev not in ("error", "warning", "info"):
         errors.append(DslJsonError(f"{pfx}.severity", f"severity 必须是 error/warning/info, 实际 {sev!r}", index))

@@ -151,6 +151,36 @@ async def check_rules(data: dict):
 
 # ─── Knowledge Base API ───────────────────────────────────────
 
+@app.post("/api/rules/validate")
+async def validate_dsl_json_endpoint(data: dict):
+    """校验 DSL 规则 JSON（设计师改 default.json 后先验再应用）。
+
+    入参: {"path": ".../default.json"} 或 {"rules": {...}} (顶层 schema)
+    返回: {"valid": bool, "errors": [{path, message, rule_index}], "count": int}
+    errors 为空 = 合法，可安全 load（与 DslRuleProvider.load fail-fast 判据一致）。
+    """
+    from src.rules.src.editor_validate import validate_dsl_json, DslJsonError
+
+    path = data.get("path")
+    if not path:
+        # 未给 path 默认校验默认规则文件
+        path = "src/rules/rules/default.json"
+
+    errors = validate_dsl_json(path)
+    return {
+        "valid": len(errors) == 0,
+        "count": len(errors),
+        "errors": [
+            {
+                "path": e.path,
+                "message": e.message,
+                "rule_index": e.rule_index,
+            }
+            for e in errors
+        ],
+    }
+
+
 @app.get("/api/knowledge/search")
 async def search_knowledge(query: str, top_k: int = 5):
     """搜索知识库"""
