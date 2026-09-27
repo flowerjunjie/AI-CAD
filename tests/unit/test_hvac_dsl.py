@@ -4,10 +4,11 @@ Phase 5 — 暖通 (HVAC) 专业接入测试
 验证新专业(暖通)通过 DSL 骨架干净接入引擎（照 Phase 3 给排水 / Phase 4 电气范式）:
 - HvacDuct / HvacUnit / HvacGrille 元素模型 + default.json 的 hvac-*
   规则能被 load_dsl_rules 加载执行
-- 阈值占位规则命中/放行正确 (用 param 覆盖验证 DSL 化的核心能力)
+- 阈值规则命中/放行正确 (回填后: duct [1.5,10.0], grille [2.0,4.0], outdoor-placement 逻辑判定)
 - 34 个已有规则类零影响 (加暖通后原有 residential 规则仍在)
 
-规范条文/数值为占位 (TBD), 本测试只验证"接入机制"正确, 不验证数值业务正确性。
+规范条文/数值按 docs/gb_thresholds_research.json 回填 (风速 high / 风口 medium /
+室外机 medium, 基于通行做法), 本测试验证回填后阈值命中/放行机制正确。
 """
 import os
 import sys
@@ -68,21 +69,21 @@ def test_outdoor_unit_in_indoor_violation():
 
 
 def test_grille_height_out_of_range_violation():
-    """风口高度 1.0m 低于占位下限 2.0m → 违规"""
+    """风口高度 1.0m 低于回填下限 2.0m → 违规"""
     engine = _engine_with_rules()
     grille = HvacGrille(id="g1", grille_type="supply", height_m=1.0)
     violations = engine.check([grille], rule_ids=["hvac-grille-height-range"])
     assert len(violations) == 1
-    # 风口高度 2.5m 在区间内 → 合规
+    # 风口高度 2.5m 在回填区间 [2.0, 4.0] 内 → 合规
     grille_ok = HvacGrille(id="g2", grille_type="supply", height_m=2.5)
     assert len(engine.check([grille_ok], rule_ids=["hvac-grille-height-range"])) == 0
 
 
 def test_threshold_overridable_via_params():
-    """DSL 化核心能力: 改 param 就能改阈值, 不用动代码 (暖通规范数值待确认时最有用)"""
+    """DSL 化核心能力: 改 param 就能改阈值, 不用动代码 (规范数值待确认时最有用)"""
     rules = load_dsl_rules(DEFAULT_JSON)
     duct_rule = next(r for r in rules if r.rule_id == "hvac-duct-velocity-range")
-    # 把上限从 8.0 覆盖到 5.0: 6.0 m/s 应违规 (原 8.0 上限下合规)
+    # 把上限从回填值 10.0 覆盖到 5.0: 6.0 m/s 应违规 (默认 10.0 上限下合规)
     duct_rule.params["max_velocity_ms"] = 5.0
     duct = HvacDuct(id="d3", duct_type="supply", diameter_mm=100,
                     airflow_m3h=500.0, velocity_ms=6.0)

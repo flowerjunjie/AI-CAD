@@ -33,12 +33,14 @@ def _engine_with_rules():
 
 
 def test_structural_rules_loaded_from_dsl():
-    """default.json 里的 2 条 structural-* 规则能被 DSL 加载"""
+    """default.json 里的 4 条 structural-* 规则能被 DSL 加载"""
     engine = _engine_with_rules()
     ids = [r.rule_id for r in engine.list_rules()]
     for rid in (
         "structural-beam-width-depth-ratio",
         "structural-column-min-section",
+        "structural-beam-min-height",
+        "structural-beam-span-depth-ratio",
     ):
         assert rid in ids, f"{rid} 未从 DSL 加载"
 
@@ -81,6 +83,47 @@ def test_threshold_overridable_via_params():
     assert len(col_rule.check(col).violations) == 1
 
 
+def test_beam_min_height_violation():
+    """梁最小高度规则: predicate 前置 element.span_m>0, 但 StructuralBeam 现无 span_m。
+
+    现状 (上游未补 span_m): predicate 触发 AttributeError → 规则降级跳过 → 放行 (不误报)。
+    这是契约文档 docs/structural-upstream-contract.md 标注的"需上游补 span 字段"前置依赖:
+    上游补上 span_m 后本规则才真正生效。此处验证"缺字段时安全放行 + 补齐后按 300mm 下限命中"。
+    """
+    engine = _engine_with_rules()
+    # 梁深 200mm (< 300 下限), 但 span_m 缺失 → 规则安全放行 (不误报)
+    beam = StructuralBeam(id="bh1", beam_type="main", width_mm=300, depth_mm=200)
+    assert len(engine.check([beam], rule_ids=["structural-beam-min-height"])) == 0
+    # 补齐 span_m (模拟上游已补字段) 后, 梁深 200mm < 300mm 下限 → 命中
+    beam_active = StructuralBeam(id="bh2", beam_type="main", width_mm=300, depth_mm=200)
+    beam_active.span_m = 4.0  # 动态属性模拟上游补齐, 不改元素模型结构
+    assert len(engine.check([beam_active], rule_ids=["structural-beam-min-height"])) == 1
+    # 合规梁: 深 600mm >= 300mm 下限 → 放行
+    beam_ok = StructuralBeam(id="bh3", beam_type="main", width_mm=300, depth_mm=600)
+    beam_ok.span_m = 4.0
+    assert len(engine.check([beam_ok], rule_ids=["structural-beam-min-height"])) == 0
+
+
+def test_beam_span_depth_ratio_violation():
+    """梁跨高比规则: 依赖 element.span_m (单位换算 span_m*1000/depth_mm)。缺字段安全放行; 补齐后按 [5,20] 拦截。"""
+    engine = _engine_with_rules()
+    # 缺 span_m → 前置 span_m>0 因 AttributeError 降级 → 放行
+    beam_no = StructuralBeam(id="sd1", beam_type="main", width_mm=300, depth_mm=300)
+    assert len(engine.check([beam_no], rule_ids=["structural-beam-span-depth-ratio"])) == 0
+    # 跨高比 4.0m*1000/600=6.67, 在 [5,20] 内 → 合规
+    beam_ok = StructuralBeam(id="sd2", beam_type="main", width_mm=300, depth_mm=600)
+    beam_ok.span_m = 4.0
+    assert len(engine.check([beam_ok], rule_ids=["structural-beam-span-depth-ratio"])) == 0
+    # 跨高比 20m*1000/300=66.7, 超 max 20 → 违规
+    beam_bad = StructuralBeam(id="sd3", beam_type="main", width_mm=300, depth_mm=300)
+    beam_bad.span_m = 20.0
+    assert len(engine.check([beam_bad], rule_ids=["structural-beam-span-depth-ratio"])) == 1
+    # 跨高比 4m*1000/1000=4.0, 低于 min 5 → 违规
+    beam_shallow = StructuralBeam(id="sd4", beam_type="secondary", width_mm=300, depth_mm=1000)
+    beam_shallow.span_m = 4.0
+    assert len(engine.check([beam_shallow], rule_ids=["structural-beam-span-depth-ratio"])) == 1
+
+
 def test_existing_rules_unaffected_by_structural():
     """加结构后, 原有 residential DSL 规则 (楼梯踏步) 仍正常 → 零回归"""
     engine = _engine_with_rules()
@@ -96,5 +139,7 @@ if __name__ == "__main__":
     test_column_min_section_violation()
     test_column_foundation_exempted()
     test_threshold_overridable_via_params()
+    test_beam_min_height_violation()
+    test_beam_span_depth_ratio_violation()
     test_existing_rules_unaffected_by_structural()
     print("\nAll structural DSL tests passed!")

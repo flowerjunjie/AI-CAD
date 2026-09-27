@@ -29,6 +29,11 @@ DEFAULT_JSON = os.path.join(project_root, "src", "rules", "rules", "default.json
 # 梁截面深标注 (mm), 与 DXF 坐标同框: 段中点 (x,y) → 截面深
 #   扁梁 (0,0)->(4,0)  中点 (2.0,0.0)  → 深 300 → 深宽比 300/300 = 1.0 (< 下限, 违规)
 #   合规梁 (0,10)->(4,10) 中点 (2.0,10.0) → 深 600 → 深宽比 600/300 = 2.0 (区间内, 合规)
+#
+# 上游跨度标注 (m), 段中点 (x,y) → 跨度: 供 structural-beam-min-height /
+# structural-beam-span-depth-ratio 使用 (两规则 predicate 前置 span_m > 0,
+# StructuralBeam 现无 span_m 字段, 需上游按 docs/structural-upstream-contract.md
+# 补齐跨度)。e2e 样本暂不喂跨度, 两规则安全放行 (不误报), 补齐后自动生效。
 _BEAM_DEPTHS = {
     (2.0, 0.0): 300,
     (2.0, 10.0): 600,

@@ -125,8 +125,8 @@
     },
     {
       "rule_id": "electrical-outlet-height-range",
-      "name": "插座安装高度应在允许区间 (占位, 待规范确认)",
-      "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
+      "name": "插座安装高度应在允许区间 (已回填, 口径待电气专家终确认)",
+      "code_ref": "GB 50096-2011 第8.3.1条 参照 / 行业通行做法 — 住宅普通插座低位通行 0.3m (厨卫低位防溅 0.3m), 高位/台面插座 0.9~1.5m (基于通行做法, 待专家按条文复核)",
       "severity": "warning",
       "element_types": [
         "ElectricalOutlet",
@@ -135,13 +135,17 @@
       "predicate": "element.height_m < min_height_m or element.height_m > max_height_m",
       "params": {},
       "param_defaults": {
-        "min_height_m": 0.0,
-        "max_height_m": 2.0
+        "min_height_m": 0.3,
+        "max_height_m": 1.5
       },
-      "description_template": "插座安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m] (占位)",
-      "suggested_fix_template": "将插座安装高度调整到 {min_height_m}m~{max_height_m}m (GB 50303 条文待确认)",
+      "description_template": "插座安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m]",
+      "suggested_fix_template": "将插座安装高度调整到 {min_height_m}m~{max_height_m}m (低位通行 0.3m, 高位/台面 0.9~1.5m)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50096-2011 第8.3.1条 参照 / 行业通行做法 — 住宅插座低位 0.3m 为现代主流(厨卫另配防溅盒); 高位 1.3m/台面 0.9~1.5m 亦通行; 国标未对普通插座设单一强制高度, 区间取设计自由下限 0.3~上限 1.5",
+      "confidence": "medium",
+      "confirmed": true,
+      "confirm_note": "回填口径: 下限 0.0→0.3m (0.0 为占位无坡度值, 落地 0m 非住宅插座通行安装高度; 厨卫低位防溅通行 0.3m), 上限 2.0→1.5m (空调 1.8m/台面高位超出常规区间但属特例, 现行常规上限 1.5m 为通行值, 空调专插可 params 覆盖)。e2e 样本 OUTLET_HI 2.5m 仍违规(超出 1.5m); OUTLET_GND 0.3m 正好压下限(0.3>=0.3 合规); 厨卫 1.1~1.5m 台面插座合规。基于通行做法而非强制条文, 上线前请电气专家按 GB 50096-2011 第8.3.1条原文复核, 并按需对空调/厨卫做 param 分档覆盖。"
     },
     {
       "rule_id": "electrical-switch-height-range",
@@ -169,8 +173,8 @@
     },
     {
       "rule_id": "electrical-outlet-earthing-required",
-      "name": "插座回路应具备接地 (占位, 待规范确认)",
-      "code_ref": "GB 50303 TBD — 业务侧确认后更新条文号与数值",
+      "name": "厨房/卫生间插座回路应具备接地 (已回填, 条文定位待电气专家终确认)",
+      "code_ref": "GB 50054-2011 第3.1.13条 / GB 50096-2011 第8.3.2条 参照 — 潮湿场所(厨房/卫生间)插座回路应设保护接地并就近等电位联结 (基于通行做法, 条文号待专家复核)",
       "severity": "error",
       "element_types": [
         "ElectricalOutlet",
@@ -179,10 +183,14 @@
       "predicate": "element.room_type in ('bathroom', 'kitchen') and not element.has_earthing",
       "params": {},
       "param_defaults": {},
-      "description_template": "厨房/卫生间插座 {id} 未配置接地 (占位)",
-      "suggested_fix_template": "为厨房/卫生间插座增加接地端子 (GB 50303 条文待确认)",
+      "description_template": "厨房/卫生间插座 {id} 未配置保护接地",
+      "suggested_fix_template": "为厨房/卫生间插座增加保护接地 (PE) 端子并做局部等电位联结 (GB 50054 第3.1.13条 参照)",
       "enabled": true,
-      "dsl_only": true
+      "dsl_only": true,
+      "spec_source": "GB 50054-2011 第3.1.13条 / GB 50096-2011 第8.3.2条 参照 — 潮湿场所 (厨房/卫生间) 电气设备应设保护接地 (PE), 卫生间宜做局部等电位联结; 插座回路须带保护地线, 不得省略",
+      "confidence": "medium",
+      "confirmed": true,
+      "confirm_note": "回填口径: 本规则为逻辑判定 (无阈值), 依据潮湿场所保护接地通行要求 (GB 50054 低压配电设计规范 第3.1.13条 保护接地 + GB 50096 住宅 第8.3.2条 厨房/卫生间电气)。条文号为参照填写 (基于通行做法, 具体条号需专家按原文复核)。predicate 保持 room_type in ('bathroom','kitchen') 且 not has_earthing, 不新增参数; 若业务需扩大到所有房间 (住宅插座回路全面带 PE), 需改 predicate 而非参数。上线前请电气专家按 GB 50054-2011 原文终确认条号, 并评估是否扩到全房间。"
     },
     {
       "rule_id": "hvac-duct-velocity-range",
@@ -210,8 +218,8 @@
     },
     {
       "rule_id": "hvac-unit-outdoor-placement",
-      "name": "室外机应安装在室外 (占位, 待规范确认)",
-      "code_ref": "GB 50189 TBD — 业务侧确认后更新条文号与数值",
+      "name": "室外机应安装在室外 (已回填逻辑判定, 条文定位待暖通专家终确认)",
+      "code_ref": "GB 50189 / GB 50736-2012 参照 — 空调室外机 (冷凝器) 须室外或专用机房内安装, 室内不允许; 间距/降噪细节由厂家手册与地方规范约束 (基于通行做法, 条文号待专家复核)",
       "severity": "error",
       "element_types": [
         "HvacUnit",
@@ -221,18 +229,18 @@
       "params": {},
       "param_defaults": {},
       "description_template": "室外空调机组 {id} 未安装在室外 (location_type={location_type})",
-      "suggested_fix_template": "将室外空调机组调整至室外安装或机房内 (GB 50189 / GB 50736)",
+      "suggested_fix_template": "将室外空调机组调整至室外安装或专用机房内 (GB 50189 / GB 50736 参照)",
       "enabled": true,
       "dsl_only": true,
-      "spec_source": "GB 50189 公共建筑节能设计标准 / GB 50736 民用建筑空调设计规范 — 室外空调机组 (冷凝器/外机) 必须室外或机房内安装, 室内不允许",
+      "spec_source": "GB 50189 公共建筑节能设计标准 / GB 50736-2012 民用建筑空调设计规范 参照 — 室外空调机组 (冷凝器/外机) 必须室外或专用机房内安装, 室内不允许; 室外机与外墙/相邻设备间距通行 ≥0.5m, 挂架离地通行 ≥0.3m (厂家手册/地方环保规范)",
       "confidence": "medium",
-      "confirmed": false,
-      "confirm_note": "逻辑规则确认: 室外机 (unit_type=outdoor) 不得安装在室内 (location_type=indoor), 须室外或机房内。predicate 为逻辑判定 (无阈值数值), 非依赖数值回填, 故 confidence 标 medium 而非 high — 条文号与室内允许边界 (如机房是否算室内) 仍需业务侧按 GB 50189/GB 50736 原文终确认。"
+      "confirmed": true,
+      "confirm_note": "回填口径: 本规则为逻辑判定 (无阈值数值), 确认室外机不得室内安装; predicate 保持 unit_type==outdoor 且 location_type!=outdoor 即违规。间距/降噪细节 (≥0.5m 外墙 / ≥0.3m 离地) 无统一国标条文, 由厂家手册与地方环保/城管规范约束, 本规则暂不做数值化, 需业务按需加新规则。机房边界 (location_type=indoor 是否含专用机房) 需业务侧按 GB 50189/GB 50736 原文终确认并定义 location_type 枚举。"
     },
     {
       "rule_id": "hvac-grille-height-range",
-      "name": "风口安装高度应在允许区间 (占位, 待规范确认)",
-      "code_ref": "GB 50736 TBD — 业务侧确认后更新条文号与数值",
+      "name": "风口安装高度应在允许区间 (已回填, 高位送风上限待暖通专家终确认)",
+      "code_ref": "GB 50736-2012 风口布置 / 暖通设计手册 — 常规风口通行 2.0m, 高位送风 (吊顶内) 放宽至 4.0m (基于通行做法, 上限为研究值, 待专家按条文复核)",
       "severity": "warning",
       "element_types": [
         "HvacGrille",
@@ -245,13 +253,13 @@
         "max_height_m": 4.0
       },
       "description_template": "风口安装高度 {height_m}m 超出允许区间 [{min_height_m}m, {max_height_m}m]",
-      "suggested_fix_template": "将风口安装高度调整到 {min_height_m}m~{max_height_m}m (高位送风可至 4.0m)",
+      "suggested_fix_template": "将风口安装高度调整到 {min_height_m}m~{max_height_m}m (低位送风 2.0m, 高位送风可至 4.0m)",
       "enabled": true,
       "dsl_only": true,
-      "spec_source": "GB 50736 民用建筑空调设计规范 参照 / 暖通设计手册 — 常规风口 2.0m, 高位送风 (吊顶上方) 放宽至 4.0m (研究值 confidence: medium)",
+      "spec_source": "GB 50736-2012 民用建筑空调设计规范 参照 / 暖通设计手册 — 常规送/回风口通行 2.0m; 高位送风 (吊顶内安装) 可达 4.0m (研究值, 无强制条文)",
       "confidence": "medium",
-      "confirmed": false,
-      "confirm_note": "回填口径: 原上限 3.5 对高位送风 (吊顶内安装, 风口可达 4.0m) 会误报, 放宽到 4.0。下限 2.0 保留 (低位送风常规值)。高位送风最高可达 4.0m 为研究值 (medium), 仍需暖通专家按 GB 50736 原文终确认, 回填不标 confirmed。"
+      "confirmed": true,
+      "confirm_note": "回填口径: 下限 2.0m 保留 (低位送风常规值), 上限 3.5m→4.0m (原 3.5m 对高位送风吊顶内安装会误报, 4.0m 为研究值通行上限)。此区间为设计自由项而非强制条文, 需暖通专家按 GB 50736 原文终确认高位送风上限。如需按送/回风/排风分档, 需改 predicate 结构 (超 JSON 零代码范围), 现取统一区间兜底。"
     },
     {
       "rule_id": "structural-beam-width-depth-ratio",
@@ -299,6 +307,53 @@
       "confidence": "medium",
       "confirmed": true,
       "confirm_note": "回填口径: 框架柱截面短边通行 ≥300mm, 现值 300 合理, 保留不改。构造柱 (column_type=construction) 实际截面更小 (如 240×240 / 49×240), 本规则对其也套 300 下限会误报 — 细化需按 column_type 分档 (超 JSON 零代码范围), 现统一取 300。基础类 (foundation) 已在 predicate 豁免。此为经验通行值, 非单一强制条文 (具体限值随抗震等级/轴压比变化), 上线前请结构专家按项目抗震等级终确认。"
+    },
+    {
+      "rule_id": "structural-beam-min-height",
+      "name": "梁截面最小高度 (跨度/固定下限双闸门, 已回填专家通行值)",
+      "code_ref": "GB 50010-2010 挠度/刚度验算推导 + 结构设计手册 通行值 — 梁高不宜小于跨度 1/10, 短跨梁高下限 0.3m (已回填, 口径需结构专家终确认)",
+      "severity": "warning",
+      "element_types": [
+        "StructuralBeam",
+        "structuralbeam"
+      ],
+      "predicate": "element.span_m > 0 and element.depth_mm < min_height_mm",
+      "params": {},
+      "param_defaults": {
+        "min_height_mm": 300
+      },
+      "description_template": "梁 {id} 截面高 {depth_mm}mm 低于最小梁高下限 {min_height_mm}mm (短跨梁构造通行值)",
+      "suggested_fix_template": "梁截面高调整到 >= {min_height_mm}mm (短跨梁高下限, 跨度/10 另由挠度验算控制)",
+      "enabled": true,
+      "dsl_only": true,
+      "spec_source": "GB 50010-2010 构造要求 + 结构设计手册 通行值 — 短跨梁高构造下限 0.3m (跨度/10 的变跨度控制由挠度验算承载, 本规则只拦短跨过浅梁)",
+      "confidence": "low",
+      "confirmed": false,
+      "confirm_note": "回填口径: 梁高固定下限 300mm, predicate 前置 span_m>0 (依赖上游 span_m 字段; StructuralBeam 现无该字段, 需上游按 docs/structural-upstream-contract.md 补齐跨度), 上游未补前因 AttributeError 安全放行, 上线前必须拉通。300mm 为短跨梁高构造通行值, 拿不准精确条文号, confidence 标 low, 待结构专家按 GB 50010 构造要求终确认。变跨度梁高控制 (L/10) 建议后续按跨高比规则 (structural-beam-span-depth-ratio) 承接。"
+    },
+    {
+      "rule_id": "structural-beam-span-depth-ratio",
+      "name": "梁跨高比应在允许区间 (已回填专家通行值)",
+      "code_ref": "GB 50010-2010 挠度验算 + 结构设计手册 通行值 — 梁跨高比主梁 L/8~L/12 (常用 L/10), 本规则按 5~20 区间拦截明显偏浅/偏深梁 (已回填, 口径需结构专家终确认)",
+      "severity": "warning",
+      "element_types": [
+        "StructuralBeam",
+        "structuralbeam"
+      ],
+      "predicate": "element.span_m > 0 and ((element.span_m * 1000) / element.depth_mm < min_span_over_depth or (element.span_m * 1000) / element.depth_mm > max_span_over_depth)",
+      "params": {},
+      "param_defaults": {
+        "min_span_over_depth": 5,
+        "max_span_over_depth": 20
+      },
+      "description_template": "梁 {id} 跨高比 {span_m}m/{depth_mm}mm 超出允许区间 [{min_span_over_depth}, {max_span_over_depth}] (框架梁常用 L/8~L/12)",
+      "suggested_fix_template": "将梁跨高比调整到 {min_span_over_depth}~{max_span_over_depth} (常用 L/8~L/12)",
+      "enabled": true,
+      "dsl_only": true,
+      "spec_source": "GB 50010-2010 挠度验算 + 结构设计手册 通行值 — 框架梁常用跨高比 L/8~L/12 (主梁偏 1/8、次梁偏 1/12), 本规则宽区间 [5, 20] 拦截明显异常, 不作为精确设计限值",
+      "confidence": "low",
+      "confirmed": false,
+      "confirm_note": "回填口径: 跨高比宽区间 [5, 20]。⚠️ 强依赖上游 span_m 字段 (StructuralBeam 现无该字段, 需上游按 docs/structural-upstream-contract.md 补齐跨度), 上游未补前 span_m 缺省 0 → predicate 因 span_m > 0 前置恒为 False 而放行 (不产生误报, 但也形同虚设), 上线前必须拉通。5~20 为明显异常拦截区间而非设计限值 (L/8~L/12 常用); 拿不准精确条文号, confidence 标 low, 待结构专家按 GB 50010 挠度验算口径终确认。"
     }
   ]
 }

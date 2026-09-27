@@ -4,10 +4,11 @@ Phase 4 — 电气专业接入测试
 验证新专业(电气)通过 DSL 骨架干净接入引擎（照 Phase 3 给排水范式）:
 - ElectricalOutlet / ElectricalSwitch 元素模型 + default.json 的 electrical-*
   规则能被 load_dsl_rules 加载执行
-- 阈值占位规则命中/放行正确 (用 param 覆盖验证 DSL 化的核心能力)
+- 阈值规则命中/放行正确 (回填后: outlet [0.3,1.5], switch [1.2,1.4], 接地逻辑判定)
 - 34 个已有规则类零影响 (加电气后原有 residential 规则仍在)
 
-规范条文/数值为占位 (TBD), 本测试只验证"接入机制"正确, 不验证数值业务正确性。
+规范条文/数值按 docs/gb_thresholds_research.json 回填 (medium confidence,
+基于通行做法而非强制条文), 本测试验证回填后阈值命中/放行机制正确。
 """
 import os
 import sys
@@ -43,18 +44,18 @@ def test_electrical_rules_loaded_from_dsl():
 
 
 def test_outlet_height_out_of_range_violation():
-    """插座高度 0.1m 低于占位下限 0.0m 区间 → 用 param 覆盖下限触发违规"""
+    """回填后: 插座高度区间 [0.3, 1.5]。低位 0.3m 恰好合规, 2.5m 超上限违规。"""
     engine = _engine_with_rules()
-    outlet = ElectricalOutlet(id="o1", height_m=0.1, room_type="living")
-    # 占位区间 [0.0, 2.0], 0.1m 在区间内 → 合规
+    outlet = ElectricalOutlet(id="o1", height_m=0.3, room_type="living")
+    # 回填区间 [0.3, 1.5], 0.3m 在下限 (0.3 >= 0.3) → 合规
     assert len(engine.check([outlet], rule_ids=["electrical-outlet-height-range"])) == 0
-    # 高插座 2.5m 超占位上限 2.0m → 违规
+    # 高插座 2.5m 超回填上限 1.5m → 违规
     outlet_hi = ElectricalOutlet(id="o2", height_m=2.5, room_type="living")
     assert len(engine.check([outlet_hi], rule_ids=["electrical-outlet-height-range"])) == 1
 
 
 def test_switch_height_out_of_range_violation():
-    """开关高度 0.8m 低于占位区间 [1.0, 1.5] → 违规"""
+    """开关高度 0.8m 低于回填区间 [1.2, 1.4] → 违规"""
     engine = _engine_with_rules()
     switch = ElectricalSwitch(id="s1", height_m=0.8, room_type="living")
     violations = engine.check([switch], rule_ids=["electrical-switch-height-range"])

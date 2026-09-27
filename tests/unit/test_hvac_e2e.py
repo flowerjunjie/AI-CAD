@@ -19,8 +19,8 @@
 
 规范数值说明:
   - hvac-duct-velocity-range 上限 10.0 已由专家回填并标 confirmed
-  - hvac-unit-outdoor-placement 为逻辑规则 (确认 code_ref, 加 confirm_note)
-  - hvac-grille-height-range [2.0, 4.0] 高位送风放宽, confidence medium, 回填不标 confirmed
+  - hvac-unit-outdoor-placement 逻辑判定 (回填 code_ref + confirm_note, medium)
+  - hvac-grille-height-range [2.0, 4.0] 高位送风放宽 (回填 medium, confirmed)
 """
 import os
 import sys

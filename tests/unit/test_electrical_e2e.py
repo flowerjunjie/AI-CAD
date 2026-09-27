@@ -6,7 +6,7 @@
   → engine.check(elems)
 
 断言目标 (对应 data/sample/electrical_sample.dxf 的 3 个点位):
-  - OUTLET_HI 高位插座 2.5m → 命中 electrical-outlet-height-range (超默认上限 2.0)
+  - OUTLET_HI 高位插座 2.5m → 命中 electrical-outlet-height-range (超回填上限 1.5m)
   - OUTLET_GND 厨卫无接地 kitchen + has_earthing=false
         → 命中 electrical-outlet-earthing-required
   - SWITCH_OK 合规开关 1.3m → 在 switch 区间 [1.2,1.4] 内, 不违规
@@ -105,12 +105,12 @@ def test_e2e_compliant_switch_passes_all_rules():
 
 
 def test_e2e_clean_segments_pass_remaining_rules():
-    """该过的过: 非违规点位 (厨房低位 0.3m 插座高度合规) 相关规则零命中。"""
+    """该过的过: 非违规点位 (厨房低位 0.3m 插座恰好压下限合规) 相关规则零命中。"""
     elems, violations = _run()
-    # OUTLET_GND 高度 0.3m 在 outlet 区间 [0,2] 内 → 高度规则不应命中它
+    # OUTLET_GND 高度 0.3m 恰好压 outlet 回填区间 [0.3, 1.5] 下限 → 高度规则不应命中它
     assert not any(v.rule_id == "electrical-outlet-height-range"
                    and v.element_id == "OUTLET_GND" for v in violations), \
-        "OUTLET_GND 高度 0.3m 合规, 不应命中高度规则"
+        "OUTLET_GND 高度 0.3m 合规 (压下限), 不应命中高度规则"
     # OUTLET_HI 房间 living 且默认接地 → 接地规则不应命中它
     assert not any(v.rule_id == "electrical-outlet-earthing-required"
                    and v.element_id == "OUTLET_HI" for v in violations), \
