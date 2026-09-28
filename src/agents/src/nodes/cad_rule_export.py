@@ -608,6 +608,21 @@ def cad_execute_node(state: dict) -> dict:
                 results.append({"task_id": task_id, "status": "completed",
                                 "clashes": clash_count})
 
+            elif task_type == "conflict":
+                # M5 两稿改动冲突检测 (可自主子集): 对 raw_data (稿A) 与
+                # conflict_raw_b (稿B) 按元素 id 比对, 只记冲突计数, 不新增出图实体。
+                # 无第二稿 (state 未带 conflict_raw_b) → detect_conflicts(raw, {}) →
+                # 稿A 全部元素变 'removed'… 为避免误报, 无稿B 时直接 0 冲突 (no-op)。
+                raw_data = state.get("raw_data", {}) or {}
+                raw_b = state.get("conflict_raw_b")
+                if raw_b is None:
+                    conflict_count = 0
+                else:
+                    from src.agents.src.tools.conflict_detection import detect_conflicts
+                    conflict_count = len(detect_conflicts(raw_data, raw_b))
+                results.append({"task_id": task_id, "status": "completed",
+                                "conflicts": conflict_count})
+
             elif task_type == "dimension":
                 axis_count = 0
                 if rooms:
@@ -698,6 +713,26 @@ def rule_check_node(state: dict) -> dict:
     # 只追加, 不改既有 _ELEMENT_CHECKS / 门窗碰撞逻辑; 无碰撞样本零新增。
     for c in detect_clashes(raw, tolerance_m=0.15):
         violations.append(_clash_violation(c))
+
+    # M5 两稿改动冲突：仅当 state 提供第二稿 (conflict_raw_b) 时比对, 记一条汇总
+    # 违规。无第二稿 → 0 新增, 默认样本 (仅 raw_data) 零影响。
+    raw_b = state.get("conflict_raw_b")
+    if raw_b is not None:
+        from src.agents.src.tools import conflict_detection as cf
+        conflicts = cf.detect_conflicts(raw, raw_b)
+        s = cf.summarize_conflicts(conflicts)
+        if s["total"]:
+            from src.rules.src.engine import RuleViolation, ViolationSeverity
+            violations.append(RuleViolation(
+                rule_id="conflict-two-drafts",
+                rule_name="两稿改动冲突检查",
+                severity=ViolationSeverity.ERROR,
+                description=(f"两稿 {s['total']} 处改动冲突 "
+                             f"(值 {s['value_conflicts']} / 新增 {s['added']} / "
+                             f"删除 {s['removed']})"),
+                element_id="draft-a×draft-b",
+                code_ref="团队协作（两稿按元素 id 比对, 同 id 不同字段值=冲突）",
+            ))
 
     return {
         "rule_violations": [
