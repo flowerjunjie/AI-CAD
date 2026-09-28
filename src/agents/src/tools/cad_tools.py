@@ -148,14 +148,6 @@ class DXFReader:
             "dimensions": list(msp.query('DIMENSION')),
         }
 
-    def get_layers(self) -> list[str]:
-        """获取所有图层"""
-        return list(self.doc.layers)
-
-    def get_entity_count(self) -> dict:
-        """获取各类型实体数量"""
-        return {k: len(v) for k, v in self.entities.items()}
-
     def _segments_from_layer(self, layer_names) -> list:
         """按图层取线段核心逻辑 → [(start_xy, end_xy), ...]（2D，z 丢弃）。
 
