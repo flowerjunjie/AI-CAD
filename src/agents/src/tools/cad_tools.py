@@ -426,6 +426,9 @@ class DXFWriter:
         "AXIS": {"color": 7, "lineweight": 13},
         "DIMENSION": {"color": 7, "lineweight": 13},
         "OPENING_TAG": {"color": 7, "lineweight": 13},
+        # 跨专业碰撞标记: 品红(6) 粗(30) — 醒目警示, 区别于所有专业线
+        "CLASH": {"color": 6, "lineweight": 30},
+        "CLASH_LABEL": {"color": 6, "lineweight": 13},
     }
 
     def _ensure_layer_styles(self) -> None:
@@ -899,6 +902,27 @@ class DXFWriter:
             txt.dxf.insert = (x0 - 0.2, y)
             count += 1
         return count
+
+    def add_clash_marker(self, x: float, y: float, kind: str,
+                         label: str = "CLASH") -> None:
+        """在碰撞点 (x,y) 画红色碰撞圈 + 标注文字 (M4 出图侧, 增量)。
+
+        照 add_column / add_opening_marker 的「独立图层 + 显式建图层」范式:
+        - CLASH 图层 CIRCLE (半径 0.2m 警示圈, 品红粗线, 醒目区别于各专业线)
+        - CLASH_LABEL 图层 TEXT: kind (如 "PIPE-BEAM"), 画在圈上方 0.25m
+        纯增量: 不删不改任何既有实体; 无碰撞时根本不调本方法 → 既有出图 0 变化。
+        """
+        if "CLASH" not in self.doc.layers:
+            self.doc.layers.new("CLASH")
+        if "CLASH_LABEL" not in self.doc.layers:
+            self.doc.layers.new("CLASH_LABEL")
+        self.msp.add_circle(
+            (x, y), radius=0.2,
+            dxfattribs={"layer": "CLASH", "color": 6, "lineweight": 30},
+        )
+        txt = self.msp.add_text(label, dxfattribs={"height": 0.15, "layer": "CLASH_LABEL"})
+        txt.dxf.insert = (x, y + 0.25)
+        _ = kind  # kind 由调用方拼进 label; 保留形参便于日后按 kind 分级画
 
     def save(self, path: str) -> bool:
         """保存 DWG。出图前统一套图层着色/线宽标准 (幂等, 覆盖裸建图层)。"""

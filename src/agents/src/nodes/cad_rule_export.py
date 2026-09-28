@@ -12,6 +12,7 @@ from src.agents.src.tools.cad_tools import (
 )
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
+from src.agents.src.tools.clash_detection import detect_clashes
 from src.agents.src.numbering import assign_door_numbers, assign_window_numbers
 from src.agents.src.tools.wall_topology import partition_rooms
 from src.rules.src.engine import get_engine
@@ -275,6 +276,53 @@ def _collision_violation(c: dict):
         element_id=f"{c['a_id']}×{c['b_id']}",
         code_ref="施工图制图规范（门窗洞口应互不侵占）",
     )
+
+
+# 跨专业碰撞 kind → 中文 (供 _clash_violation 描述可读)
+_CLASH_KIND_CN = {
+    "pipe-beam": "排水管穿梁", "pipe-column": "排水管撞柱",
+    "duct-beam": "风管穿梁", "duct-column": "风管撞柱",
+    "outlet-beam": "插座撞梁", "outlet-column": "插座撞柱",
+    "grille-beam": "风口撞梁", "grille-column": "风口撞柱",
+}
+
+
+def _clash_violation(c: dict):
+    """把跨专业碰撞结果转成 RuleViolation (与 _collision_violation 同构)。
+    rule_id = clash-<kind>, 管线/电气/暖通 不得穿结构梁柱。"""
+    from src.rules.src.engine import RuleViolation, ViolationSeverity
+    label = _CLASH_KIND_CN.get(c["kind"], c["kind"])
+    return RuleViolation(
+        rule_id=f"clash-{c['kind']}",
+        rule_name="多专业碰撞检查",
+        severity=ViolationSeverity.ERROR,
+        description=f"{label}碰撞：{c['a_id']} × {c['b_id']} ({c.get('detail', '')})",
+        element_id=f"{c['a_id']}×{c['b_id']}",
+        code_ref="多专业碰撞检测（管线/电气/暖通 不得穿结构梁柱）",
+    )
+
+
+def _clash_point(raw: dict, c: dict) -> tuple[float, float]:
+    """碰撞标记画在哪：取 kind 中「点位类」元素坐标，否则取线段类中点。
+    无匹配元素 → (0,0) 兜底，不崩。kind 前缀对应 raw 键:
+      pipe→pipes  duct→hvac_ducts  outlet→outlets  grille→hvac_grilles
+      beam→structural_beams  column→structural_columns"""
+    _KEY = {"pipe": "pipes", "duct": "hvac_ducts", "outlet": "outlets",
+            "grille": "hvac_grilles", "beam": "structural_beams",
+            "column": "structural_columns"}
+    for prefix in c["kind"].split("-"):
+        key = _KEY.get(prefix)
+        if not key:
+            continue
+        for it in (raw.get(key) or []):
+            eid = it.get("id")
+            if eid in (c.get("a_id"), c.get("b_id")):
+                if "x" in it and "y" in it:
+                    return float(it["x"]), float(it["y"])
+                s, e = it.get("start"), it.get("end")
+                if s and e:
+                    return (float(s[0]) + float(e[0])) / 2.0, (float(s[1]) + float(e[1])) / 2.0
+    return 0.0, 0.0
 
 
 def _layout_from_state(state: dict) -> dict:
@@ -546,6 +594,20 @@ def cad_execute_node(state: dict) -> dict:
                 results.append({"task_id": task_id, "status": "completed",
                                 "count": len(raw_ducts) + len(raw_units) + len(raw_grilles)})
 
+            elif task_type == "clash":
+                # M4 跨专业碰撞出图侧: 对 raw_data 跑 detect_clashes, 每个碰撞画
+                # 红色警示圈 (CLASH/CLASH_LABEL 层)。碰撞点坐标取 kind 对应的
+                # 线段中点或点位坐标 (见 _clash_point)。无碰撞 → 0 实体, 既有出图不变。
+                from src.agents.src.tools.clash_detection import detect_clashes
+                raw_data = state.get("raw_data", {}) or {}
+                clash_count = 0
+                for c in detect_clashes(raw_data, tolerance_m=0.15):
+                    cx, cy = _clash_point(raw_data, c)
+                    writer.add_clash_marker(cx, cy, c["kind"], label=c["kind"].upper())
+                    clash_count += 1
+                results.append({"task_id": task_id, "status": "completed",
+                                "clashes": clash_count})
+
             elif task_type == "dimension":
                 axis_count = 0
                 if rooms:
@@ -631,6 +693,11 @@ def rule_check_node(state: dict) -> dict:
     win_layout = place_windows_on_walls(raw_windows, rooms)
     for c in detect_opening_collisions(door_layout, win_layout):
         violations.append(_collision_violation(c))
+
+    # 多专业碰撞：管线/电气/暖通 段与点位 vs 结构梁/柱 (几何层, 非规范条文)
+    # 只追加, 不改既有 _ELEMENT_CHECKS / 门窗碰撞逻辑; 无碰撞样本零新增。
+    for c in detect_clashes(raw, tolerance_m=0.15):
+        violations.append(_clash_violation(c))
 
     return {
         "rule_violations": [
