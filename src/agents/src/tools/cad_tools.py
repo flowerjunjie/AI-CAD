@@ -194,6 +194,22 @@ class DXFReader:
             raise RuntimeError("调用 get_wall_segments 前需先 open()")
         return self._segments_from_layer(layer_names)
 
+    def _segments_by_layer(self, layer_names, include_layer: bool, _caller: str) -> list:
+        """线段类元素通用底座: 按图层读 LINE/LWPOLYLINE → 纯线段或带图层 dict。
+
+        include_layer=False → [(start_xy,end_xy),...]; True → [{start,end,layer},...]。
+        给排水/结构/墙 共用此法, 各专业只传自己的默认图层组 (开放封闭: 加专业=加一行薄封装)。
+        """
+        if self.doc is None:
+            raise RuntimeError(f"调用 {_caller} 前需先 open()")
+        if not include_layer:
+            return self._segments_from_layer(layer_names)
+        out = []
+        for layer in layer_names:
+            for a, b in self._segments_from_layer((layer,)):
+                out.append({"start": a, "end": b, "layer": layer})
+        return out
+
     def get_plumbing_segments(
         self,
         layer_names=("PIPE", "PIPE_WASTE", "PIPE_VENT", "PIPE_DRAIN"),
@@ -208,16 +224,7 @@ class DXFReader:
             每条都带来源图层，供 plumbing_extractor 按图层映射管径。
             结构化 dict 消除「纯线段 vs 带图层」的形态歧义。
         """
-        if self.doc is None:
-            raise RuntimeError("调用 get_plumbing_segments 前需先 open()")
-        if not include_layer:
-            return self._segments_from_layer(layer_names)
-        # 按图层分组再平铺，给每段补上来源图层（统一 dict 形态）
-        out = []
-        for layer in layer_names:
-            for a, b in self._segments_from_layer((layer,)):
-                out.append({"start": a, "end": b, "layer": layer})
-        return out
+        return self._segments_by_layer(layer_names, include_layer, "get_plumbing_segments")
 
     def get_structural_segments(
         self,
@@ -232,15 +239,7 @@ class DXFReader:
             每条带来源图层，供 structural_extractor 按图层映射 beam_type/width_mm。
         契约: docs/structural-upstream-contract.md §2.1
         """
-        if self.doc is None:
-            raise RuntimeError("调用 get_structural_segments 前需先 open()")
-        if not include_layer:
-            return self._segments_from_layer(layer_names)
-        out = []
-        for layer in layer_names:
-            for a, b in self._segments_from_layer((layer,)):
-                out.append({"start": a, "end": b, "layer": layer})
-        return out
+        return self._segments_by_layer(layer_names, include_layer, "get_structural_segments")
 
     def get_element_blocks(self, layer_names) -> list:
         """通用底座：按图层读 INSERT 块 → 结构化 dict（与 ezdxf 实体解耦）。
@@ -932,64 +931,6 @@ class DXFWriter:
             return True
         except Exception as e:
             print(f"Save failed: {e}")
-            return False
-
-
-# ─── COM Interface (Windows only) ───────────────────────────────
-
-class COMCadInterface:
-    """AutoCAD COM 接口（Windows 专用）"""
-
-    def __init__(self):
-        self._application = None
-
-    @property
-    def is_available(self) -> bool:
-        """检查 COM 接口是否可用"""
-        if self._application is None:
-            try:
-                import win32com.client
-                self._application = win32com.client.Dispatch("AutoCAD.Application")
-                return True
-            except Exception:
-                return False
-        return True
-
-    def open_document(self, path: str) -> bool:
-        """打开文档"""
-        if not self.is_available:
-            print("COM interface not available (non-Windows or AutoCAD not installed)")
-            return False
-        try:
-            import win32com.client
-            doc = self._application.Documents.Open(path)
-            return doc is not None
-        except Exception as e:
-            print(f"COM open failed: {e}")
-            return False
-
-    def draw_line(self, start: tuple, end: tuple) -> bool:
-        """绘制直线"""
-        if not self.is_available:
-            return False
-        try:
-            import win32com.client
-            self._application.ActiveDocument.ModelSpace. \
-                AddLine(start, end)
-            return True
-        except Exception as e:
-            print(f"COM draw failed: {e}")
-            return False
-
-    def save(self, path: str) -> bool:
-        """保存文档"""
-        if not self.is_available:
-            return False
-        try:
-            self._application.ActiveDocument.SaveAs(path)
-            return True
-        except Exception as e:
-            print(f"COM save failed: {e}")
             return False
 
 
