@@ -101,7 +101,7 @@ def main():
         "outlets": [{"id": "o", "height_m": 2.5, "room_type": "kitchen", "has_earthing": False}],
         "switches": [],
         "hvac_ducts": [{"id": "hd", "duct_type": "supply", "diameter_mm": 100,
-                        "airflow_m3h": 500.0, "velocity_ms": 9.0}],
+                        "airflow_m3h": 500.0, "velocity_ms": 12.0}],
         "hvac_units": [{"id": "hu", "unit_type": "outdoor", "cooling_kw": 3.5,
                         "location_type": "indoor"}],
         "hvac_grilles": [{"id": "hg", "grille_type": "supply", "height_m": 1.0}],

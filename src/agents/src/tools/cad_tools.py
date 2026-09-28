@@ -386,6 +386,71 @@ class DXFWriter:
             if name not in existing:
                 self.doc.linetypes.add(name, pattern=pattern)
 
+    # ── 图层着色/线宽标准 (M3 出图深化: 图层→精细图元 的制图标准维度) ──────
+    # ezdxf layers.new(name, color=ACI, lineweight=1/100mm) 给图层挂属性;
+    # matplotlib 渲染按 color 上色, 线宽决定线粗。ACI 色号: 1红 2黄 3绿 4青
+    # 5蓝 6品红 7白 8灰。lineweight 单位 1/100 mm (13=0.13mm 细 / 30=0.30mm 中粗
+    # / 50=0.50mm 粗)。配色依据建筑/水/电/暖/结构制图惯例, 结构线粗于管线。
+    _LAYER_STYLES: dict[str, dict[str, int]] = {
+        # 墙体承重主轮廓: 白(7) 粗(50) — 制图最粗实线
+        "WALL": {"color": 7, "lineweight": 50},
+        "CENTERLINE": {"color": 7, "lineweight": 50},
+        # 门窗建筑细部: 灰(8) 细
+        "DOOR": {"color": 8, "lineweight": 13},
+        "WINDOW": {"color": 8, "lineweight": 13},
+        # 水系统: 红(1) 细
+        "PIPE": {"color": 1, "lineweight": 13},
+        "PIPE_LABEL": {"color": 1, "lineweight": 13},
+        "PIPE_WASTE": {"color": 1, "lineweight": 13},
+        "PIPE_VENT": {"color": 1, "lineweight": 13},
+        "PIPE_DRAIN": {"color": 1, "lineweight": 13},
+        # 风系统: 蓝(5) 细
+        "HVAC_DUCT": {"color": 5, "lineweight": 13},
+        "HVAC_UNIT": {"color": 5, "lineweight": 13},
+        "HVAC_GRILLE": {"color": 5, "lineweight": 13},
+        "HVAC_LABEL": {"color": 5, "lineweight": 13},
+        # 结构: 绿(3) 中粗(30) — 梁柱截面主轮廓, 粗于管线细于墙体
+        "BEAM": {"color": 3, "lineweight": 30},
+        "BEAM_LABEL": {"color": 3, "lineweight": 13},
+        "BEAM_FILL": {"color": 3, "lineweight": 13},
+        "COLUMN": {"color": 3, "lineweight": 30},
+        "COLUMN_LABEL": {"color": 3, "lineweight": 13},
+        "FOUNDATION": {"color": 3, "lineweight": 30},
+        "NODE": {"color": 3, "lineweight": 13},
+        "WALL_SHEAR": {"color": 3, "lineweight": 30},
+        # 电气: 黄(2) 细
+        "ELEC_OUTLET": {"color": 2, "lineweight": 13},
+        "ELEC_SWITCH": {"color": 2, "lineweight": 13},
+        "ELEC_LABEL": {"color": 2, "lineweight": 13},
+        # 轴网/标注/编号: 白(7) 细
+        "AXIS": {"color": 7, "lineweight": 13},
+        "DIMENSION": {"color": 7, "lineweight": 13},
+        "OPENING_TAG": {"color": 7, "lineweight": 13},
+    }
+
+    def _ensure_layer_styles(self) -> None:
+        """幂等给各专业图层套 着色(color) + 线宽(lineweight) 标准。
+
+        仿 _ensure_linetypes 的"先查后建/幂等"范式:
+        - 已存在图层 → 属性赋值 layer.color/lineweight (ezdxf setter, 不 new)。
+        - 未存在图层 → layers.new(name, color, lineweight) 一次带全样式。
+        重复调用全走 setter 分支, no-op 安全。出图前 (save 入口) 统一调,
+        覆盖 add_* 内裸建 (无色) 的图层; 不删不改任何既有实体。
+
+        ezdxf 1.4.4 的 layers.new() 不接受 color/lineweight 关键字 (只认 name
+        等基础参数), 故未建图层也走 new(name) + 属性赋值, 与已存在分支统一
+        成 setter 路径 (同名字段增量, 单一写法)。
+        注意: lineweight 须写 dxf.lineweight 原语 (ezdxf 的 layer.lineweight
+        高级 setter 会把普通 int 当 ByLayer 吞掉, 读回 -3); color 走 dxf.color
+        (ACI 色号 1-256, 读回正常)。
+        """
+        for name, style in self._LAYER_STYLES.items():
+            if name not in self.doc.layers:
+                self.doc.layers.new(name)
+            layer = self.doc.layers.get(name)
+            layer.dxf.color = style["color"]
+            layer.dxf.lineweight = style["lineweight"]
+
     def add_wall(self, wall: Wall) -> None:
         """添加墙体（中心线）"""
         self.msp.add_line(
@@ -836,8 +901,9 @@ class DXFWriter:
         return count
 
     def save(self, path: str) -> bool:
-        """保存 DWG"""
+        """保存 DWG。出图前统一套图层着色/线宽标准 (幂等, 覆盖裸建图层)。"""
         try:
+            self._ensure_layer_styles()
             self.doc.saveas(path)
             return True
         except Exception as e:
