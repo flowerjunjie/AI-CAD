@@ -23,6 +23,17 @@
 - 收口/重构后必跑全量 `python -m pytest tests/ -q` + `python scripts/smoke_test.py`，
   贴真实数字才交付（红线一：没有输出的完成叫自嗨）。
 
+## 打包 / 长任务纪律（2026-09-30 固化）
+- **重打包 exe 前必须先刷新前端**：`cd src/client && npm run build`（产物落 `src/dist`，
+  非 `src/client/dist`——vite `outDir: '../dist'` 上移一层）。旧 dist 打进去 = 界面里没有新面板。
+- **PyInstaller 长构建放后台就等完成通知，不轮询、不手停**——手停会留残留
+  `ai_cad_gui.exe` 进程锁 `_internal/*.pyd`，下次构建 COLLECT 阶段 `rmtree` 报 WinError 5。
+  遇文件锁先 `taskkill` 残留 exe + 删整个 `build/dist/ai_cad_gui` 再重跑。
+- **改懒 import 的新模块要同步补 `build_exe.py` 的 `HIDDEN_IMPORTS`**（如 M4/M5 的
+  `clash_detection`/`conflict_detection`）——`tools` 是命名空间包，PyInstaller 静态分析
+  追不到，不显式列则 exe 运行时 ModuleNotFoundError（开发态正常、打包态才炸的坑）。
+- 前端 `vite.config` 已开 `emptyOutDir`（outDir 在根外默认不清空会堆积历史 bundle 进 exe）。
+
 ## 诚实边界（不虚标，留给人）
 - M1 结构/给排水数值、M2 DWG 图层约定、M5 权限模型 = **外部依赖**。
   机制已通、值/约定待专家与业务回填，**不要替专家把占位翻成 confirmed=true**。
