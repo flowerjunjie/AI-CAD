@@ -296,7 +296,30 @@ M3/M4/M5 往核心文件堆代码后收口，`cad_tools.py` 从 1021 行回落�
   `self.entities` 状态机保守保留）。
 - **收口红线**：零行为改变——全量 294 + 冒烟全绿，src/rules 0 改动。
 
-### 8.5 本轮外部依赖边界（不虚标，留给人）
+### 8.6 M4 碰撞 / M5 冲突 接入 GUI 面板（肉眼可见，commit `a7818ed`）
+
+M4/M5 代码已落地但 GUI 上**没有独立展示位**（碰撞违规混在 `/api/pipeline` 的规范违规清单里）。本次补齐——**让新能力在双击界面上肉眼可见**：
+
+- **桥端点**（`bridge.py` F 段，照既有范式追加）：
+  - `GET /api/clash?sample=...` → 调 `detect_clashes`，无碰撞 `count=0` 空列表（不造假）
+  - `GET /api/conflict?sample_a=&sample_b=` → 调 `detect_conflicts` + `summarize`，同稿 0 冲突
+  - 懒 import（函数体）+ 缺 sample → 404 诚实报错
+- **前端四层**（照 `loadDslRules`/`pipelineResult` 范式）：
+  - `engineApi.ts`：`runClashCheck` / `runConflict`（`getJson` 封装，断连降级 `null` 不崩）
+  - `useEngineStore.ts`：`clashResults`/`conflictResults` + loading 字段/setter
+  - `App.tsx` 中区：「碰撞检测」+「改动冲突」独立区块（**品红徽标**呼应出图 CLASH 层，
+    有碰撞列清单 / 无碰撞绿色 ✓ / 断连按钮 disabled）
+  - `App.css`：品红 badge 样式
+- **测试** `test_bridge_clash_conflict.py` 6 条（有碰撞命中 / 无碰撞 0 列表 / 404 /
+  同稿 0 冲突 / 缺稿 404 / 不同稿命中）。
+- **验证**：全量 **300 passed / 5 skipped / 0 failed** + 冒烟全过 + 前端 `tsc --noEmit` 0 报错
+  + 起桥真 curl 两端点（默认样本无碰撞 `count=0`，缺样本 404，肉眼可见）。
+  命中路径由单测用**构造的碰撞 raw**（管横穿梁 `pipe-beam`、插座落梁 `outlet-beam`）真验证。
+
+> **诚实降级**：`residential_100sqm.json` 真实几何上无跨专业碰撞，`/api/clash` 返回 `count=0`
+> 而非塞假碰撞——区分「没数据」和「错了」。M4/M5 后端逻辑 0 改动（只调 `detect_*`，未重写）。
+
+### 8.7 本轮外部依赖边界（不虚标，留给人）
 
 | 里程碑 | 剩余占位 | 需要谁 | 现状 |
 |--------|---------|--------|------|
@@ -308,4 +331,4 @@ M3/M4/M5 往核心文件堆代码后收口，`cad_tools.py` 从 1021 行回落�
 > M3/M4/M5 都是**照同一套纯函数范式接入、主链路零/最小改动**——可扩展底座再证一次。
 > 剩下 M1/M2/M5权限 三块全是外部依赖，专家/业务把"值"和"约定"喂进来即可点亮，架构不动。
 
-全量回归：`python -m pytest tests/ -q` → **294 passed / 5 skipped / 0 failed** · 冒烟 `scripts/smoke_test.py` 秒级全过。
+全量回归：`python -m pytest tests/ -q` → **300 passed / 5 skipped / 0 failed** · 冒烟 `scripts/smoke_test.py` 秒级全过 · 前端 `tsc --noEmit` 0 报错。
