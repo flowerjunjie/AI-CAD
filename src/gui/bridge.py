@@ -534,6 +534,66 @@ def api_rules_dsl_apply(req: DslRulesApplyReq) -> dict:
     }
 
 
+# ─── F 碰撞/冲突域段: M4 跨专业碰撞 + M5 两稿改动冲突 (只调用工具库, 不重写) ───
+# 懒 import 放函数体: module 收集期不触发 clash/conflict 重依赖。
+# 红线二: sample 不存在 → 404 诚实报错, 无碰撞/无冲突 → 0 + 空列表, 绝不造假。
+
+_CLASH_SAMPLE_KEYS = [
+    "structural_beams", "structural_columns", "pipes", "hvac_ducts",
+    "outlets", "hvac_grilles",
+]
+
+
+def _load_sample_raw(sample: str) -> dict:
+    """读 data/sample/<sample> 顶层元素数据 (键缺失/缺键优雅取空 dict)。
+    文件不存在 → HTTPException 404 (诚实报错, 不造假数据)。"""
+    p = os.path.join(ROOT, "data", "sample", sample)
+    if not os.path.exists(p):
+        raise HTTPException(404, f"样本不存在: {sample}")
+    with open(p, encoding="utf-8") as fh:
+        data = json.load(fh)
+    # 顶层是元素数据 (doors/pipes/... 各带 id), 只取碰撞检测用到的键
+    return {k: data.get(k, []) for k in _CLASH_SAMPLE_KEYS}
+
+
+@app.get("/api/clash")
+def api_clash(sample: str = "residential_100sqm.json", tolerance_m: float = 0.15) -> dict:
+    """M4 跨专业碰撞: 读 sample 顶层元素数据调 detect_clashes。
+
+    返回 {sample, tolerance_m, clashes: [{a_id,b_id,kind,category,detail}], count}。
+    无碰撞 → count=0 空列表 (诚实, 不造假)。"""
+    from src.agents.src.tools.clash_detection import detect_clashes  # 懒
+
+    raw = _load_sample_raw(sample)
+    clashes = detect_clashes(raw, tolerance_m=tolerance_m)
+    return {"sample": sample, "tolerance_m": tolerance_m,
+            "clashes": clashes, "count": len(clashes)}
+
+
+@app.get("/api/conflict")
+def api_conflict(sample_a: str = "residential_100sqm.json",
+                 sample_b: str = "residential_100sqm.json") -> dict:
+    """M5 两稿改动冲突: 两份 sample 顶层数据调 detect_conflicts + summarize_conflicts。
+
+    返回 {sample_a, sample_b, count, by_category, conflicts, summary}。
+    同稿自比 → count=0 空列表 (诚实, 不造假)。"""
+    from src.agents.src.tools.conflict_detection import (  # 懒
+        detect_conflicts, summarize_conflicts)
+
+    raw_a = _load_sample_raw(sample_a)
+    raw_b = _load_sample_raw(sample_b)
+    conflicts = detect_conflicts(raw_a, raw_b)
+    summary = summarize_conflicts(conflicts)
+    return {
+        "sample_a": sample_a,
+        "sample_b": sample_b,
+        "count": len(conflicts),
+        "by_category": summary["by_category"],
+        "conflicts": conflicts,
+        "summary": summary,
+    }
+
+
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
 from fastapi.responses import HTMLResponse

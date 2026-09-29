@@ -505,6 +505,56 @@ body {
 
 /* rules-panel 内部 tab 切换 (列表 vs 编辑器) */
 .rules-pane-toggle { margin-bottom: 8px; }
+
+/* ============================================================
+   M4 碰撞检测 / M5 改动冲突 展示区块 (agent-panel 中区, bridge F 段)
+   ============================================================ */
+
+.clash-section, .conflict-section { margin-top: 16px; }
+.clash-section h3, .conflict-section h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: #888; margin-bottom: 8px;
+}
+.clash-head-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 8px;
+}
+.clash-head-row h3 { margin-bottom: 0; }
+
+/* 品红 badge — 呼应出图 CLASH 层 (DWG 出图层同色系) */
+.clash-badge {
+  display: inline-block; min-width: 20px; text-align: center;
+  background: #e91e8f; color: #fff; font-size: 11px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px; margin-right: 8px;
+}
+.clash-scope { font-size: 11px; color: #888; }
+
+.clash-item {
+  padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;
+  font-size: 12px; background: #0f0f1a; border-left: 3px solid #555;
+}
+/* 有碰撞 → 品红左边框, 命中态 */
+.clash-item.clash-hit { border-left-color: #e91e8f; }
+/* 无碰撞 → 绿色左边框, 清洁态 */
+.clash-item.clash-ok { border-left-color: #2ecc71; }
+.clash-clean { color: #2ecc71; font-weight: 600; }
+
+.clash-line { display: flex; gap: 8px; align-items: baseline; margin-top: 4px; }
+.clash-kind {
+  font-size: 10px; font-weight: 600; color: #e91e8f;
+  background: #2a0a1f; padding: 0 6px; border-radius: 4px; flex-shrink: 0;
+}
+.clash-ids { color: #eee; font-family: 'Consolas', monospace; font-size: 11px; }
+.clash-detail { color: #666; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clash-empty { font-size: 12px; color: #555; }
+
+/* M5 区块的稿B 选择器 (暂只有单 sample, 预留下拉后续接真实两稿) */
+.conflict-controls { display: flex; align-items: center; gap: 6px; }
+.conflict-select {
+  background: #16213e; border: 1px solid #0f3460; color: #ccc;
+  font-size: 11px; padding: 3px 6px; border-radius: 6px; max-width: 190px;
+}
+.conflict-select:focus { outline: none; border-color: #e91e8f; }
 .placeholder-card-lit {
   opacity: 1; filter: none;
   border-style: solid; border-color: #2e7d32;

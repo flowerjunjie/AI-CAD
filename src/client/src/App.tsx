@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
-import { syncEngine, runPipeline, runRagSearch, previewUrl, API } from './engineApi';
+import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
+        runClashCheck, runConflict } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -21,6 +22,7 @@ function App() {
   const {
     engineConnected, phase, rules, violations,
     running, lastSample, pipelineResult, ragResults, ragQuery,
+    clashResults, clashLoading, conflictResults, conflictLoading,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +52,17 @@ function App() {
     if (!searchQuery.trim()) return;
     await runRagSearch(searchQuery);
   }, [searchQuery]);
+
+  // M4 碰撞检测 (bridge /api/clash): 默认用当前 lastSample 检测
+  const handleClash = useCallback(async () => {
+    await runClashCheck(lastSample);
+  }, [lastSample]);
+
+  // M5 改动冲突检测 (bridge /api/conflict): 两稿默认同 sample (自比 → 0 冲突)
+  const [conflictSampleB, setConflictSampleB] = useState('residential_100sqm.json');
+  const handleConflict = useCallback(async () => {
+    await runConflict(lastSample, conflictSampleB);
+  }, [lastSample, conflictSampleB]);
 
   return (
     <div className="app">
@@ -172,6 +185,88 @@ function App() {
               ))}
             </div>
           )}
+
+          {/* M4 碰撞检测 — 真数据 (bridge /api/clash, 品红色呼应出图 CLASH 层) */}
+          <div className="clash-section">
+            <div className="clash-head-row">
+              <h3>碰撞检测</h3>
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleClash}
+                disabled={!engineConnected || clashLoading}
+              >
+                {clashLoading ? '检测中…' : '检测碰撞'}
+              </button>
+            </div>
+            {clashResults.length === 0 && (
+              <p className="clash-empty">尚未检测 — 点「检测碰撞」跑 {lastSample} 的跨专业碰撞 (管线/暖通 vs 结构梁柱)</p>
+            )}
+            {clashResults.map((r, i) => (
+              <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                {r.count > 0 ? (
+                  <>
+                    <span className="clash-badge">{r.count}</span>
+                    <span className="clash-scope">{r.sample}</span>
+                    {r.clashes.map((c, j) => (
+                      <div key={j} className="clash-line">
+                        <span className="clash-kind">{c.kind}</span>
+                        <span className="clash-ids">{c.a_id} × {c.b_id}</span>
+                        <span className="clash-detail">{c.detail}</span>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <span className="clash-clean">✓ 无跨专业碰撞 · {r.sample}</span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* M5 改动冲突检测 — 真数据 (bridge /api/conflict, 两稿按元素 id 比对) */}
+          <div className="conflict-section">
+            <div className="clash-head-row">
+              <h3>改动冲突 (两稿比对)</h3>
+              <div className="conflict-controls">
+                <select
+                  value={conflictSampleB}
+                  onChange={(e) => setConflictSampleB(e.target.value)}
+                  className="conflict-select"
+                >
+                  <option value="residential_100sqm.json">residential_100sqm.json</option>
+                </select>
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={handleConflict}
+                  disabled={!engineConnected || conflictLoading}
+                >
+                  {conflictLoading ? '比对中…' : '比冲突'}
+                </button>
+              </div>
+            </div>
+            {conflictResults.length === 0 && (
+              <p className="clash-empty">尚未比对 — 点「比冲突」比对稿A与稿B 的元素改动 (改值/新增/删除)</p>
+            )}
+            {conflictResults.map((r, i) => (
+              <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                {r.count > 0 ? (
+                  <>
+                    <span className="clash-badge">{r.count}</span>
+                    <span className="clash-scope">{r.sample_a} vs {r.sample_b}</span>
+                    {r.conflicts.slice(0, 8).map((c, j) => (
+                      <div key={j} className="clash-line">
+                        <span className="clash-kind">{c.kind}</span>
+                        <span className="clash-ids">{c.category}/{c.id}{c.field ? `.${c.field}` : ''}</span>
+                        {c.field && <span className="clash-detail">{String(c.a_value)} → {String(c.b_value)}</span>}
+                      </div>
+                    ))}
+                    {r.conflicts.length > 8 && <div className="clash-detail">… 共 {r.conflicts.length} 条</div>}
+                  </>
+                ) : (
+                  <span className="clash-clean">✓ 两稿无改动冲突 · {r.sample_a} vs {r.sample_b}</span>
+                )}
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* 右: 规则 + 知识 */}

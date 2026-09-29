@@ -1,5 +1,6 @@
 import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult,
-        type DslRuleItem, type DslValidateResp, type DslApplyResp } from './useEngineStore';
+        type DslRuleItem, type DslValidateResp, type DslApplyResp,
+        type ClashResult, type ConflictResult } from './useEngineStore';
 
 // 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
 // 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
@@ -99,6 +100,38 @@ export async function applyDslRules(rules: DslRuleItem[], confirm: boolean): Pro
     '/api/rules/dsl/apply',
     { rules, confirm },
   );
+}
+
+// ─── M4 碰撞 / M5 冲突 (bridge.py F 段) ───
+// GET /api/clash?sample=X        → ClashResult (无碰撞 count=0 空列表)
+// GET /api/conflict?sample_a=&sample_b= → ConflictResult (同稿自比 0 冲突)
+// 断连时 getJson 返回 null, 对应 loading 复位, 不崩。
+
+export async function runClashCheck(sample: string): Promise<ClashResult | null> {
+  const store = useEngineStore.getState();
+  store.setClashLoading(true);
+  const result = await getJson<ClashResult>(
+    `/api/clash?sample=${encodeURIComponent(sample)}`,
+  );
+  store.setClashLoading(false);
+  if (result) {
+    // 追加而非覆盖: 多次检测不同 sample 可并存, 面板肉眼可区分
+    store.setClashResults([...store.clashResults, result]);
+  }
+  return result;
+}
+
+export async function runConflict(sampleA: string, sampleB: string): Promise<ConflictResult | null> {
+  const store = useEngineStore.getState();
+  store.setConflictLoading(true);
+  const result = await getJson<ConflictResult>(
+    `/api/conflict?sample_a=${encodeURIComponent(sampleA)}&sample_b=${encodeURIComponent(sampleB)}`,
+  );
+  store.setConflictLoading(false);
+  if (result) {
+    store.setConflictResults([...store.conflictResults, result]);
+  }
+  return result;
 }
 
 export { API };

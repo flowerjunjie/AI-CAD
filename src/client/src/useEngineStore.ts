@@ -41,6 +41,50 @@ export interface RAGResult {
   category: string;
 }
 
+// ─── M4 跨专业碰撞 / M5 两稿改动冲突 (bridge.py F 段) 数据契约 ───
+
+/** M4 单条碰撞 (bridge /api/clash 的 clashes[i]，对齐 detect_clashes 返回)。 */
+export interface ClashItem {
+  a_id: string;
+  b_id: string;
+  kind: string;          // pipe-beam / duct-column / outlet-beam / grille-column ...
+  detail: string;        // 中文说明 (如 "管段与梁段相交")
+}
+
+/** GET /api/clash 响应 (bridge.py F 段)。 */
+export interface ClashResult {
+  sample: string;
+  tolerance_m: number;
+  clashes: ClashItem[];
+  count: number;
+}
+
+/** M5 单条冲突 (bridge /api/conflict 的 conflicts[i])。 */
+export interface ConflictItem {
+  id: string;
+  field: string | null;  // null = 元素整块 added/removed
+  a_value: unknown;
+  b_value: unknown;
+  kind: 'value' | 'added' | 'removed';
+  category: string;      // 元素类: doors/outlets/pipes...
+}
+
+/** GET /api/conflict 响应 (bridge.py F 段)。 */
+export interface ConflictResult {
+  sample_a: string;
+  sample_b: string;
+  count: number;
+  by_category: Record<string, number>;
+  conflicts: ConflictItem[];
+  summary: {
+    total: number;
+    by_category: Record<string, number>;
+    value_conflicts: number;
+    added: number;
+    removed: number;
+  };
+}
+
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
 
 /** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
@@ -106,6 +150,11 @@ interface EngineState {
   pipelineResult: PipelineResult | null;
   ragResults: RAGResult[];
   ragQuery: string;
+  // M4 碰撞 / M5 冲突 (bridge F 段)
+  clashResults: ClashResult[];
+  clashLoading: boolean;
+  conflictResults: ConflictResult[];
+  conflictLoading: boolean;
   setConnected: (c: boolean, phase?: string) => void;
   setRules: (r: RuleItem[]) => void;
   setViolations: (v: Violation[]) => void;
@@ -113,6 +162,10 @@ interface EngineState {
   setLastSample: (s: string) => void;
   setPipelineResult: (p: PipelineResult | null) => void;
   setRagResults: (q: string, r: RAGResult[]) => void;
+  setClashResults: (c: ClashResult[]) => void;
+  setClashLoading: (l: boolean) => void;
+  setConflictResults: (c: ConflictResult[]) => void;
+  setConflictLoading: (l: boolean) => void;
 }
 
 export const useEngineStore = create<EngineState>((set) => ({
@@ -125,6 +178,10 @@ export const useEngineStore = create<EngineState>((set) => ({
   pipelineResult: null,
   ragResults: [],
   ragQuery: '',
+  clashResults: [],
+  clashLoading: false,
+  conflictResults: [],
+  conflictLoading: false,
   setConnected: (c, phase) => set({ engineConnected: c, ...(phase !== undefined ? { phase } : {}) }),
   setRules: (rules) => set({ rules }),
   setViolations: (violations) => set({ violations }),
@@ -132,4 +189,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   setLastSample: (lastSample) => set({ lastSample }),
   setPipelineResult: (pipelineResult) => set({ pipelineResult }),
   setRagResults: (ragQuery, ragResults) => set({ ragQuery, ragResults }),
+  setClashResults: (clashResults) => set({ clashResults }),
+  setClashLoading: (clashLoading) => set({ clashLoading }),
+  setConflictResults: (conflictResults) => set({ conflictResults }),
+  setConflictLoading: (conflictLoading) => set({ conflictLoading }),
 }));
