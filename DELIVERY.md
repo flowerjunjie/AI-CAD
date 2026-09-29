@@ -245,3 +245,67 @@ build/dist/ai_cad_gui/
 > 直观证明「专家填值即点亮、零代码」——填一个专业亮一个专业，架构不动。
 
 全量回归：`python -m pytest tests/ -q` → **249 passed / 5 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0）。
+
+---
+
+## 八、交付更新（2026-09-28 · M3 出图深化 + M4 碰撞检测 + M5 改动冲突 + 代码质量收口）
+
+> 本日推进 roadmap 里**全部可自主推动的里程碑**（M3/M4/M5 自主子集 + 代码质量收口），
+> 6 个原子 commit，全量测试基线从 249 推到 **294 passed / 5 skipped / 0 failed** 全程守住。
+> 原则不变——**已实现如实展示，外部依赖明确留占位，不虚标、不臆想业务**。
+
+### 8.1 M3 出图深化（图层着色 + 线宽标准，commit `fe8c770`）
+
+出图基础图元 Phase 3 已全，M3 补的是占位描述里唯一空缺的两项——**图层着色 + 线宽**：
+
+- `DXFWriter._LAYER_STYLES`（22 图层 → ACI 色号 + lineweight）+ 幂等 `_ensure_layer_styles()`，
+  经 `save()` 统一接入，**主链路 `cad_rule_export` 0 改动**。
+- 配色按建筑/水/电/暖/结构制图惯例：墙白粗(7/50) / 水红(1) / 风蓝(5) / 结构绿中粗(3/30) / 电黄(2) / 标注白 / 碰撞品红(6)。
+- 出图 PNG 预览按图层上色，肉眼验收不用开 CAD。
+- **纯增量红线**：不删/改任何既有出图实体，BEAM=2/COLUMN=3/ELEC_OUTLET=2 回归数量不变。
+
+### 8.2 M4 多专业碰撞检测（管线穿梁/插座撞梁/风管撞梁，commit `e057b09`）
+
+roadmap 里唯一**无外部依赖、可完全自主推进**的能力：
+
+- 核心几何库 `clash_detection.py`（纯函数，仿门窗碰撞范式）：`seg_intersect`
+  （严格相交，端点 T-touch 不算穿）+ `point_to_seg_dist` + `detect_clashes`，
+  覆盖 8 类跨专业碰撞（pipe/duct/outlet/grille × beam/column）。
+- 主链路 `rule_check_node` 追加 → `clash-<kind>` violation（不改既有条目）；
+  出图侧 `task_type=clash` 画品红警示圈（CLASH 层，有碰撞才出，无碰撞 0 实体）。
+- **回归安全**：无碰撞样本违规数不变（residential_100sqm 仍 3 条），真实碰撞样本可肉眼定位。
+
+### 8.3 M5 改动冲突检测（两稿 raw JSON 比对，自主子集，commit `c327de3`）
+
+M5「多设计师协作」整套需业务定权限模型（外部依赖，**不臆想**），本次只落地**无外部依赖的自主子集**：
+
+- 核心库 `conflict_detection.py`（纯函数，仿 M4 范式）：`diff_elements` + `detect_conflicts`
+  + `summarize_conflicts`，按元素类 + id 对齐比对，覆盖 value（同 id 字段值不同，含嵌套
+  list 深比较 / 缺字段）/ added / removed 三类冲突。
+- 主链路 `task_type="conflict"` 接入（无第二稿默认 no-op，0 冲突 0 出图，既有测试不破）。
+- **边界诚实标注**：多设计师权限模型 / 在线协同仍占位（需业务定模型）。
+
+### 8.4 代码质量收口（commit `75fa642` + `f00a498`，零行为改变）
+
+M3/M4/M5 往核心文件堆代码后收口，`cad_tools.py` 从 1021 行回落到 954 行：
+
+- 删 `COMCadInterface` 整段（全仓 0 引用、本环境跑不了的 AutoCAD COM 接口）。
+- 抽 `_segments_by_layer` 私有底座，收敛 `get_plumbing_segments`/`get_structural_segments`
+  的逐行同构逻辑（两方法体各 12 行→1 行薄封装），public 契约 inspect 程序化核实不变。
+- 删 `DXFReader.get_layers`/`get_entity_count` 两处 0 引用 public API（核实清再删，
+  `self.entities` 状态机保守保留）。
+- **收口红线**：零行为改变——全量 294 + 冒烟全绿，src/rules 0 改动。
+
+### 8.5 本轮外部依赖边界（不虚标，留给人）
+
+| 里程碑 | 剩余占位 | 需要谁 | 现状 |
+|--------|---------|--------|------|
+| M1 数值终确认 | 结构梁高下限/跨高比等 4 条数值已回填但 `confirmed=false`（**故意不虚标**） | 结构/给排水专家背书 | 机制通、值待专家 |
+| M2 DWG 图层约定 | 各院"点位画法/块名"映射 = TBD | 业务侧 DWG 制图规范 | 改 dict 即可 |
+| M5 权限模型 | 多设计师角色/在线协同 | 业务定协同模型 | 未启动（不臆想） |
+
+> **本日交付论点**：架构把"加专业 = 加分发表项 + 元素模型 + DSL 规则"的复杂度消化了，
+> M3/M4/M5 都是**照同一套纯函数范式接入、主链路零/最小改动**——可扩展底座再证一次。
+> 剩下 M1/M2/M5权限 三块全是外部依赖，专家/业务把"值"和"约定"喂进来即可点亮，架构不动。
+
+全量回归：`python -m pytest tests/ -q` → **294 passed / 5 skipped / 0 failed** · 冒烟 `scripts/smoke_test.py` 秒级全过。
