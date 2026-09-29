@@ -49,6 +49,8 @@ HIDDEN_IMPORTS = [
     "src.agents.src.tools.hvac_extractor",
     "src.agents.src.tools.structural_extractor",
     "src.agents.src.tools.matplotlib_cjk",
+    "src.agents.src.tools.clash_detection",
+    "src.agents.src.tools.conflict_detection",
     "src.rules.src.engine",
     "src.rules.src.dsl",
     "src.rules.src.residential",

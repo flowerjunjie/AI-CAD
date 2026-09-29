@@ -11,6 +11,9 @@ export default defineConfig({
   base: './',
   build: {
     outDir: '../dist',
+    // outDir 在项目根外 (src/dist), vite 默认不清空 → 每次 build 堆积历史
+    // bundle 死代码, 最后全被打进 exe 虚胖。显式清空 (纯 build 产物目录, 无风险)。
+    emptyOutDir: true,
   },
   server: {
     port: 3000,
