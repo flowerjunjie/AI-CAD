@@ -47,7 +47,7 @@
 ```
 意图理解(LLM) → 方案结构化(RAG) → CAD执行(ezdxf) → 规则校验(4专业) → 成果输出(DWG+报告)
 ```
-- **人在回路**：`auto_mode` 可开关，非自动模式关键节点暂停等设计师确认。graph 侧 `interrupt`+checkpointer+`run_agent_with_confirmation`（挂起→放行→resume 出终态）已就绪并有框架测试（`AI_CAD_RUN_FRAMEWORK=1`）；bridge 确认闸 `/agent/confirm` 已接通该 resume 通路（`_resume_agent_graph` 接 `run_agent_with_confirmation`，接 `test_agent_confirm_wiring.py`）。**边界**：前端存住"本 run 的 sample+checkpointer 再续跑"这一步尚未接——确认闸当前用默认样本真跑通路，未做 session 级续跑。
+- **人在回路**：`auto_mode` 可开关，非自动模式关键节点暂停等设计师确认。graph 侧 `interrupt`+checkpointer 已就绪并有框架测试（`AI_CAD_RUN_FRAMEWORK=1`）；**session 级真人在回路已打通**——`graph.start_agent_run_suspended` / `resume_agent_run`（外部持有 checkpointer+thread，分「起图挂起 / 续跑」两步）+ bridge `/agent/run`（起真实图挂起、存 session、真实 pending task）+ `/agent/confirm`（用**同一 thread** 真续跑，`resume.session=true`）+ 前端「起图挂起→逐 task 确认→同 thread 续跑」区块（演示/真实两级，据实标注）。端到端测试 `test_agent_confirm_wiring.py`（起图挂起 / session 续跑 / 拒绝保持挂起）+ 框架测试 `test_agent_graph.py` 双覆盖。
 - **LLM 真主导**：`run.py --llm` 走 LLM 意图生成方案；`--no-llm` 本地快验。两条路径边界清晰，LLM 是否参与**肉眼可验**（打印"LLM 实例就绪"）。
 - **5 个 LLM 适配器**：Agnes（默认，Anthropic 兼容接口）/ MiniMax / Kimi / GLM，统一 `LLMFactory` 接口（`src/agents/src/tools/llm_adapter.py`）。
 - 实测：喂"三室一厅 100㎡" → LLM 出方案 → 出 DWG + 违规清单 + 户型图渲染。

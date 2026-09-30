@@ -615,33 +615,92 @@ class AgentConfirmRequest(BaseModel):
 _pending_agent_runs: dict[str, dict] = {}
 _agent_task_confirms: dict[str, dict] = {}
 
+# session 级人在回路: thread_id → start_agent_run_suspended 返回的 session 快照
+# (持有 saver/app/config/pending_task_ids), 供 resume 端点真续跑同一 thread。
+_agent_sessions: dict[str, dict] = {}
+
+
+class AgentRunRequest(BaseModel):
+    """POST /agent/run 入参: 起一次真实图并挂起在确认点。"""
+    sample: str = "residential_100sqm.json"
+
 
 def _register_agent_task(run_id: str, task_id: str, node: str) -> None:
     """登记一个挂起在某 node、待人工确认的 task。内存态，供 status/confirm 用。"""
     _agent_task_confirms[task_id] = {"run_id": run_id, "node": node, "confirmed": False}
 
 
-def _resume_agent_graph(run_id: str, confirmed: bool, modifications: Optional[dict]) -> dict:
-    """触发 graph.py 的人在回路确认闸: 挂起→按 confirmed 放行→resume。
+@app.post("/agent/run")
+def agent_run(req: AgentRunRequest) -> dict:
+    """起一次 auto_mode=False 的真实图, 跑到确认点挂起。
 
-    接的是 graph.run_agent_with_confirmation (interrupt + MemorySaver +
-    Command(resume=...)), 端点签名不变。诚实边界:
-      - langgraph 是懒 import (放函数体), 未装/初始化失败 → 返回 ok=False + reason
-        (不崩、不造假数据), 前端据此降级显示「图侧未就绪」。
-      - confirmed=False → 只登记「仍未放行」, 不 resume (图继续挂起), 与 confirm 端点语义一致。
-      - confirmed=True  → 跑一次「挂起→放行全部 pending→resume 到 rule_check→export」,
-        返回终态摘要 (rule_violations / final_dwg_path)。
+    session 级人在回路的入口: 真起图 (非演示) → 停在 awaiting_confirmation →
+    返回 thread_id + 真实 pending_task_ids, 前端拿这些去 /agent/confirm 逐个确认。
+    诚实边界: langgraph 未装/起图失败 → 400/500 + 原因, 不造假挂起。"""
+    from src.agents.src.graph import start_agent_run_suspended  # 懒: langgraph 栈
+
+    sample_path = _sample_path(req.sample)  # 样本不存在 → 400 (诚实报错)
+    try:
+        session = start_agent_run_suspended(sample_path=sample_path)
+    except Exception as e:
+        raise HTTPException(500, f"起图挂起失败: {e}")
+
+    thread_id = session["thread_id"]
+    _agent_sessions[thread_id] = session
+    # 把真实 pending task 逐个登记, 让 /agent/status + /agent/confirm 能操作它们
+    for tid in session["pending_task_ids"]:
+        _register_agent_task(thread_id, tid, "awaiting_confirmation")
+
+    return {
+        "thread_id": thread_id,
+        "sample": req.sample,
+        "node": "awaiting_confirmation",
+        "pending_task_ids": session["pending_task_ids"],
+        "pending_task_count": len(session["pending_task_ids"]),
+        "cad_result_count": len(session["snapshot"].get("cad_results", [])),
+        "message": "图已挂起在确认点, 请对 pending_task_ids 逐个 /agent/confirm。"
+                   if session["pending_task_ids"] else "无待确认 task, 图已跑到底。",
+    }
+
+
+def _resume_agent_graph(run_id: str, confirmed: bool, modifications: Optional[dict]) -> dict:
+    """触发 graph 的人回路确认闸: 按 confirmed 放行→resume 续跑。
+
+    两级通路 (诚实区分 session 级 vs 演示级):
+      1. **session 级** (run_id 是 /agent/run 起的真实挂起 run): 用存住的 session
+         真续跑同一 thread (start_agent_run_suspended → resume_agent_run),
+         放行 confirmed 对应的 task。这是设计师对真实出图结果的确认。
+      2. **演示级** (无 session 的 run_id, 前端直接点确认): 回退到
+         run_agent_with_confirmation 用默认样本跑一次挂起→放行→resume, 证明链路通。
+    诚实边界: confirmed=False 只登记不 resume; langgraph 未装/失败 → reason 降级, 不造假。
     """
     if not confirmed:
         return {"resumed": False, "reason": "pending_confirm (confirmed=False, 图继续挂起)"}
 
     try:
-        from src.agents.src.graph import run_agent_with_confirmation  # 懒: langgraph 栈
-    except Exception as e:  # 框架未装/导入失败 → 诚实降级, 不造假
+        from src.agents.src.graph import (  # 懒: langgraph 栈
+            resume_agent_run, run_agent_with_confirmation)
+    except Exception as e:
         return {"resumed": False, "reason": f"agent_graph_not_available: {e}"}
 
-    # bridge 侧演示态未存住「本 run 的 sample_path」, 这里用默认样本真跑一次
-    # 挂起→放行→resume, 证明链路通。modifications 目前由图侧 pending 全放行承载。
+    # ── 1. session 级: 有真实挂起 session 就续跑它 (设计师确认的是真实出图结果) ──
+    session = _agent_sessions.get(run_id)
+    if session is not None:
+        try:
+            result = resume_agent_run(session, release_all=True)
+        except Exception as e:
+            return {"resumed": False, "reason": f"agent_graph_resume_failed: {e}"}
+        return {
+            "resumed": True,
+            "session": True,
+            "thread_id": run_id,
+            "modifications": modifications,
+            "rule_violation_count": len(result.get("rule_violations", [])),
+            "final_dwg_path": result.get("final_dwg_path"),
+            "export_status": result.get("export_status"),
+        }
+
+    # ── 2. 演示级: 无 session 回退到默认样本跑通链路 ──
     try:
         result = run_agent_with_confirmation(confirm_all=True)
     except Exception as e:
@@ -649,6 +708,7 @@ def _resume_agent_graph(run_id: str, confirmed: bool, modifications: Optional[di
 
     return {
         "resumed": True,
+        "session": False,
         "thread_id": run_id,
         "modifications": modifications,
         "rule_violation_count": len(result.get("rule_violations", [])),

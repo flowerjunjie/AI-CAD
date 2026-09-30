@@ -287,3 +287,85 @@ def _resume_with_confirmations(
     # Command(resume=...) 传入全量确认映射；awaiting_confirmation_node 写回 state，
     # 条件边据此路由到 rule_check（全部确认）或回到确认点（仍有 pending）。
     return app.invoke(Command(resume=new_confirms), config)
+
+
+# ─── Session 级人在回路: 外部持有 checkpointer + thread, 分「起图挂起 / 续跑」两步 ───
+# 与上面 run_agent_with_confirmation (一次跑到底, saver 闭在函数内) 互补:
+# 这里把 saver/app/config 交给调用方 (bridge) 持有, 设计师可「起真实图 → 拿到挂起
+# 快照 → 逐 task 确认 → 续跑同一 thread」, 即真正的 session 级人在回路 (非演示)。
+
+def start_agent_run_suspended(
+    sample_path: str | None = None,
+    thread_id: str | None = None,
+    output_path: str | None = None,
+    inject_sample_structure: bool = True,
+) -> dict:
+    """起一次 auto_mode=False 的图, 跑到 awaiting_confirmation 挂起。
+
+    返回 {saver, app, thread_id, pending_task_ids, snapshot}:
+      - saver/app: MemorySaver + 编译图, 供后续 resume_agent_run 用 (同一实例!)
+      - thread_id: 本次 run 的 thread (外部不传则自动生成)
+      - pending_task_ids: 挂起时的待确认 task 列表 (设计师要逐个确认的对象)
+      - snapshot: 挂起前 state 快照 (此时 CAD 已出图, 规则/export 未跑)
+    若 auto_mode 下无 pending (已跑到底), pending_task_ids 为空。
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+    from uuid import uuid4
+
+    saver = MemorySaver()
+    graph = build_agent_graph(checkpointer=saver)
+    app = graph.compile(checkpointer=saver)
+    tid = thread_id or f"ai-cad-hil-{uuid4().hex[:8]}"
+    config = {"configurable": {"thread_id": tid}}
+
+    initial_state: DesignState = {
+        "project_input": "三室一厅住宅，建筑面积约100平米，需要生成施工图",
+        "output_path": output_path or f"/tmp/ai_cad_hil_{tid}.dwg",
+        "auto_mode": False,  # 人在回路必须关 auto_mode, 否则确认点被绕过
+    }
+    if sample_path:
+        from src.agents.src.nodes.input_parser import parse_json_input
+        parsed = parse_json_input(sample_path)
+        initial_state["raw_data"] = parsed.get("raw_data", {})
+        if inject_sample_structure:
+            initial_state["task_list"] = parsed.get("task_list", [])
+            initial_state["project_structure"] = parsed.get("project_structure", {})
+            initial_state["project_type"] = parsed.get("project_type", "住宅")
+
+    result = app.invoke(initial_state, config)  # 在确认点挂起, 返回挂起前快照
+    pending = pending_confirmation_ids(result)
+    return {
+        "saver": saver,
+        "app": app,
+        "thread_id": tid,
+        "config": config,
+        "pending_task_ids": pending,
+        "snapshot": result,
+        "sample_path": sample_path,
+    }
+
+
+def resume_agent_run(
+    session: dict,
+    release_task_ids: list[str] | None = None,
+    release_all: bool = True,
+) -> dict:
+    """续跑一次挂起的 run (用 start_agent_run_suspended 返回的 session)。
+
+    release_all=True 放行全部 pending; release_task_ids 给定时只放行这些 task
+    (逐 task 确认语义, 其余仍挂起, 图会再次停在确认点等下一批)。
+    返回最终 state (含 rule_violations / final_dwg_path)。"""
+    from langgraph.types import Command
+
+    app = session["app"]
+    config = session["config"]
+    pending = session.get("pending_task_ids", [])
+    new_confirms = dict(session["snapshot"].get("human_confirmations", {}))
+    if release_task_ids is not None:
+        for tid in release_task_ids:
+            new_confirms[tid] = True
+    elif release_all:
+        for tid in pending:
+            new_confirms[tid] = True
+    # 逐批确认: 未放行的 task 保持 False, 图会重回确认点 (可再调本函数放行下一批)
+    return app.invoke(Command(resume=new_confirms), config)

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
-        runClashCheck, runConflict, runAgentConfirm } from './engineApi';
+        runClashCheck, runConflict, runAgentConfirm, runAgentStart } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -65,13 +65,23 @@ function App() {
     await runConflict(lastSample, conflictSampleB);
   }, [lastSample, conflictSampleB]);
 
-  // 人在回路确认闸 (bridge /agent/confirm, 演示通路): 对演示 task 放行/拒绝
-  // confirmed=true 时 bridge 真跑一次 graph 挂起→放行→resume 出终态摘要。
+  // 人在回路确认闸 (bridge /agent/confirm): 放行/拒绝 → 真续跑。
+  // session 级: 先「起图挂起」(runAgentStart → /agent/run) 起真实图拿 thread+真实 pending,
+  // 再对真实 task 确认 → bridge 用同一 thread 真续跑 (resume.session=true)。
+  // 演示级: 没起图直接确认演示 task → bridge 回退默认样本跑通链路 (resume.session=false)。
+  const { agentRun } = useEngineStore();
   const [confirmTask, setConfirmTask] = useState('door-3');
   const [confirmDecision, setConfirmDecision] = useState(true);
   const handleConfirm = useCallback(async () => {
     await runAgentConfirm(confirmTask, confirmDecision);
   }, [confirmTask, confirmDecision]);
+  // 「起图挂起」: 起一次真实 auto_mode=False 图停在确认点, 把真实 pending 灌进 task 下拉
+  const handleStartRun = useCallback(async () => {
+    const res = await runAgentStart(lastSample);
+    if (res && res.pending_task_ids.length > 0) {
+      setConfirmTask(res.pending_task_ids[0]);
+    }
+  }, [lastSample]);
 
   return (
     <div className="app">
@@ -277,18 +287,38 @@ function App() {
             ))}
           </div>
 
-          {/* 人在回路确认闸 — 演示通路 (bridge /agent/confirm → graph 挂起→放行→resume) */}
+          {/* 人在回路确认闸 — session 级 (起真实图挂起→逐 task 确认→同 thread 真续跑) */}
           <div className="confirm-section">
             <div className="clash-head-row">
-              <h3>人在回路 · 确认闸 <span className="confirm-tag">演示通路</span></h3>
+              <h3>人在回路 · 确认闸 <span className="confirm-tag">session</span></h3>
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleStartRun}
+                disabled={!engineConnected || confirmLoading}
+              >
+                {confirmLoading ? '起图中…' : '起图挂起'}
+              </button>
             </div>
+            {agentRun && (
+              <div className={`clash-item ${agentRun.pending_task_count > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                <span className="clash-scope">
+                  已挂起 {agentRun.thread_id} · {agentRun.pending_task_count} 个待确认 /
+                  CAD 已出 {agentRun.cad_result_count} 图元
+                </span>
+              </div>
+            )}
             <div className="confirm-controls">
               <select
                 value={confirmTask}
                 onChange={(e) => setConfirmTask(e.target.value)}
                 className="conflict-select"
               >
-                <option value="door-3">door-3</option>
+                {(agentRun?.pending_task_ids.length
+                  ? agentRun.pending_task_ids
+                  : ['door-3']
+                ).map((t) => (
+                  <option key={t} value={t}>{t}{agentRun ? '' : ' (演示)'}</option>
+                ))}
               </select>
               <label className="confirm-radio">
                 <input
@@ -317,18 +347,20 @@ function App() {
               </button>
             </div>
             <p className="clash-empty">
-              演示态: 提交「放行」→ bridge 真跑一次图挂起→放行→resume, 出终态摘要 (违规数 / DWG 路径 / 出图状态)。
-              非设计师对真实出图结果的逐 task 确认 (前端 session 续跑待接)。
+              session 级: 点「起图挂起」起一次真实图停在确认点 → 对真实 task 放行/拒绝 →
+              bridge 用同一 thread 真续跑出终态。未起图时提交 = 演示级 (bridge 用默认样本跑通链路)。
             </p>
             {confirmResults.map((r, i) => {
               const isResumed = r.resume?.resumed === true;
               const degraded = r.resume && !r.resume.resumed && r.resume.reason;
+              const isSession = r.resume?.session === true;
               return (
                 <div key={i} className={`clash-item ${isResumed ? 'clash-ok' : 'clash-hit'}`}>
                   {isResumed ? (
                     <span className="clash-clean">
-                      ✓ 已放行 · 图侧 resume 出终态 — 违规 {r.resume?.rule_violation_count ?? 0} 条 /
-                      出图 {r.resume?.export_status ?? '?'} / {r.resume?.final_dwg_path}
+                      ✓ 已放行 · {isSession ? '同 thread 续跑' : '演示跑'} — 违规{' '}
+                      {r.resume?.rule_violation_count ?? 0} 条 / 出图{' '}
+                      {r.resume?.export_status ?? '?'} / {r.resume?.final_dwg_path}
                     </span>
                   ) : r.status === 'pending_confirm' ? (
                     <span className="clash-detail">

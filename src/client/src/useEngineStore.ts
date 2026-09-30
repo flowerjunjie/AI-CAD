@@ -158,6 +158,8 @@ interface EngineState {
   // 人在回路确认闸 (bridge G 段, 演示通路)
   confirmResults: import('./engineApi').AgentConfirmResult[];
   confirmLoading: boolean;
+  // session 级人在回路: /agent/run 起的真实挂起 run (thread + pending tasks)
+  agentRun: import('./engineApi').AgentRunResult | null;
   setConnected: (c: boolean, phase?: string) => void;
   setRules: (r: RuleItem[]) => void;
   setViolations: (v: Violation[]) => void;
@@ -171,6 +173,7 @@ interface EngineState {
   setConflictLoading: (l: boolean) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
+  setAgentRun: (r: import('./engineApi').AgentRunResult | null) => void;
 }
 
 export const useEngineStore = create<EngineState>((set) => ({
@@ -189,6 +192,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   conflictLoading: false,
   confirmResults: [],
   confirmLoading: false,
+  agentRun: null,
   setConnected: (c, phase) => set({ engineConnected: c, ...(phase !== undefined ? { phase } : {}) }),
   setRules: (rules) => set({ rules }),
   setViolations: (violations) => set({ violations }),
@@ -202,4 +206,5 @@ export const useEngineStore = create<EngineState>((set) => ({
   setConflictLoading: (conflictLoading) => set({ conflictLoading }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
+  setAgentRun: (agentRun) => set({ agentRun }),
 }));

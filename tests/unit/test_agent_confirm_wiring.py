@@ -87,3 +87,50 @@ if __name__ == "__main__":
     test_reject_stays_pending_and_no_resume()
     test_confirm_wired_resume_returns_terminal_shape()
     print("OK: bridge human-in-loop confirm wiring tests passed")
+
+
+# ─── session 级人在回路 (bridge /agent/run 起真实挂起图 → /agent/confirm 真续跑) ───
+# 依赖 langgraph (真起图); 无框架环境则整体跳过, 不影响上面演示级测试。
+import pytest
+
+if HAS_LANGGRAPH:
+    def test_session_run_suspends_with_real_pending():
+        """/agent/run 起一次真实 auto_mode=False 图, 应挂起在确认点 + 返回真实 pending。"""
+        with TestClient(app) as client:
+            resp = client.post("/agent/run", json={"sample": "residential_100sqm.json"})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["node"] == "awaiting_confirmation"
+            assert body["pending_task_count"] >= 1
+            assert body["cad_result_count"] >= 1  # 挂起前 CAD 已出图
+            thread_id = body["thread_id"]
+            # 该 thread 有 session 存住 (续跑端点能认得它)
+            assert thread_id in bridge._agent_sessions
+            print("PASS test_session_run_suspends_with_real_pending")
+
+    def test_session_confirm_resumes_same_thread():
+        """/agent/confirm 对真实挂起 run 放行 → 走 session 级真续跑 (session=True 终态)。"""
+        with TestClient(app) as client:
+            run_body = client.post("/agent/run", json={"sample": "residential_100sqm.json"}).json()
+            thread_id = run_body["thread_id"]
+            tid = run_body["pending_task_ids"][0]
+            resp = client.post("/agent/confirm", json={"task_id": tid, "confirmed": True})
+            assert resp.status_code == 200
+            r = resp.json()["resume"]
+            assert r["resumed"] is True
+            assert r["session"] is True, "应走 session 级真续跑 (同一 thread), 非演示回退"
+            assert "rule_violation_count" in r
+            assert "export_status" in r
+            print("PASS test_session_confirm_resumes_same_thread")
+
+    def test_session_reject_keeps_running():
+        """对真实挂起 run confirmed=False → 不 resume, session 仍存活待下一批确认。"""
+        with TestClient(app) as client:
+            run_body = client.post("/agent/run", json={"sample": "residential_100sqm.json"}).json()
+            thread_id = run_body["thread_id"]
+            tid = run_body["pending_task_ids"][0]
+            resp = client.post("/agent/confirm", json={"task_id": tid, "confirmed": False})
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "pending_confirm"
+            assert thread_id in bridge._agent_sessions  # session 未销毁, 可再确认
+            print("PASS test_session_reject_keeps_running")

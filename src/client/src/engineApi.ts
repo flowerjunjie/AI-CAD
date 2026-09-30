@@ -142,6 +142,7 @@ export async function runConflict(sampleA: string, sampleB: string): Promise<Con
 /** /agent/confirm 的 resume 通路返回 (bridge._resume_agent_graph)。 */
 export interface AgentResumeResult {
   resumed: boolean;
+  session?: boolean;          // true = session 级同 thread 真续跑; false = 演示级默认样本
   reason?: string;            // 未放行 / 图侧不可用 / resume 失败 的诚实说明
   thread_id?: string;
   rule_violation_count?: number;
@@ -156,6 +157,17 @@ export interface AgentConfirmResult {
   modifications?: Record<string, unknown> | null;
   status: 'confirmed' | 'pending_confirm';
   resume?: AgentResumeResult; // confirmed=true 才有
+}
+
+/** POST /agent/run 响应: 起一次真实图挂起在确认点 (session 级人在回路入口)。 */
+export interface AgentRunResult {
+  thread_id: string;
+  sample: string;
+  node: string;
+  pending_task_ids: string[];
+  pending_task_count: number;
+  cad_result_count: number;
+  message: string;
 }
 
 export async function runAgentConfirm(
@@ -175,6 +187,21 @@ export async function runAgentConfirm(
   if (result) {
     // 追加而非覆盖: 多次确认(同/不同 task)可并存, 面板肉眼可区分
     store.setConfirmResults([...store.confirmResults, result]);
+  }
+  return result;
+}
+
+export async function runAgentStart(sample: string): Promise<AgentRunResult | null> {
+  const store = useEngineStore.getState();
+  store.setConfirmLoading(true);
+  const result = await postJson<AgentRunResult, { sample: string }>(
+    '/agent/run',
+    { sample },
+  );
+  store.setConfirmLoading(false);
+  if (result) {
+    // 起图挂起成功 → 记录 thread, 供确认闸操作真实 run (非演示 task)
+    store.setAgentRun(result);
   }
   return result;
 }
