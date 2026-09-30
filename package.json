@@ -10,9 +10,8 @@
     "src/rules"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "npm run dev:client",
     "dev:client": "npm run dev --workspace=src/client",
-    "dev:server": "npm run dev --workspace=src/server",
     "bootstrap": "npm install && npm run bootstrap:agents",
     "bootstrap:agents": "cd src/agents && pip install -r requirements.txt",
     "test": "npm run test --workspaces --if-present",

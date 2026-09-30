@@ -2,27 +2,7 @@
   "name": "ai-cad-server",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.1",
-    "winston": "^3.11.0",
-    "zod": "^3.22.4",
-    "axios": "^1.6.7"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
-    "@types/node": "^20.11.0",
-    "tsx": "^4.7.0",
-    "typescript": "^5.4.0",
-    "vitest": "^1.2.0"
-  }
+  "_comment": "本目录实物是 Python FastAPI 人工确认闸 (src/api/routes.py, 测试见 tests/unit/test_agent_confirm_routes.py), 非 Node 服务。原 Node/Express 壳 index.ts 已删。保留 package.json 仅为 npm workspaces 发现; 无 Node 依赖。",
+  "dependencies": {},
+  "devDependencies": {}
 }
