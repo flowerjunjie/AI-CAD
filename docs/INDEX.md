@@ -13,7 +13,7 @@
 | [capability-map.md](capability-map.md) | 一页纸能力地图（展示用） | ✅ |
 | [capability-slide.html](capability-slide.html) | 单屏技术实力幻灯片（展示用） | ✅ |
 | [decisions.md](decisions.md) | 架构决策记录 (ADR-001~004) | ✅ |
-| [CHANGELOG-Phase0.md](CHANGELOG-Phase0.md) | Phase 0 里程碑变更记录 | ✅ |
+| [CHANGELOG-Phase0.md](CHANGELOG-Phase0.md) | 里程碑变更记录（Phase 0→3 + M3/M4/M5，352/43） | ✅ |
 
 ## 原始需求文档
 
