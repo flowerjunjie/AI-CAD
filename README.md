@@ -87,7 +87,7 @@ AI-CAD/
 │   │   └── src/
 │   │       ├── dsl.py / engine.py / baselines.py / batch_check.py / diff.py
 │   │       └── {residential,fire_safety,accessibility,plumbing,electrical,hvac,structural}
-│   └── server/             # Node 后端（package.json + src/api）
+│   └── server/             # 遗留 Node 脚手架（Phase 2 起未再改，非运行链路——现役后端是 src/gui/bridge.py）
 ├── config/                 # agents.yaml / app.json
 ├── data/                   # baselines / sample / chroma_db（default.json 样本）
 ├── scripts/
