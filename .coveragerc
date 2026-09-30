@@ -1,0 +1,30 @@
+# AI-CAD coverage config (coverage.py)
+#
+# Design (fact-driven): pure-testable code measures ~94%; the 3 external-
+# dependency modules (graph / llm_adapter / rag_tools) need real framework /
+# LLM key / vector DB and are omitted so they don't drag the gate down.
+# fail_under=90 leaves ~4% headroom against jitter.
+#
+# Run:
+#   python -m coverage run -m pytest tests/ -q
+#   python -m coverage report --fail-under=90
+#   # below 90% -> non-zero exit, wire into any CI / pre-commit check
+#
+# Red-line 2 (no fake-green): omitted modules are "needs real external
+# dependency", NOT "untested bug hotspots". Each module's docstring states
+# why; keep this list in sync with those code-level notes.
+
+[run]
+source = src
+
+[report]
+# Omit: external-dependency modules (coverage excluded from fail_under)
+omit =
+    src/agents/src/graph.py
+    src/agents/src/tools/llm_adapter.py
+    src/agents/src/tools/rag_tools.py
+
+# Pure-testable gate (measured 94%, set to 90 with headroom)
+fail_under = 90
+show_missing = true
+skip_covered = false
