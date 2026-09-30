@@ -97,7 +97,7 @@ AI-CAD/
 │   └── render_floorplan.py / seed_rag.py
 ├── tests/                  # 43 个测试文件（unit + integration）
 ├── docs/                   # 设计文档（capability-map.md / architecture.md / phases.md …）
-├── doc/                    # 原始需求文档（合作方案、面试方案）
+├── doc/                    # 原始需求文档（合作方案）
 ├── DELIVERY.md             # 交付报告（决策者主文档）
 └── README.md
 ```
@@ -236,7 +236,6 @@ M1 数值终确认 / M2 图层约定 / M5 权限模型 为**外部依赖占位**
 - [交付报告 DELIVERY.md](./DELIVERY.md) — 决策者主文档（能力清单 / 占位边界 / 路线图 / 实跑命令）
 - [能力地图 capability-map.md](./docs/capability-map.md) — 一页纸 ✅ 已通 / ▢ 占位
 - [技术合作方案](./doc/AIWeb_AICAD技术合作方案.md)
-- [技术负责人面试方案](./doc/AIWeb_AICAD智能体技术负责人方案.md)
 
 ---
 

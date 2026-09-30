@@ -19,7 +19,6 @@
 
 | 文档 | 说明 | 来源 |
 |------|------|------|
-| [AIWeb_AICAD智能体技术负责人方案.md](../doc/AIWeb_AICAD智能体技术负责人方案.md) | 面试方案 | 丁Sir |
 | [AIWeb_AICAD技术合作方案.md](../doc/AIWeb_AICAD技术合作方案.md) | 合作方案 | 丁Sir |
 
 ## 待创建文档

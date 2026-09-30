@@ -73,8 +73,9 @@ background-info/
 # 规则 DSL 写回备份 (bridge.py /api/rules/dsl/apply 生成, 供回滚, 不追踪)
 src/rules/rules/default.json.bak.*
 
-# 面试/求职文档 (不纳入版本管理, 2026-09 已从项目删除)
-doc/面试*.md
+# 求职/面试类文档不纳入版本管理（按内容关键词匹配，文件名不含"面试"也拦得住）
+doc/*面试*.md
+doc/*求职*.md
 doc/*口袋卡*.md
 doc/*词汇速查*.md
 
