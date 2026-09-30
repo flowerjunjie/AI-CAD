@@ -594,6 +594,96 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
     }
 
 
+# ─── G 人在回路确认闸域段: Agent 步进/确认接口 (原 src/server routes.py 并入) ───
+# 配合 graph.py 的暂停机制 (interrupt + checkpointer + awaiting_confirmation_node)。
+# 本段只负责 FastAPI 端: 登记人工决定 + 触发 resume。图侧真实「写 human_confirmations
+# 并 resume」尚未定死, 故 _resume_agent_graph() 是预留对接点 (TODO)。内存态 (Phase 0)。
+
+class AgentConfirmRequest(BaseModel):
+    """POST /agent/confirm 入参。
+
+    confirmed=False → 记录该 task 为待确认（登记后仍暂停）；
+    confirmed=True  → 标记放行并触发 resume（携 modifications 回写图状态）。
+    """
+    task_id: str
+    confirmed: bool
+    modifications: Optional[dict] = None
+
+
+# 内存态（Phase 0）：挂起的 Agent 图 run + 每个待确认 task 的人工决定。
+# run 键为 graph 的 thread_id，task 键为 cad 执行产生的 task_id（门/窗等）。
+_pending_agent_runs: dict[str, dict] = {}
+_agent_task_confirms: dict[str, dict] = {}
+
+
+def _register_agent_task(run_id: str, task_id: str, node: str) -> None:
+    """登记一个挂起在某 node、待人工确认的 task。内存态，供 status/confirm 用。"""
+    _agent_task_confirms[task_id] = {"run_id": run_id, "node": node, "confirmed": False}
+
+
+def _resume_agent_graph(run_id: str, confirmed: bool, modifications: Optional[dict]) -> dict:
+    """TODO(图层专家对接点)：graph.py 的 run_agent_with_confirmation 还没定死。
+    预期语义：按 thread_id=run_id 读 checkpointer 里的 state，把待确认 task 的
+    human_confirmations 置 confirmed、并入 modifications，再 app.invoke(resume=...)
+    把图从 interrupt 处恢复。届时把下面这段占位换成真实调用即可，端点签名不变。"""
+    return {
+        "resumed": False,
+        "reason": "agent_graph_not_wired",
+        "todo": "graph.py run_agent_with_confirmation",
+    }
+
+
+@app.post("/agent/confirm")
+def agent_confirm(data: AgentConfirmRequest) -> dict:
+    """登记人工确认，若 confirmed 则触发图侧 resume。"""
+    record = _agent_task_confirms.get(data.task_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 内存态记录人工决定（immutable 风格：重建 dict，不改原对象）
+    _agent_task_confirms[data.task_id] = {
+        **record,
+        "confirmed": data.confirmed,
+        "modifications": data.modifications,
+    }
+
+    result = {
+        "task_id": data.task_id,
+        "confirmed": data.confirmed,
+        "modifications": data.modifications,
+        "status": "confirmed" if data.confirmed else "pending_confirm",
+    }
+
+    # confirmed=True 才放行 resume；False 只是登记「仍未确认」，图继续暂停
+    if data.confirmed:
+        result["resume"] = _resume_agent_graph(
+            record["run_id"], data.confirmed, data.modifications)
+
+    return result
+
+
+@app.get("/agent/status")
+def agent_status() -> dict:
+    """当前停在哪个节点 + 待确认 task 列表（人在回路视图）。"""
+    awaiting = [
+        {
+            "task_id": tid,
+            "run_id": rec["run_id"],
+            "node": rec["node"],
+            "pending": not rec["confirmed"],
+        }
+        for tid, rec in _agent_task_confirms.items()
+        if not rec["confirmed"]
+    ]
+    current_run = next(iter(_pending_agent_runs.values()), None)
+    return {
+        "current_node": current_run["node"] if current_run else "idle",
+        "is_running": current_run is not None,
+        "awaiting_confirmation": awaiting,
+        "pending_task_count": len(awaiting),
+    }
+
+
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
 from fastapi.responses import HTMLResponse

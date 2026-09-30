@@ -1,8 +1,0 @@
-{
-  "name": "ai-cad-server",
-  "version": "0.1.0",
-  "private": true,
-  "_comment": "本目录实物是 Python FastAPI 人工确认闸 (src/api/routes.py, 测试见 tests/unit/test_agent_confirm_routes.py), 非 Node 服务。原 Node/Express 壳 index.ts 已删。保留 package.json 仅为 npm workspaces 发现; 无 Node 依赖。",
-  "dependencies": {},
-  "devDependencies": {}
-}

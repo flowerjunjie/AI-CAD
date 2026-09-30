@@ -5,7 +5,6 @@
   "private": true,
   "workspaces": [
     "src/client",
-    "src/server",
     "src/agents",
     "src/rules"
   ],
@@ -22,7 +21,6 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "typescript": "^5.4.0",
     "vitest": "^1.2.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

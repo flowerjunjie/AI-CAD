@@ -11,14 +11,16 @@ sys.path.insert(0, project_root)
 
 from fastapi.testclient import TestClient
 
-from src.server.src.api import routes
-from src.server.src.api.routes import app
+from src.gui import bridge
+
+# 确认闸端点已并入 src/gui/bridge.py (原 src/server routes.py 收敛掉, 单套后端)。
+app = bridge.app
 
 # 模块级 fixture：登记一个「正在等人确认」的 run + task。
 # run 挂在 awaiting_confirmation 节点（内存态），door-3 是它待确认的 task，
 # 让 /agent/confirm + /agent/status 有真实对象可操作（不依赖 graph.py 的 resume API）。
-routes._pending_agent_runs["demo-run-001"] = {"node": "awaiting_confirmation"}
-routes._register_agent_task("demo-run-001", "door-3", "awaiting_confirmation")
+bridge._pending_agent_runs["demo-run-001"] = {"node": "awaiting_confirmation"}
+bridge._register_agent_task("demo-run-001", "door-3", "awaiting_confirmation")
 
 
 def test_agent_status_lists_pending_confirmation():

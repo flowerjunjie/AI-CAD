@@ -87,7 +87,6 @@ AI-CAD/
 │   │   └── src/
 │   │       ├── dsl.py / engine.py / baselines.py / batch_check.py / diff.py
 │   │       └── {residential,fire_safety,accessibility,plumbing,electrical,hvac,structural}
-│   └── server/             # FastAPI 人工确认闸后端（routes.py，测于 test_agent_confirm_routes；index.ts 为 Node 遗留壳）
 ├── config/                 # agents.yaml / app.json
 ├── data/                   # baselines / sample / chroma_db（default.json 样本）
 ├── scripts/
