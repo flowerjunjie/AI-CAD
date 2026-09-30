@@ -77,3 +77,6 @@ src/rules/rules/default.json.bak.*
 doc/面试*.md
 doc/*口袋卡*.md
 doc/*词汇速查*.md
+
+# coverage 工具产物 (coverage run 生成, 非源码)
+.coverage
