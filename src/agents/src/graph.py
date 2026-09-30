@@ -2,6 +2,15 @@
 AI-CAD Agent 图定义 — LangGraph
 人在回路的可中断执行流
 集成 LLM + RAG + CAD + 规则引擎
+
+外部依赖标注（诚实边界，不虚标）:
+- 本模块图编排逻辑本身纯 Python 可测（纯定义 + routing 函数）。
+- 但完整跑图需真 langgraph 栈 + LLM API key + ChromaDB 向量库:
+  * `tests/integration/test_agent_graph.py` 的 4 条框架用例默认 skip，
+    设 `AI_CAD_RUN_FRAMEWORK=1` 才真构建/编译 Agent 图。
+  * LLM 主导路径需 `AGNES_API_KEY`（或对应 provider key）。
+  覆盖率 ~27% 属正常——未盖部分全落在「需真框架/真 key 才能跑」的编排分支，
+  非「没测试的 bug 热点」，故不硬 mock 凑覆盖（红线二：不造假绿）。
 """
 from typing import TypedDict
 

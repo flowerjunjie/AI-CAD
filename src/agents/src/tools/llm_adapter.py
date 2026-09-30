@@ -1,6 +1,15 @@
 """
 LLM 接入层 — 统一接口，支持 Agnes / MiniMax / Kimi / GLM
 支持自动重试、速率限制处理、JSON 解析
+
+外部依赖标注（诚实边界，不虚标）:
+- 本模块的「纯逻辑」（接口定义、工厂路由、JSON 解析、重试退避计时、
+  速率限制判断）可全测、不联网。
+- 但「真调 LLM 接口」需对应 provider 的 API key（默认 Agnes 用
+  `AGNES_API_KEY`）。无 key 时工厂/适配器仍 import 成功、方法抛
+  「未配置 key」而非崩（降级诚实）。
+- 覆盖率 ~36% 属正常——未盖部分全在「真发 HTTP 请求」分支，
+  需真 key + 网络，故不 mock 假响应凑覆盖（红线二：不造假绿）。
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

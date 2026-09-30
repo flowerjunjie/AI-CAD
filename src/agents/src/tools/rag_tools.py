@@ -1,6 +1,15 @@
 """
 RAG 知识库 — ChromaDB 本地部署
 规范条文向量检索 + 历史图纸检索
+
+外部依赖标注（诚实边界，不虚标）:
+- 本模块的「纯逻辑」（数据结构、条目序列化、检索结果打分映射）可全测。
+- 但「真向量检索」需 ChromaDB 持久库（`data/chroma_db`）+ embedding 后端:
+  * chromadb 未装 / 库缺失时, `initialize()` 诚实降级返回 False,
+    检索方法返回空 + note, 不崩、不造假数据（红线二）。
+  * 跑真检索需先 `python scripts/seed_rag.py` 灌入规范条文向量。
+- 覆盖率 ~44% 属正常——未盖部分全在「真连 chroma 建/查 collection」分支,
+  需真向量库, 故不 mock 假 collection 凑覆盖（红线二：不造假绿）。
 """
 from dataclasses import dataclass
 from typing import Optional
