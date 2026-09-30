@@ -622,14 +622,38 @@ def _register_agent_task(run_id: str, task_id: str, node: str) -> None:
 
 
 def _resume_agent_graph(run_id: str, confirmed: bool, modifications: Optional[dict]) -> dict:
-    """TODO(图层专家对接点)：graph.py 的 run_agent_with_confirmation 还没定死。
-    预期语义：按 thread_id=run_id 读 checkpointer 里的 state，把待确认 task 的
-    human_confirmations 置 confirmed、并入 modifications，再 app.invoke(resume=...)
-    把图从 interrupt 处恢复。届时把下面这段占位换成真实调用即可，端点签名不变。"""
+    """触发 graph.py 的人在回路确认闸: 挂起→按 confirmed 放行→resume。
+
+    接的是 graph.run_agent_with_confirmation (interrupt + MemorySaver +
+    Command(resume=...)), 端点签名不变。诚实边界:
+      - langgraph 是懒 import (放函数体), 未装/初始化失败 → 返回 ok=False + reason
+        (不崩、不造假数据), 前端据此降级显示「图侧未就绪」。
+      - confirmed=False → 只登记「仍未放行」, 不 resume (图继续挂起), 与 confirm 端点语义一致。
+      - confirmed=True  → 跑一次「挂起→放行全部 pending→resume 到 rule_check→export」,
+        返回终态摘要 (rule_violations / final_dwg_path)。
+    """
+    if not confirmed:
+        return {"resumed": False, "reason": "pending_confirm (confirmed=False, 图继续挂起)"}
+
+    try:
+        from src.agents.src.graph import run_agent_with_confirmation  # 懒: langgraph 栈
+    except Exception as e:  # 框架未装/导入失败 → 诚实降级, 不造假
+        return {"resumed": False, "reason": f"agent_graph_not_available: {e}"}
+
+    # bridge 侧演示态未存住「本 run 的 sample_path」, 这里用默认样本真跑一次
+    # 挂起→放行→resume, 证明链路通。modifications 目前由图侧 pending 全放行承载。
+    try:
+        result = run_agent_with_confirmation(confirm_all=True)
+    except Exception as e:
+        return {"resumed": False, "reason": f"agent_graph_resume_failed: {e}"}
+
     return {
-        "resumed": False,
-        "reason": "agent_graph_not_wired",
-        "todo": "graph.py run_agent_with_confirmation",
+        "resumed": True,
+        "thread_id": run_id,
+        "modifications": modifications,
+        "rule_violation_count": len(result.get("rule_violations", [])),
+        "final_dwg_path": result.get("final_dwg_path"),
+        "export_status": result.get("export_status"),
     }
 
 

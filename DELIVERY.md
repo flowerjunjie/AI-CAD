@@ -47,7 +47,7 @@
 ```
 意图理解(LLM) → 方案结构化(RAG) → CAD执行(ezdxf) → 规则校验(4专业) → 成果输出(DWG+报告)
 ```
-- **人在回路**：`auto_mode` 可开关，非自动模式关键节点暂停等设计师确认。
+- **人在回路**：`auto_mode` 可开关，非自动模式关键节点暂停等设计师确认。graph 侧 `interrupt`+checkpointer+`run_agent_with_confirmation`（挂起→放行→resume 出终态）已就绪并有框架测试（`AI_CAD_RUN_FRAMEWORK=1`）；bridge 确认闸 `/agent/confirm` 已接通该 resume 通路（`_resume_agent_graph` 接 `run_agent_with_confirmation`，接 `test_agent_confirm_wiring.py`）。**边界**：前端存住"本 run 的 sample+checkpointer 再续跑"这一步尚未接——确认闸当前用默认样本真跑通路，未做 session 级续跑。
 - **LLM 真主导**：`run.py --llm` 走 LLM 意图生成方案；`--no-llm` 本地快验。两条路径边界清晰，LLM 是否参与**肉眼可验**（打印"LLM 实例就绪"）。
 - **5 个 LLM 适配器**：Agnes（默认，Anthropic 兼容接口）/ MiniMax / Kimi / GLM，统一 `LLMFactory` 接口（`src/agents/src/tools/llm_adapter.py`）。
 - 实测：喂"三室一厅 100㎡" → LLM 出方案 → 出 DWG + 违规清单 + 户型图渲染。
