@@ -134,4 +134,49 @@ export async function runConflict(sampleA: string, sampleB: string): Promise<Con
   return result;
 }
 
+// ─── 人在回路确认闸 (bridge.py G 段, 演示通路) ───
+// POST /agent/confirm {task_id, confirmed, modifications}
+// 演示态: bridge 未存住"本 run 的 sample+checkpointer", confirmed=true 时用默认样本
+// 真跑一次 graph 挂起→放行→resume (出终态摘要), 非设计师对真实出图结果的逐 task 确认。
+
+/** /agent/confirm 的 resume 通路返回 (bridge._resume_agent_graph)。 */
+export interface AgentResumeResult {
+  resumed: boolean;
+  reason?: string;            // 未放行 / 图侧不可用 / resume 失败 的诚实说明
+  thread_id?: string;
+  rule_violation_count?: number;
+  final_dwg_path?: string;
+  export_status?: string;
+}
+
+/** POST /agent/confirm 响应。 */
+export interface AgentConfirmResult {
+  task_id: string;
+  confirmed: boolean;
+  modifications?: Record<string, unknown> | null;
+  status: 'confirmed' | 'pending_confirm';
+  resume?: AgentResumeResult; // confirmed=true 才有
+}
+
+export async function runAgentConfirm(
+  taskId: string,
+  confirmed: boolean,
+): Promise<AgentConfirmResult | null> {
+  const store = useEngineStore.getState();
+  store.setConfirmLoading(true);
+  const result = await postJson<AgentConfirmResult, { task_id: string; confirmed: boolean }>(
+    '/agent/confirm',
+    {
+      task_id: taskId,
+      confirmed,
+    },
+  );
+  store.setConfirmLoading(false);
+  if (result) {
+    // 追加而非覆盖: 多次确认(同/不同 task)可并存, 面板肉眼可区分
+    store.setConfirmResults([...store.confirmResults, result]);
+  }
+  return result;
+}
+
 export { API };

@@ -155,6 +155,9 @@ interface EngineState {
   clashLoading: boolean;
   conflictResults: ConflictResult[];
   conflictLoading: boolean;
+  // 人在回路确认闸 (bridge G 段, 演示通路)
+  confirmResults: import('./engineApi').AgentConfirmResult[];
+  confirmLoading: boolean;
   setConnected: (c: boolean, phase?: string) => void;
   setRules: (r: RuleItem[]) => void;
   setViolations: (v: Violation[]) => void;
@@ -166,6 +169,8 @@ interface EngineState {
   setClashLoading: (l: boolean) => void;
   setConflictResults: (c: ConflictResult[]) => void;
   setConflictLoading: (l: boolean) => void;
+  setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
+  setConfirmLoading: (l: boolean) => void;
 }
 
 export const useEngineStore = create<EngineState>((set) => ({
@@ -182,6 +187,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   clashLoading: false,
   conflictResults: [],
   conflictLoading: false,
+  confirmResults: [],
+  confirmLoading: false,
   setConnected: (c, phase) => set({ engineConnected: c, ...(phase !== undefined ? { phase } : {}) }),
   setRules: (rules) => set({ rules }),
   setViolations: (violations) => set({ violations }),
@@ -193,4 +200,6 @@ export const useEngineStore = create<EngineState>((set) => ({
   setClashLoading: (clashLoading) => set({ clashLoading }),
   setConflictResults: (conflictResults) => set({ conflictResults }),
   setConflictLoading: (conflictLoading) => set({ conflictLoading }),
+  setConfirmResults: (confirmResults) => set({ confirmResults }),
+  setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
 }));

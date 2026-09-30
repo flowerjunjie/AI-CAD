@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
-        runClashCheck, runConflict } from './engineApi';
+        runClashCheck, runConflict, runAgentConfirm } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -23,6 +23,7 @@ function App() {
     engineConnected, phase, rules, violations,
     running, lastSample, pipelineResult, ragResults, ragQuery,
     clashResults, clashLoading, conflictResults, conflictLoading,
+    confirmResults, confirmLoading,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,6 +64,14 @@ function App() {
   const handleConflict = useCallback(async () => {
     await runConflict(lastSample, conflictSampleB);
   }, [lastSample, conflictSampleB]);
+
+  // 人在回路确认闸 (bridge /agent/confirm, 演示通路): 对演示 task 放行/拒绝
+  // confirmed=true 时 bridge 真跑一次 graph 挂起→放行→resume 出终态摘要。
+  const [confirmTask, setConfirmTask] = useState('door-3');
+  const [confirmDecision, setConfirmDecision] = useState(true);
+  const handleConfirm = useCallback(async () => {
+    await runAgentConfirm(confirmTask, confirmDecision);
+  }, [confirmTask, confirmDecision]);
 
   return (
     <div className="app">
@@ -266,6 +275,75 @@ function App() {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* 人在回路确认闸 — 演示通路 (bridge /agent/confirm → graph 挂起→放行→resume) */}
+          <div className="confirm-section">
+            <div className="clash-head-row">
+              <h3>人在回路 · 确认闸 <span className="confirm-tag">演示通路</span></h3>
+            </div>
+            <div className="confirm-controls">
+              <select
+                value={confirmTask}
+                onChange={(e) => setConfirmTask(e.target.value)}
+                className="conflict-select"
+              >
+                <option value="door-3">door-3</option>
+              </select>
+              <label className="confirm-radio">
+                <input
+                  type="radio"
+                  name="confirm-decision"
+                  checked={confirmDecision}
+                  onChange={() => setConfirmDecision(true)}
+                />
+                放行
+              </label>
+              <label className="confirm-radio">
+                <input
+                  type="radio"
+                  name="confirm-decision"
+                  checked={!confirmDecision}
+                  onChange={() => setConfirmDecision(false)}
+                />
+                拒绝
+              </label>
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleConfirm}
+                disabled={!engineConnected || confirmLoading}
+              >
+                {confirmLoading ? '确认中…' : '提交确认'}
+              </button>
+            </div>
+            <p className="clash-empty">
+              演示态: 提交「放行」→ bridge 真跑一次图挂起→放行→resume, 出终态摘要 (违规数 / DWG 路径 / 出图状态)。
+              非设计师对真实出图结果的逐 task 确认 (前端 session 续跑待接)。
+            </p>
+            {confirmResults.map((r, i) => {
+              const isResumed = r.resume?.resumed === true;
+              const degraded = r.resume && !r.resume.resumed && r.resume.reason;
+              return (
+                <div key={i} className={`clash-item ${isResumed ? 'clash-ok' : 'clash-hit'}`}>
+                  {isResumed ? (
+                    <span className="clash-clean">
+                      ✓ 已放行 · 图侧 resume 出终态 — 违规 {r.resume?.rule_violation_count ?? 0} 条 /
+                      出图 {r.resume?.export_status ?? '?'} / {r.resume?.final_dwg_path}
+                    </span>
+                  ) : r.status === 'pending_confirm' ? (
+                    <span className="clash-detail">
+                      · {r.task_id} 已登记「拒绝」, 图继续挂起 (未 resume)
+                    </span>
+                  ) : degraded ? (
+                    <span className="clash-detail">
+                      · {r.task_id} 放行未成 — {degraded}
+                    </span>
+                  ) : (
+                    <span className="clash-detail">· {r.task_id} {r.status}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
 
