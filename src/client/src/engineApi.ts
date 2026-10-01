@@ -159,6 +159,14 @@ export interface AgentConfirmResult {
   resume?: AgentResumeResult; // confirmed=true 才有
 }
 
+/** 接真实 CAD 数据源: /agent/run 透出的单个待确认 task (含类型/描述/出图结果)。 */
+export interface AgentPendingItem {
+  task_id: string;
+  type: string;                     // door / window / beam / column / pipe ... (设计师看得懂)
+  description: string;              // 来自 cad_results.description
+  result: Record<string, unknown>;  // 该 task 的出图结果 (status / count / ...)
+}
+
 /** POST /agent/run 响应: 起一次真实图挂起在确认点 (session 级人在回路入口)。 */
 export interface AgentRunResult {
   thread_id: string;
@@ -168,6 +176,8 @@ export interface AgentRunResult {
   pending_task_count: number;
   cad_result_count: number;
   message: string;
+  pending?: AgentPendingItem[];     // 接真实 CAD 数据源: 结构化待确认项 (老字段向后兼容)
+  preview_url?: string;             // 图面预览 (设计师对照看每个待确认 task)
 }
 
 export async function runAgentConfirm(

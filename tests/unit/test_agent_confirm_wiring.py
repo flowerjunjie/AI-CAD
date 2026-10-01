@@ -134,3 +134,34 @@ if HAS_LANGGRAPH:
             assert resp.json()["status"] == "pending_confirm"
             assert thread_id in bridge._agent_sessions  # session 未销毁, 可再确认
             print("PASS test_session_reject_keeps_running")
+
+    def test_session_run_exposes_structured_pending_with_cad_data():
+        """/agent/run 透真实 CAD 数据源: pending[] 每项带 task_id/type/result,
+        且与 pending_task_ids 对齐; 老字段向后兼容 (pending_task_ids 仍在)。"""
+        with TestClient(app) as client:
+            body = client.post("/agent/run", json={"sample": "residential_100sqm.json"}).json()
+            # 向后兼容: 老字段原样在 (现有测试靠它们)
+            assert "pending_task_ids" in body and "pending_task_count" in body
+            # 新增: 结构化 pending[]
+            assert "pending" in body, "应透出结构化 pending[] (接真实 CAD 数据源)"
+            pending = body["pending"]
+            # 每项 task_id 与 pending_task_ids 对齐 (同集合)
+            assert {p["task_id"] for p in pending} == set(body["pending_task_ids"])
+            # 每项带图元类型 (接真实数据源的核心: 设计师看得懂) + 出图 result
+            for p in pending:
+                assert p["type"] in ("door", "window", "beam", "column", "pipe",
+                                     "outlet", "switch", "hvac", "unknown")
+                assert "result" in p, "应带该 task 的 cad_results 出图结果"
+            # 门 task 应被识别为 door (residential 样本待确认项主要是门)
+            assert any(p["type"] == "door" for p in pending), \
+                f"residential 样本 pending 应含 door 类, 实际 {[(p['task_id'], p['type']) for p in pending]}"
+            print("PASS test_session_run_exposes_structured_pending_with_cad_data")
+
+    def test_task_type_of_resolves_known_and_unknown():
+        """_task_type_of: raw_data 命中 / 前缀兜底 / 查不到→unknown (不瞎猜)。"""
+        raw = {"doors": [{"id": "door-entrance"}], "pipes": [{"id": "p1"}]}
+        assert bridge._task_type_of("door-entrance", raw) == "door"
+        assert bridge._task_type_of("p1", raw) == "pipe"
+        assert bridge._task_type_of("beam-3", {}) == "beam"      # 前缀兜底
+        assert bridge._task_type_of("xyz-999", {}) == "unknown"   # 查不到诚实 unknown
+        print("PASS test_task_type_of_resolves_known_and_unknown")

@@ -305,6 +305,19 @@ function App() {
                   已挂起 {agentRun.thread_id} · {agentRun.pending_task_count} 个待确认 /
                   CAD 已出 {agentRun.cad_result_count} 图元
                 </span>
+                {/* 接真实 CAD 数据源: 列出每个待确认项的类型+描述 (设计师看得懂) */}
+                {(agentRun.pending ?? []).map((p) => (
+                  <div key={p.task_id} className="pending-line">
+                    <span className="pending-kind">{p.type}</span>
+                    <span className="pending-id">{p.task_id}</span>
+                    {p.description && <span className="pending-desc">{p.description}</span>}
+                  </div>
+                ))}
+                {agentRun.preview_url && (
+                  <a className="pending-preview" href={agentRun.preview_url} target="_blank" rel="noreferrer">
+                    查看出图预览 →
+                  </a>
+                )}
               </div>
             )}
             <div className="confirm-controls">
@@ -316,9 +329,11 @@ function App() {
                 {(agentRun?.pending_task_ids.length
                   ? agentRun.pending_task_ids
                   : ['door-3']
-                ).map((t) => (
-                  <option key={t} value={t}>{t}{agentRun ? '' : ' (演示)'}</option>
-                ))}
+                ).map((t) => {
+                  const p = agentRun?.pending?.find((x) => x.task_id === t);
+                  const label = p ? `${t} · ${p.type}${p.description ? ' · ' + p.description : ''}` : t;
+                  return <option key={t} value={t}>{label}{agentRun ? '' : ' (演示)'}</option>;
+                })}
               </select>
               <label className="confirm-radio">
                 <input

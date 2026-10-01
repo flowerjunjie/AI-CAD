@@ -39,6 +39,15 @@
 - **68806c6** — 重打包 exe 纳入 M4/M5：`HIDDEN_IMPORTS` 补 `clash_detection`/`conflict_detection`（懒 import 模块 PyInstaller 静态追不到）+ vite `emptyOutDir` 治本（outDir 在根外默认不清空→历史 bundle 虚胖）。`ai_cad_gui.exe` 43.6MB，verify_exe PASS，起 exe curl `/api/clash`+`/api/conflict` 均 200。
 - **3422070 / 9cf0342** — 测试与质量护栏收尾：补 bridge 端点 + input_parser/wall_topology 测试（覆盖 78%→94%）；加 `.coveragerc` 门槛 90% + 外部依赖模块（graph/llm_adapter/rag_tools）豁免清单（需真实框架/LLM key/向量库，非漏测）。
 
+### 人在回路 · session 级 + 真实 CAD 数据源（Phase 3 收口后）
+
+> 三根线端到端：确认闸接通（#1）→ 前端确认闸 UI（#2）→ session 级真人在回路（#3）→ 确认闸透真实 CAD task 语义（本轮立项）。
+
+- **人在回路 session 级打通**：graph 层 `start_agent_run_suspended` / `resume_agent_run`（外部持有 MemorySaver + thread，分「起图挂起 / 续跑」两步，不破坏 `run_agent_with_confirmation` 向后兼容）；bridge `POST /agent/run`（起真实图挂起 + 存 session + 真实 pending task）+ `/agent/confirm` 两级 resume（session 级同 thread 真续跑 / 演示级回退默认样本）。前端确认闸「起图挂起→逐 task 确认→同 thread 续跑」区块。
+- **确认闸接真实 CAD 数据源（立项 docs/plan-confirm-gate-real-cad.md）**：`/agent/run` 把 `cad_execute_node` 已产的 `cad_results` 按 task_id join 成结构化 `pending[]`（task_id / type / description / 出图 result）+ 图面 `preview_url`，**纯 join 不重算**、老字段向后兼容；`_task_type_of` 从 raw_data/前缀反查 task 图元类型（查不到诚实 unknown）；前端确认闸从裸 task_id 升级为「id · 类型 · 描述」语义化 + 出图预览。数据在 `session["snapshot"]["cad_results"]`，零新数据源。
+- 出图深化补 **柱截面填充**（`add_column(hatch=True)` + `COLUMN_FILL` 图层标准，同 `add_beam` HATCH 范式，梁/柱画法拉平）。
+- 规则类分支覆盖补盲：`test_rules_branch_coverage.py` 27 条，把 5 个「低于 90% 的纯可测规则模块」（residential 采光/走廊/窗、fire_safety 走廊、accessibility 坡道）拉到 100%，总覆盖 93%→95%。
+
 ### 底座（Phase 0）
 
 - **Phase 0 · 墙体厚度标注进主链路** — 见 f7b4f2d。

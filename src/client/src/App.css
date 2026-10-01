@@ -571,6 +571,19 @@ body {
   font-size: 11px; color: #ccc; cursor: pointer;
 }
 .confirm-radio input { margin: 0; cursor: pointer; accent-color: #4caf50; }
+/* 接真实 CAD 数据源: 每个待确认项的 类型/描述 行 + 出图预览链接 */
+.pending-line { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; }
+.pending-kind {
+  display: inline-block; min-width: 44px; text-align: center;
+  padding: 1px 6px; border-radius: 8px; font-weight: 600;
+  background: rgba(76, 175, 80, 0.15); color: #4caf50;
+}
+.pending-id { color: #ccc; }
+.pending-desc { color: #889; }
+.pending-preview {
+  display: inline-block; margin-top: 4px; font-size: 11px;
+  color: #4caf50; text-decoration: underline;
+}
 .placeholder-card-lit {
   opacity: 1; filter: none;
   border-style: solid; border-color: #2e7d32;

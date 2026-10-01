@@ -167,7 +167,7 @@ python scripts/smoke_test.py            # 秒级冒烟（5 大核心不变量）
 python scripts/ai_cad_cli.py rules     # 列全部规范规则
 python run.py --no-llm                 # 本地全链路出图（不联网）
 python run.py --llm --render           # LLM 主导出图 + 自动弹户型图（联网）
-python -m pytest tests/ -q             # 全量测试（386 passed / 5 skipped）
+python -m pytest tests/ -q             # 全量测试（388 passed / 5 skipped）
 ```
 
 
@@ -194,7 +194,7 @@ M1 数值终确认 / M2 图层约定 / M5 权限模型 为**外部依赖占位**
 
 ## ✅ 测试与质量
 
-- **386 passed / 5 skipped / 0 failed**（45 个测试文件，unit + integration）。
+- **388 passed / 5 skipped / 0 failed**（45 个测试文件，unit + integration）。
   5 个 skip 是外部依赖用例：4 条 langgraph 框架（设 `AI_CAD_RUN_FRAMEWORK=1` 启用）+ 1 条 LLM（需 `AGNES_API_KEY` 环境变量）。
 - 冒烟：`python scripts/smoke_test.py` 秒级验证 5 大核心不变量（小改动 0.4s 出结果）。
 - 覆盖率门槛：`.coveragerc` 设 `fail_under=90`（纯可测代码实测 95%）；`graph.py` / `llm_adapter.py` / `rag_tools.py` 三个模块因需真实框架/LLM key/向量库而**豁免**（是"需外部依赖"，非"漏测热点"）。

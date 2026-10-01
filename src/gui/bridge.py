@@ -625,6 +625,32 @@ class AgentRunRequest(BaseModel):
     sample: str = "residential_100sqm.json"
 
 
+def _task_type_of(task_id: str, raw_data: dict) -> str:
+    """从 task_id + raw_data 反查它属于哪类图元 (门/窗/梁/柱/管...), 供前端显示。
+
+    纯 join 不重算出图: 优先看 raw_data 各元素类里有没有这个 id (门/窗 有 id),
+    命中就取该类; 没命中退到 task_id 前缀 (door-/window-... 命名约定); 都查不到
+    返回 'unknown' (诚实, 不瞎猜)。"""
+    if isinstance(raw_data, dict):
+        for key, kind in (
+            ("doors", "door"), ("windows", "window"),
+            ("structural_beams", "beam"), ("structural_columns", "column"),
+            ("pipes", "pipe"), ("outlets", "outlet"), ("switches", "switch"),
+        ):
+            for e in raw_data.get(key, []) or []:
+                if isinstance(e, dict) and e.get("id") == task_id:
+                    return kind
+    # task_id 前缀兜底 (cad_execute_node 的 task 命名约定)
+    for prefix, kind in (
+        ("door", "door"), ("window", "window"), ("beam", "beam"),
+        ("column", "column"), ("pipe", "pipe"), ("outlet", "outlet"),
+        ("switch", "switch"), ("hvac", "hvac"),
+    ):
+        if task_id.startswith(prefix):
+            return kind
+    return "unknown"
+
+
 def _register_agent_task(run_id: str, task_id: str, node: str) -> None:
     """登记一个挂起在某 node、待人工确认的 task。内存态，供 status/confirm 用。"""
     _agent_task_confirms[task_id] = {"run_id": run_id, "node": node, "confirmed": False}
@@ -648,18 +674,38 @@ def agent_run(req: AgentRunRequest) -> dict:
     thread_id = session["thread_id"]
     _agent_sessions[thread_id] = session
     # 把真实 pending task 逐个登记, 让 /agent/status + /agent/confirm 能操作它们
-    for tid in session["pending_task_ids"]:
+    pending_ids = session["pending_task_ids"]
+    for tid in pending_ids:
         _register_agent_task(thread_id, tid, "awaiting_confirmation")
+
+    # 结构化 pending[] (接真实 CAD 数据源): 把 cad_execute_node 已产好的 cad_results
+    # 按 task_id join 进响应, 让设计师看得懂每个待确认项是什么/出了什么。纯 join,
+    # 不重算 (数据在 snapshot 里躺着)。非 pending_confirm 的 task 不进 pending[]。
+    cad_results = session["snapshot"].get("cad_results", [])
+    result_by_task = {r.get("task_id"): r for r in cad_results if isinstance(r, dict)}
+    pending_detail = []
+    for tid in pending_ids:
+        r = result_by_task.get(tid, {})
+        pending_detail.append({
+            "task_id": tid,
+            "type": _task_type_of(tid, session.get("snapshot", {}).get("raw_data", {})),
+            "description": r.get("description", ""),
+            "result": r,  # cad_execute_node 产的该 task 出图结果 (status/count/...)
+        })
 
     return {
         "thread_id": thread_id,
         "sample": req.sample,
         "node": "awaiting_confirmation",
-        "pending_task_ids": session["pending_task_ids"],
-        "pending_task_count": len(session["pending_task_ids"]),
-        "cad_result_count": len(session["snapshot"].get("cad_results", [])),
+        # 向后兼容: 老字段原样保留 (现有 session 测试断言这些)
+        "pending_task_ids": pending_ids,
+        "pending_task_count": len(pending_ids),
+        "cad_result_count": len(cad_results),
+        # 新增: 结构化 pending 详情 + 图面预览关联 (前端对照看每个待确认 task)
+        "pending": pending_detail,
+        "preview_url": f"/api/preview?sample={req.sample}",
         "message": "图已挂起在确认点, 请对 pending_task_ids 逐个 /agent/confirm。"
-                   if session["pending_task_ids"] else "无待确认 task, 图已跑到底。",
+                   if pending_ids else "无待确认 task, 图已跑到底。",
     }
 
 
