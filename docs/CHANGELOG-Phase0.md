@@ -48,6 +48,14 @@
 - 出图深化补 **柱截面填充**（`add_column(hatch=True)` + `COLUMN_FILL` 图层标准，同 `add_beam` HATCH 范式，梁/柱画法拉平）。
 - 规则类分支覆盖补盲：`test_rules_branch_coverage.py` 27 条，把 5 个「低于 90% 的纯可测规则模块」（residential 采光/走廊/窗、fire_safety 走廊、accessibility 坡道）拉到 100%，总覆盖 93%→95%。
 
+### M5 团队协作 · 机制骨架（纯内部可推，值/协议留业务）
+
+> 顶层设计：M5「团队协作」拆成 **机制骨架（内部可落地）** 与 **值/协议（留业务定）**，只推前者、诚实留白后者（呼应 CLAUDE.md 不虚标）。
+
+- **权限模型机制骨架** `permission_model.py`（纯函数库，仿 M4 clash 范式，11 测试）：角色→权限→资源锁→改动审批→合并 的判定逻辑。`DEFAULT_PERMISSIONS` 是**占位矩阵**（业务可改），自审红线内建，未知角色/未知动作优雅拒绝不崩。
+- **在线协同持久层协议骨架** `collab_protocol.py`（纯函数 + 可注入存储，10 测试）：把 permission_model 的内存态锁/审批升级为**可持久化 + 事件溯源**——锁落 JSON 盘（进程重启不丢）+ append-only 事件日志（谁锁/放行/合并）+ 可序列化协同快照（跨进程传递）。存储可注入（内存 dict 测协议 / JSON 文件真落盘 / 换 DB 不改协议）。**真·多机在线协同（socket/消息总线/CRDT）仍占位**，需业务定协同协议。
+- 同步补 `build_exe.py` HIDDEN_IMPORTS（`permission_model` + `collab_protocol`，tools 命名空间包 PyInstaller 静态追不到，CLAUDE.md 纪律）。
+
 ### 底座（Phase 0）
 
 - **Phase 0 · 墙体厚度标注进主链路** — 见 f7b4f2d。

@@ -90,7 +90,7 @@
 
 ### 2.5 工程质量护栏（可复现性证明）
 
-- **388 passed / 5 skipped / 0 failed** 全量测试（45 个测试文件）；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
+- **409 passed / 5 skipped / 0 failed** 全量测试（47 个测试文件）；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
 - 硬编码规则类 0 改动红线（git diff 校验）；新增测试"全量绿 + 单跑绿"双护栏（防假绿）。
 - **51 个 commit** 的完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交。
 
@@ -180,7 +180,7 @@ python run.py --no-llm
 python run.py --llm --render         # 出 preview.png + report.html
 
 # ④ 完整测试（commit 前 / CI）
-python -m pytest tests/ -q           # 388 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q           # 409 passed / 5 skipped / 0 failed
 ```
 
 ---
@@ -198,10 +198,10 @@ python -m pytest tests/ -q           # 388 passed / 5 skipped / 0 failed
 ---
 
 > **给决策者的一句话**：这套系统已证明"多专业接入可扩展"的工程底座是真实跑通的
-> （388 测试 / 四专业出图 / LLM 全链路出图 / session 级人在回路），剩下的不是"能不能做"，而是"各专业专家
+> （409 测试 / 四专业出图 / LLM 全链路出图 / session 级人在回路），剩下的不是"能不能做"，而是"各专业专家
 > 把数值和约定填进来"——**架构把复杂度消化了，专业价值留给专业的人**。
 
-*本报告数据截止 2026-09-30 · 全部数字经实跑验证（388 passed / 45 测试文件 / 91 commit）*
+*本报告数据截止 2026-09-30 · 全部数字经实跑验证（409 passed / 47 测试文件 / 91 commit）*
 
 ---
 
@@ -244,7 +244,7 @@ build/dist/ai_cad_gui/
 > 论证落地：M1 卡从「整卡置灰」变成「给排水/电气/暖通点亮 + 结构占位」，
 > 直观证明「专家填值即点亮、零代码」——填一个专业亮一个专业，架构不动。
 
-全量回归：`python -m pytest tests/ -q` → **388 passed / 5 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0；当前水位含人在回路 session 级 + 规则分支覆盖测试）。
+全量回归：`python -m pytest tests/ -q` → **409 passed / 5 skipped / 0 failed**（hvac 风速上限变更同步更新 test_hvac_dsl 断言 9.0→12.0；当前水位含人在回路 session 级 + 规则分支覆盖测试 + M5 权限/协同骨架）。
 
 ---
 

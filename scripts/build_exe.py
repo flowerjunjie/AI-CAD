@@ -51,6 +51,8 @@ HIDDEN_IMPORTS = [
     "src.agents.src.tools.matplotlib_cjk",
     "src.agents.src.tools.clash_detection",
     "src.agents.src.tools.conflict_detection",
+    "src.agents.src.tools.permission_model",
+    "src.agents.src.tools.collab_protocol",
     "src.rules.src.engine",
     "src.rules.src.dsl",
     "src.rules.src.residential",
