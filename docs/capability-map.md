@@ -43,7 +43,9 @@
   ✅ 人在回路       session 级真人在回路: 起真实图挂起 (/agent/run) → 逐 task 确认 → 同 thread 真续跑
                      (graph interrupt+checkpointer + start_agent_run_suspended/resume_agent_run, 前端确认闸区块)
                      已透真实 CAD 数据源: /agent/run 把每个待确认 task 的类型/描述/出图结果 + 图面预览透出
-  ▢ 团队协作          多设计师权限/在线协同 (占位, 需业务定权限模型; 单人 session 级已通)
+  ◑ 团队协作          机制骨架已通: 角色→权限→资源锁→改动审批→合并 (permission_model 纯函数库,
+                     11 测试); 具体角色/权限矩阵值 = 占位配置 (DEFAULT_PERMISSIONS, 需业务定夺回填)
+                     单人 session 级已通; 多设计师在线协同 (持久锁/消息总线) 仍占位
 ```
 
 ## 一句话实力证明（数据背书）
