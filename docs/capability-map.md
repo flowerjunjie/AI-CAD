@@ -36,7 +36,8 @@
   待各专业专家补（占位, 机制已通、值待定）
   ▢ 规范数值          给排水/结构 已回填(GB 50015/50010/50011, confidence low~medium); 电气/暖通 部分占位 (改 JSON 即可)
   ▢ DWG 图层约定      各院"点位画法/块名"映射 = TBD (改 dict 即可)
-  ▢ 出图深化          各专业基础图元已出(PHASE 3), "元素→精细图元"画法 (线型/填充/图层着色) 待补
+  ✅ 出图深化          图层着色(23 层 ACI+线宽, 含 COLUMN_FILL) + DASHED/CENTERLINE 线型
+                     + 梁/柱截面实填充(HATCH) 已落地 (M3 图层着色/线宽/梁填充 + 本轮补柱填充)
   ✅ 多专业碰撞检测    管线穿梁/插座撞梁/风管撞梁 自动检测 (M4, clash_detection 几何库 + 主链路 + 出图红圈)
   ✅ 改动冲突检测     两稿 raw JSON 按元素 id 比对 (M5 自主子集, conflict_detection 纯函数库)
   ✅ 人在回路       session 级真人在回路: 起真实图挂起 (/agent/run) → 逐 task 确认 → 同 thread 真续跑

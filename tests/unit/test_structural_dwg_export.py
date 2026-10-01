@@ -174,11 +174,49 @@ def test_structure_design_passes_beam_column_counts():
     assert "column" in types, f"重建 task_list 缺 column task: {types}"
 
 
+def test_add_column_hatch_creates_column_fill():
+    """add_column(hatch=True): COLUMN_FILL 图层出 1 条实填充 HATCH (4 顶点=柱本体 4 角),
+    且不破坏既有柱本体 LWPOLYLINE / COLUMN_LABEL (回归红线: hatch 是纯增量)。"""
+    from src.agents.src.tools.cad_tools import DXFWriter, Column, Point
+
+    writer = DXFWriter()
+    writer.new("AC1027")
+    n = writer.add_column(Column(position=Point(0.0, 4.0), section_mm=400), hatch=True)
+    assert n == 1, f"add_column(hatch=True) 仍返回 1 条标注, 实际 {n}"
+
+    msp = writer.doc.modelspace()
+    # 柱本体不受影响: COLUMN 层仍 1 条 LWPOLYLINE
+    assert len(list(msp.query('LWPOLYLINE[layer=="COLUMN"]'))) == 1
+    # COLUMN_FILL 层出 1 条 HATCH (新增的填充, 与 add_beam hatch 同口径)
+    hatches = list(msp.query('HATCH[layer=="COLUMN_FILL"]'))
+    assert len(hatches) == 1, f"COLUMN_FILL 层应有 1 条 HATCH, 实际 {len(hatches)}"
+    # HATCH 有 1 条闭合 path (填充区域 = 柱截面)
+    h = hatches[0]
+    assert len(h.paths) == 1, "柱填充应有 1 条 path"
+
+
+def test_add_column_hatch_default_off_and_idempotent():
+    """hatch 默认 False 不出填充 (既有行为不变); 多次 hatch=True 幂等不炸 (纯增量)。"""
+    from src.agents.src.tools.cad_tools import DXFWriter, Column, Point
+
+    writer = DXFWriter()
+    writer.new("AC1027")
+    # 默认 hatch=False: 无 COLUMN_FILL 实体 (既有行为不变)
+    writer.add_column(Column(position=Point(0.0, 4.0), section_mm=400))
+    assert len(list(writer.doc.modelspace().query('HATCH[layer=="COLUMN_FILL"]'))) == 0, \
+        "默认 hatch=False 不应出 COLUMN_FILL 填充 (既有行为不变)"
+    # hatch=True: 出填充; 再调一次同位置不炸 (幂等纯增量)
+    writer.add_column(Column(position=Point(0.0, 4.0), section_mm=400), hatch=True)
+    assert len(list(writer.doc.modelspace().query('HATCH[layer=="COLUMN_FILL"]'))) == 1
+
+
 if __name__ == "__main__":
     test_add_beam_creates_lwpolyline_on_beam_layer()
     test_add_column_creates_square_on_column_layer()
     test_cad_execute_beam_column_tasks_write_entities()
     test_input_parser_emits_beam_column_tasks()
     test_structure_design_passes_beam_column_counts()
+    test_add_column_hatch_creates_column_fill()
+    test_add_column_hatch_default_off_and_idempotent()
     # ASCII print — Windows GBK 终端不能 print emoji (直跑护栏见 test_direct_run.py)
     print("OK: all structural DWG export tests passed")

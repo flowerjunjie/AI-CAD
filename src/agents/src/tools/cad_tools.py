@@ -406,6 +406,7 @@ class DXFWriter:
         "BEAM_FILL": {"color": 3, "lineweight": 13},
         "COLUMN": {"color": 3, "lineweight": 30},
         "COLUMN_LABEL": {"color": 3, "lineweight": 13},
+        "COLUMN_FILL": {"color": 3, "lineweight": 13},
         "FOUNDATION": {"color": 3, "lineweight": 30},
         "NODE": {"color": 3, "lineweight": 13},
         "WALL_SHEAR": {"color": 3, "lineweight": 30},
@@ -697,7 +698,7 @@ class DXFWriter:
         hatch.set_solid_fill()
         hatch.paths.add_polyline_path(pts, is_closed=True)
 
-    def add_column(self, col: Column, label_offset: float = 0.15) -> int:
+    def add_column(self, col: Column, label_offset: float = 0.15, hatch: bool = False) -> int:
         """添加结构柱（截面矩形）+ 截面标注，返回标注条数（0 或 1）。
 
         出图范式照 add_opening_marker 的点位范式（以 point 定位）：
@@ -705,6 +706,8 @@ class DXFWriter:
           边长 = 截面短边 mm/1000 m）, 读回走与 pipe/beam 相同的 polyline 通道。
         - 截面标注: 仿 BEAM_LABEL 范式, COLUMN_LABEL 层 TEXT "{短边}x{短边}"
           画在柱心（插入点上方半边长）上方 offset 处。
+        - hatch=True: 在柱截面 (左下顶角→右上) 处补一个实填充 (COLUMN_FILL 层),
+          照 _add_beam_hatch 的 HATCH 范式 (柱是正方形, 4 顶点 = 柱本体 4 角)。
 
         显式建图层 — DWG 二进制省略零实体空图层，须先 layers.new 再 add。
         """
@@ -721,6 +724,9 @@ class DXFWriter:
             close=True,
             dxfattribs={"layer": col.layer},
         )
+        # hatch=True: 柱截面实填充 (COLUMN_FILL 层, 4 顶点 = 柱本体 4 角)
+        if hatch:
+            self._add_column_hatch(x0, y0, half)
         # 截面标注: 柱心上方 offset 处 TEXT "{短边}x{短边}"
         txt = self.msp.add_text(
             f"{col.section_mm}x{col.section_mm}",
@@ -728,6 +734,23 @@ class DXFWriter:
         )
         txt.dxf.insert = (col.position.x, col.position.y + label_offset)
         return 1
+
+    def _add_column_hatch(self, x0: float, y0: float, half: float) -> None:
+        """柱截面实填充 (COLUMN_FILL 层, 4 顶点 = 柱本体正方形 4 角)。
+
+        照 _add_beam_hatch 的 ezdxf HATCH 范式: set_solid_fill +
+        add_polyline_path (闭合)。显式建 COLUMN_FILL 图层 (先查后建/幂等),
+        并 _ensure_layer_styles 让 COLUMN_FILL 套上 M3 结构系配色。
+        """
+        if "COLUMN_FILL" not in self.doc.layers:
+            self.doc.layers.new("COLUMN_FILL")
+        pts = [
+            (x0, y0), (x0 + 2 * half, y0),
+            (x0 + 2 * half, y0 + 2 * half), (x0, y0 + 2 * half),
+        ]
+        hatch = self.msp.add_hatch(color=8, dxfattribs={"layer": "COLUMN_FILL"})
+        hatch.set_solid_fill()
+        hatch.paths.add_polyline_path(pts, is_closed=True)
 
     def _add_point_symbol(
         self,
