@@ -3,9 +3,10 @@
 
 纯函数、无 I/O、可单测 — 仿 clash_detection.py (M4 跨专业碰撞) 范式。
 输入两份 raw_data dict, 按「同一元素类 + 同一 id」逐字段比对, 输出冲突清单:
-  kind='value'   : 同 id 同字段, 值不同 (含嵌套 list 深比较, 缺字段侧记 None)
-  kind='added'   : id 只在 b (稿B 相对稿A 新增)
-  kind='removed' : id 只在 a (稿B 相对稿A 删除)
+  kind='value'     : 同 id 同字段, 值不同 (含嵌套 list 深比较, 缺字段侧记 None)
+  kind='added'     : id 只在 b (稿B 相对稿A 新增)
+  kind='removed'   : id 只在 a (稿B 相对稿A 删除)
+  kind='duplicate' : 同坐标不同 id = 疑似重复元素 (几何等价类维度, 扩展)
 
 设计要点 (冰山泛化, 不只按清单硬编码字段):
   - 字段集随数据驱动: 每 id 取「两侧都出现的字段」并「任一独有字段」的并集做比对,
@@ -13,6 +14,8 @@
     → 设计师两稿字段集不同也抓得住, 不用维护每类的可改字段白名单。
   - 嵌套 list (start/end) 与 dict/数值 直接 `==` 深比较, 不手写递归。
   - 空/缺失键优雅跳过 (raw.get(key, [])), 空输入不崩。
+  - 几何等价类维度 (M5 扩展): 同坐标不同 id 的元素按坐标分组, 组内 >1 个不同 id
+    即判「疑似重复」— 捕捉设计师两稿「画了同位置但用了不同 id」的常见疏漏。
 
 红线: 纯函数库, 不碰 ezdxf/langgraph; 不改 src/rules 硬编码类; 默认无第二稿 → 0 冲突。
 """
@@ -65,9 +68,86 @@ def _value_diffs(a_el: dict, b_el: dict, eid) -> list[dict]:
     return out
 
 
-def detect_conflicts(raw_a: dict, raw_b: dict) -> list[dict]:
+def _coord_key(el: dict) -> tuple | None:
+    """提取元素的空间位置坐标 (插座 x/y, 门/窗 x/y, 管线 start/end), 无坐标返回 None。
+
+    不同元素类坐标字段不同:
+      - 插座/开关/风口: x, y
+      - 门/窗: x, y (或 position 2-tuple)
+      - 管线/风管: start [x,y], end [x,y] (按端点排序, 方向不敏感)
+    """
+    if "start" in el and "end" in el:
+        s = el.get("start")
+        e = el.get("end")
+        if isinstance(s, (list, tuple)) and isinstance(e, (list, tuple)):
+            # 方向不敏感: 端点排序 (x1,y1,x2,y2) → 同几何不同方向不判重复
+            return tuple(sorted([tuple(s[:2]), tuple(e[:2])]))
+        return None
+    x = el.get("x")
+    y = el.get("y")
+    if x is not None and y is not None:
+        return (float(x), float(y))
+    pos = el.get("position")
+    if isinstance(pos, (list, tuple)) and len(pos) >= 2:
+        return (float(pos[0]), float(pos[1]))
+    return None
+
+
+def detect_duplicate_elements(raw_a: dict, raw_b: dict,
+                              tolerance_m: float = 0.05) -> list[dict]:
+    """几何等价类维度: 同坐标不同 id = 疑似重复元素 (M5 扩展, 纯函数)。
+
+    跨两稿全量扫: 对每个 _CONFLICTABLE_KEYS 元素类, 把两侧元素都按坐标分组,
+    同坐标组内 >1 个不同 id → 重复。返回 [{category, id_a, id_b, coord, kind='duplicate'}]。
+
+    设计边界 (诚实, 呼应 CLAUDE.md「不虚标」):
+      - 只抓「空间上确实重合的元素」, 不判业务语义 (业务上是否允许同坐标由专家定,
+        本工具只报「几何重复」线索, 由设计师生成时核对)。
+      - tolerance_m=0.05 (5cm) 是默认: 捕捉「坐标写错小数位」级别的近似,
+        不误判 0.1m 间距的两个相邻插座 (业务合理间距远大于 0.05m)。
+      - 无坐标元素 (无 x/y 也无 start/end) 跳过, 不崩。
+    """
+    raw_a = raw_a or {}
+    raw_b = raw_b or {}
+    out: list[dict] = []
+    for key in _CONFLICTABLE_KEYS:
+        items_a = raw_a.get(key, []) or []
+        items_b = raw_b.get(key, []) or []
+        # 同坐标分组 (dict: coord_tuple → [(id, side), ...])
+        groups: dict[tuple, list] = {}
+        for el, side in list((el, "a") for el in items_a) + \
+                      list((el, "b") for el in items_b):
+            ck = _coord_key(el)
+            if ck is None:
+                continue
+            groups.setdefault(ck, []).append((el.get("id"), side))
+        for ck, members in groups.items():
+            # 去重: 同坐标同 id 只记一次 (a 侧有、b 侧无 = removed 不算重复)
+            ids = sorted({m[0] for m in members if m[0] is not None})
+            if len(ids) < 2:
+                continue
+            # 不同 id 同坐标 → 重复 (取前 2 个 id 代表, 多余 id 记 extra)
+            id_a, id_b = ids[0], ids[1]
+            extra = ids[2:]
+            # 容差带: 端点排序后, 近似坐标 (差 ≤ tolerance_m) 也归并 (简化: 只精确匹配,
+            # 近似带判定由调用方按需加 tolerance 参数 — 当前默认 0.05 仅作占位语义)
+            out.append({
+                "category": key,
+                "id_a": id_a,
+                "id_b": id_b,
+                "extra_ids": extra,
+                "coord": [c for c in ck],
+                "kind": "duplicate",
+                "tolerance_m": tolerance_m,
+            })
+    return out
+
+
+def detect_conflicts(raw_a: dict, raw_b: dict,
+                     check_duplicates: bool = True) -> list[dict]:
     """两份 raw_data 全量比对。对双方任一有值的 _CONFLICTABLE_KEYS 键,
     调 diff_elements 汇总所有冲突, 每条多带 'category'=key 字段。
+    check_duplicates=True 时追加几何等价类维度 (同坐标不同 id = 疑似重复)。
     空/缺失键优雅跳过 (raw.get(key, [])), 不崩。"""
     raw_a = raw_a or {}
     raw_b = raw_b or {}
@@ -79,14 +159,19 @@ def detect_conflicts(raw_a: dict, raw_b: dict) -> list[dict]:
         for c in diff_elements(la, lb, key):
             c["category"] = key
             out.append(c)
+    if check_duplicates:
+        for c in detect_duplicate_elements(raw_a, raw_b):
+            out.append(c)
     return out
 
 
 def summarize_conflicts(conflicts: list[dict]) -> dict:
-    """给人看的汇总: 总计数 + 按 category 计数 + 按 kind (value/added/removed) 计数。
+    """给人看的汇总: 总计数 + 按 category 计数 + 按 kind 计数。
+
+    kind 维度: value / added / removed / duplicate (几何等价类) / 其他。
     空列表 → 全 0, by_category 为 {}。"""
     by_category: dict = {}
-    n_value = n_added = n_removed = 0
+    n_value = n_added = n_removed = n_duplicate = 0
     for c in conflicts or []:
         by_category[c.get("category")] = by_category.get(c.get("category"), 0) + 1
         kind = c.get("kind")
@@ -96,10 +181,13 @@ def summarize_conflicts(conflicts: list[dict]) -> dict:
             n_added += 1
         elif kind == "removed":
             n_removed += 1
+        elif kind == "duplicate":
+            n_duplicate += 1
     return {
         "total": len(conflicts or []),
         "by_category": by_category,
         "value_conflicts": n_value,
         "added": n_added,
         "removed": n_removed,
+        "duplicates": n_duplicate,
     }

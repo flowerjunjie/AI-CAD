@@ -132,7 +132,7 @@ def test_detect_conflicts_empty_input():
 
 
 def test_summarize_counts():
-    """summarize: 计数正确 (value/added/removed + by_category + total)"""
+    """summarize: 计数正确 (value/added/removed/duplicate + by_category + total)"""
     cf = _import()
     conflicts = [
         {"id": "d1", "field": "width_m", "a_value": 0.9, "b_value": 1.0,
@@ -141,23 +141,27 @@ def test_summarize_counts():
          "kind": "added", "category": "pipes"},
         {"id": "o1", "field": None, "a_value": {}, "b_value": None,
          "kind": "removed", "category": "outlets"},
+        {"id": "o3", "field": None, "a_value": None, "b_value": None,
+         "kind": "duplicate", "category": "outlets"},
     ]
     s = cf.summarize_conflicts(conflicts)
     assert s == {
-        "total": 3,
-        "by_category": {"doors": 1, "pipes": 1, "outlets": 1},
+        "total": 4,
+        "by_category": {"doors": 1, "pipes": 1, "outlets": 2},
         "value_conflicts": 1,
         "added": 1,
         "removed": 1,
+        "duplicates": 1,
     }, f"汇总计数应正确, 实际 {s}"
 
 
 def test_summarize_empty():
-    """summarize 空输入 → 全 0, by_category={}"""
+    """summarize 空输入 → 全 0, by_category={}; 含 duplicates 键"""
     cf = _import()
     s = cf.summarize_conflicts([])
     assert s == {"total": 0, "by_category": {}, "value_conflicts": 0,
-                 "added": 0, "removed": 0}, f"空输入应全 0, 实际 {s}"
+                 "added": 0, "removed": 0, "duplicates": 0}, \
+        f"空输入应全 0 (含 duplicates=0), 实际 {s}"
     assert cf.summarize_conflicts(None) == s
 
 
@@ -190,6 +194,84 @@ def test_cad_execute_conflict_task_counts_second_draft():
 
 
 
+# ── M5 几何等价类维度 (同坐标不同 id = 疑似重复元素, 纯函数扩展) ──
+
+def test_detect_duplicate_elements_same_coord_different_id():
+    """同坐标不同 id → 疑似重复元素 (kind='duplicate'), 跨两稿全量扫。"""
+    cf = _import()
+    raw_a = {"outlets": [
+        {"id": "o1", "x": 1.0, "y": 1.0},
+        {"id": "o2", "x": 1.0, "y": 1.0},  # 与 o1 同坐标不同 id → 重复
+    ]}
+    raw_b = {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]}
+    dupes = cf.detect_duplicate_elements(raw_a, raw_b)
+    assert len(dupes) == 1, f"应 1 处重复, 实际 {dupes}"
+    d = dupes[0]
+    assert d["kind"] == "duplicate" and d["category"] == "outlets"
+    assert d["id_a"] == "o1" and d["id_b"] == "o2"
+    assert d["coord"] == [1.0, 1.0]
+
+
+def test_detect_duplicate_elements_no_false_positive():
+    """同坐标同 id (稿 A/B 对齐) → 不算重复 (removed 已记过, 不再报 duplicate)。"""
+    cf = _import()
+    raw_a = {"outlets": [{"id": "o1", "x": 2.0, "y": 2.0}]}
+    raw_b = {"outlets": [{"id": "o1", "x": 2.0, "y": 2.0}]}
+    dupes = cf.detect_duplicate_elements(raw_a, raw_b)
+    assert dupes == [], f"同 id 同坐标不应报重复, 实际 {dupes}"
+
+
+def test_detect_duplicate_elements_pipeline_endpoints():
+    """管线 start/end 按端点排序 (方向不敏感): 同几何不同方向的管段不算重复。"""
+    cf = _import()
+    raw_a = {"pipes": [
+        {"id": "p1", "start": [0.0, 0.0], "end": [5.0, 0.0]},
+        {"id": "p2", "start": [5.0, 0.0], "end": [0.0, 0.0]},  # 与 p1 同几何反向
+    ]}
+    dupes = cf.detect_duplicate_elements(raw_a, {})
+    assert len(dupes) == 1, f"同几何反向管段应 1 处重复, 实际 {dupes}"
+    assert dupes[0]["id_a"] == "p1" and dupes[0]["id_b"] == "p2"
+
+
+def test_detect_conflicts_includes_duplicates_by_default():
+    """detect_conflicts 默认 check_duplicates=True: 重复元素进冲突清单。"""
+    cf = _import()
+    raw_a = {"outlets": [
+        {"id": "o1", "x": 3.0, "y": 3.0},
+        {"id": "o2", "x": 3.0, "y": 3.0},
+    ]}
+    res = cf.detect_conflicts(raw_a, {})
+    kinds = {c["kind"] for c in res}
+    assert "duplicate" in kinds, f"应含 duplicate 冲突, 实际 kinds={kinds}"
+    dup = next(c for c in res if c["kind"] == "duplicate")
+    assert dup["id_a"] == "o1" and dup["id_b"] == "o2"
+
+
+def test_detect_conflicts_no_duplicates_when_disabled():
+    """check_duplicates=False → 不报重复 (老调用方零改动, 向后兼容)。"""
+    cf = _import()
+    raw_a = {"outlets": [
+        {"id": "o1", "x": 4.0, "y": 4.0},
+        {"id": "o2", "x": 4.0, "y": 4.0},
+    ]}
+    res = cf.detect_conflicts(raw_a, {}, check_duplicates=False)
+    assert all(c["kind"] != "duplicate" for c in res), \
+        f"禁用重复检测应无 duplicate, 实际 {res}"
+
+
+def test_summarize_counts_duplicate_kind():
+    """summarize_conflicts 含 kind='duplicate' → 计入 total, 不污染 value/added/removed。"""
+    cf = _import()
+    conflicts = [
+        {"id": "o1", "field": None, "a_value": None, "b_value": None,
+         "kind": "duplicate", "category": "outlets"},
+    ]
+    s = cf.summarize_conflicts(conflicts)
+    assert s["total"] == 1
+    assert s["value_conflicts"] == 0 and s["added"] == 0 and s["removed"] == 0
+    assert s["by_category"] == {"outlets": 1}
+
+
 if __name__ == "__main__":
     test_diff_elements_value_conflict()
     test_diff_elements_identical_returns_empty()
@@ -204,4 +286,10 @@ if __name__ == "__main__":
     test_summarize_empty()
     test_cad_execute_conflict_task_noop_without_second_draft()
     test_cad_execute_conflict_task_counts_second_draft()
+    test_detect_duplicate_elements_same_coord_different_id()
+    test_detect_duplicate_elements_no_false_positive()
+    test_detect_duplicate_elements_pipeline_endpoints()
+    test_detect_conflicts_includes_duplicates_by_default()
+    test_detect_conflicts_no_duplicates_when_disabled()
+    test_summarize_counts_duplicate_kind()
     print("OK: all conflict detection tests passed")

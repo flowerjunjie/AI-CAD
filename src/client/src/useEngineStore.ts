@@ -63,11 +63,17 @@ export interface ClashResult {
 /** M5 单条冲突 (bridge /api/conflict 的 conflicts[i])。 */
 export interface ConflictItem {
   id: string;
-  field: string | null;  // null = 元素整块 added/removed
+  field: string | null;  // null = 元素整块 added/removed/duplicate
   a_value: unknown;
   b_value: unknown;
-  kind: 'value' | 'added' | 'removed';
+  kind: 'value' | 'added' | 'removed' | 'duplicate';  // duplicate = 同坐标不同 id (几何等价类)
   category: string;      // 元素类: doors/outlets/pipes...
+  // duplicate 冲突专有字段 (kind='duplicate' 时)
+  id_a?: string;         // 重复元素 A 的 id
+  id_b?: string;         // 重复元素 B 的 id
+  extra_ids?: string[];  // 同坐标第 3+ 个 id (多重重叠)
+  coord?: number[];      // 坐标 [x, y] 或端点排序 [x1,y1,x2,y2]
+  tolerance_m?: number;  // 判定容差带
 }
 
 /** GET /api/conflict 响应 (bridge.py F 段)。 */
@@ -83,6 +89,7 @@ export interface ConflictResult {
     value_conflicts: number;
     added: number;
     removed: number;
+    duplicates: number;  // 几何等价类维度 (同坐标不同 id = 疑似重复)
   };
 }
 

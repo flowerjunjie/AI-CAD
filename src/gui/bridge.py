@@ -596,14 +596,19 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
                  sample_b: str = "residential_100sqm.json") -> dict:
     """M5 两稿改动冲突: 两份 sample 顶层数据调 detect_conflicts + summarize_conflicts。
 
+    默认开启几何等价类维度 (check_duplicates=True): 同坐标不同 id = 疑似重复元素
+    (kind='duplicate', 琥珀色 UI 标注), 捕捉设计师两稿「画了同位置但用了不同 id」
+    的常见疏漏。传 check_duplicates=False 可关闭 (老调用方零改动, 向后兼容)。
+
     返回 {sample_a, sample_b, count, by_category, conflicts, summary}。
+    summary 含 value_conflicts/added/removed/duplicates 四维度计数。
     同稿自比 → count=0 空列表 (诚实, 不造假)。"""
     from src.agents.src.tools.conflict_detection import (  # 懒
         detect_conflicts, summarize_conflicts)
 
     raw_a = _load_sample_raw(sample_a)
     raw_b = _load_sample_raw(sample_b)
-    conflicts = detect_conflicts(raw_a, raw_b)
+    conflicts = detect_conflicts(raw_a, raw_b, check_duplicates=True)
     summary = summarize_conflicts(conflicts)
     return {
         "sample_a": sample_a,

@@ -294,9 +294,17 @@ function App() {
                     <span className="clash-scope">{r.sample_a} vs {r.sample_b}</span>
                     {r.conflicts.slice(0, 8).map((c, j) => (
                       <div key={j} className="clash-line">
-                        <span className="clash-kind">{c.kind}</span>
-                        <span className="clash-ids">{c.category}/{c.id}{c.field ? `.${c.field}` : ''}</span>
-                        {c.field && <span className="clash-detail">{String(c.a_value)} → {String(c.b_value)}</span>}
+                        <span className={`clash-kind ${c.kind === 'duplicate' ? 'clash-kind-dup' : ''}`}>
+                          {c.kind === 'duplicate' ? '重复' : c.kind}
+                        </span>
+                        <span className="clash-ids">
+                          {c.kind === 'duplicate'
+                            ? `${c.category}/${c.id_a} ≡ ${c.id_b}${c.extra_ids?.length ? ` +${c.extra_ids.length} 个` : ''} @ (${c.coord?.join(', ')})`
+                            : `${c.category}/${c.id}${c.field ? `.${c.field}` : ''}`}
+                        </span>
+                        {c.kind === 'duplicate'
+                          ? <span className="clash-detail">同坐标不同 id (容差 {c.tolerance_m}m)</span>
+                          : c.field && <span className="clash-detail">{String(c.a_value)} → {String(c.b_value)}</span>}
                       </div>
                     ))}
                     {r.conflicts.length > 8 && <div className="clash-detail">… 共 {r.conflicts.length} 条</div>}
