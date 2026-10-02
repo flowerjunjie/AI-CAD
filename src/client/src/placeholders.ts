@@ -35,9 +35,10 @@ export const PLACEHOLDERS: Placeholder[] = [
   {
     id: 'm4-collision',
     title: '多专业碰撞检测',
-    desc: '管线穿梁 / 插座撞梁 自动检测',
+    desc: '管线穿梁 / 插座撞梁 自动检测 (容差带已接 default.json 回填通道, 专家改 JSON 即调参)',
     domain: '多专业协同',
     owner: '团队工程',
+    disciplinePrefixes: ['clash-'],
   },
   {
     id: 'm5-team',

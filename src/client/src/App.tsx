@@ -572,7 +572,11 @@ function App() {
             const litPrefixes = p.disciplinePrefixes?.filter((pref) =>
               rules.some((r) => r.confirmed && r.rule_id.startsWith(pref)),
             ) || [];
-            const allLit = litPrefixes.length > 0 && litPrefixes.length === p.domain.split('/').length;
+            // 全亮判定: 无前缀声明 → 恒不亮 (功能占位, 无回填通道);
+            // 有前缀 → 全部前缀 confirmed 才算 "已点亮" (M1 四专业 / M4 clash 容差)
+            const allLit = p.disciplinePrefixes?.length
+              ? litPrefixes.length === p.disciplinePrefixes.length
+              : false;
             return (
               <div
                 key={p.id}
