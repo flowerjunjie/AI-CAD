@@ -30,6 +30,15 @@
 | `GET /api/preview?sample=residential_100sqm.json` | – | 直接返回 PNG bytes (Content-Type image/png) | render_and_open 逻辑抽成只渲染不弹窗 |
 | `GET /api/rule-violations` | – | 全量规则实测违规演示 `[{...}]` | engine.check([bad elements]) 演示 |
 | `POST /api/rag/search` | `{"query":"疏散走道最小宽度"}` | `{"query","results":[{text,score,category}]}` | RAGKnowledgeBase.search (本地 chroma_db) |
+| `GET /api/clash?sample=&tolerance_m=` | – | `{sample, tolerance_m, tolerance_source, clashes:[{a_id,b_id,kind,detail}], count}` | clash_detection.detect_clashes (M4, 容差取值通道 param>default) |
+| `GET /api/conflict?sample_a=&sample_b=` | – | `{sample_a, sample_b, count, by_category, conflicts:[...], summary}` | conflict_detection.detect_conflicts (M5 两稿比对) |
+| `GET /api/collab/snapshot?designer=` | – | `{designer, write_holders, recent_events, event_count, source}` | collab_protocol.make_snapshot (M5 持久层, 只读) |
+| `POST /api/collab/acquire` | `{designer, resource_id, mode}` | 快照 + `{acquired, reason}` (本地锁演示, 非跨设计师同步) | collab_protocol.persistent_acquire |
+| `POST /api/collab/release` | `{designer, resource_id}` | 快照 + `{released}` (幂等, 无锁释放→false) | collab_protocol.persistent_release |
+
+**M2 制图约定对齐工具 (离线 CLI, 非桥端点)**：
+`python scripts/dwg_layer_scan.py <dxf>` → 图层 × 实体类型 × INSERT 块名 × ATTRIB 频率 JSON 报告。
+业务专家据此把 `docs/element-upstream-contract.md` §5 的 TBD 映射 dict 回填成选择题 (选图层/块名对应哪种元素种类), 不必凭记忆口述。只报频率, 不判定 kind 归属。
 
 **violation 结构**（引擎 `RuleViolation.to_dict()` 已固定，桥原样透出）：
 ```json
