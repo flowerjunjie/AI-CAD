@@ -574,6 +574,15 @@ body {
 }
 .collab-release-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* M2 制图约定对齐区块: 蓝紫色系 = 出图规范/图层 (区别于碰撞品红、协同琥珀) */
+.dwgscan-section { margin-top: 16px; }
+.dwgscan-section h3 {
+  font-size: 13px; color: #7c6ee5; font-weight: 700; margin-bottom: 8px;
+}
+.dwgscan-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.dwgscan-layer { color: #7c6ee5; background: #1a163a; }
+.dwgscan-attr { color: #4caf50; background: #0d1a12; }
+
 /* 人在回路确认闸区块 (演示通路): 绿色系 = "放行/通过" 语义, 呼应 clash-ok */
 .confirm-section { margin-top: 16px; }
 .confirm-section h3 {

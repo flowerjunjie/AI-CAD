@@ -620,6 +620,40 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
     }
 
 
+# ─── I M2 制图约定对齐工具域段: 扫真实 DWG → 图层/块名/ATTRIB 频率报告 ──
+# 让业务专家在 GUI 面板里直接扫 DWG 看「各院用什么图层/块名画点位」, 把
+# docs/element-upstream-contract.md §5 的 TBD 映射 dict 从填空题变选择题。
+# 诚实边界 (不虚标): 只报频率 + 图层/块名清单, **不**判定「哪个图层=梁/柱/插座」
+# — 判定是业务约定, 专家看报告回填映射 dict (改 JSON 即可), 不在本端点冒称自动映射。
+
+_DWGSAMPLES = [
+    "electrical_sample.dxf", "hvac_sample.dxf",
+    "plumbing_sample.dxf", "structural_sample.dxf",
+]
+
+
+@app.get("/api/dwg-scan")
+def api_dwg_scan(sample: str = "electrical_sample.dxf") -> dict:
+    """M2 制图约定对齐: 扫 data/sample/<sample> (DXF) → 图层/块名/ATTRIB 频率报告。
+
+    返回 {sample, layers, entity_type_totals, attrib_tags, layer_count,
+          insert_total, available_samples, note}。
+    sample 非 DXF / 不存在 → 诚实 404 (不崩不造假); 缺图层 → 空报告 (诚实两态)。
+    懒 import: dwg_layer_scan 纯函数库 (依赖 ezdxf, 放函数体不触发模块收集冷启)。"""
+    from src.agents.src.tools.dwg_layer_scan import scan_sample_reader  # 懒
+    p = os.path.join(ROOT, "data", "sample", sample)
+    if not os.path.exists(p) or not sample.endswith(".dxf"):
+        raise HTTPException(404,
+            f"样本不存在或非 DXF: {sample} "
+            f"(可用: {', '.join(_DWGSAMPLES)})")
+    report = scan_sample_reader(sample, ROOT)
+    report["sample"] = sample
+    report["available_samples"] = _DWGSAMPLES
+    report["note"] = ("图层/块名频率报告 — 专家据此回填映射 dict "
+                      "(docs/element-upstream-contract.md §5), 不判定 kind 归属")
+    return report
+
+
 # ─── G 人在回路确认闸域段: Agent 步进/确认接口 (原 src/server routes.py 并入) ───
 # 配合 graph.py 的暂停机制 (interrupt + checkpointer + awaiting_confirmation_node)。
 # 本段只负责 FastAPI 端: 登记人工决定 + 触发 resume。图侧真实「写 human_confirmations

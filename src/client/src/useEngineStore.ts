@@ -124,6 +124,26 @@ export interface CollabLockOp extends CollabSnapshot {
   reason?: string;
 }
 
+// ─── M2 制图约定对齐工具 (bridge.py I 段, 扫 DWG → 图层/块名频率报告) ───
+
+/** 单个图层的扫描结果 (bridge /api/dwg-scan 的 layers[图层名])。 */
+export interface DwgLayerInfo {
+  entity_counts: Record<string, number>;  // 实体类型 → 数量
+  block_names: string[];                  // INSERT 块名 (按频率降序)
+}
+
+/** GET /api/dwg-scan 响应 (bridge.py I 段, 诚实两态: 有数据/缺图层空报告)。 */
+export interface DwgScanResult {
+  sample: string;
+  layers: Record<string, DwgLayerInfo>;
+  entity_type_totals: Record<string, number>;
+  attrib_tags: Record<string, number>;
+  layer_count: number;
+  insert_total: number;
+  available_samples?: string[];
+  note?: string;
+}
+
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
 
 /** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
@@ -198,6 +218,9 @@ interface EngineState {
   collabSnapshot: import('./useEngineStore').CollabSnapshot | null;
   collabOps: import('./engineApi').CollabLockOp[];
   collabLoading: boolean;
+  // M2 制图约定对齐工具 (bridge I 段, 扫 DWG → 图层/块名频率报告)
+  dwgScan: import('./useEngineStore').DwgScanResult | null;
+  dwgScanLoading: boolean;
   // 人在回路确认闸 (bridge G 段, 演示通路)
   confirmResults: import('./engineApi').AgentConfirmResult[];
   confirmLoading: boolean;
@@ -217,6 +240,8 @@ interface EngineState {
   setCollabSnapshot: (s: import('./useEngineStore').CollabSnapshot | null) => void;
   appendCollabOp: (op: import('./engineApi').CollabLockOp) => void;
   setCollabLoading: (l: boolean) => void;
+  setDwgScan: (r: import('./useEngineStore').DwgScanResult | null) => void;
+  setDwgScanLoading: (l: boolean) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
   setAgentRun: (r: import('./engineApi').AgentRunResult | null) => void;
@@ -239,6 +264,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   collabSnapshot: null,
   collabOps: [],
   collabLoading: false,
+  dwgScan: null,
+  dwgScanLoading: false,
   confirmResults: [],
   confirmLoading: false,
   agentRun: null,
@@ -256,6 +283,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   setCollabSnapshot: (collabSnapshot) => set({ collabSnapshot }),
   appendCollabOp: (op) => set((s) => ({ collabOps: [...s.collabOps, op] })),
   setCollabLoading: (collabLoading) => set({ collabLoading }),
+  setDwgScan: (dwgScan) => set({ dwgScan }),
+  setDwgScanLoading: (dwgScanLoading) => set({ dwgScanLoading }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
   setAgentRun: (agentRun) => set({ agentRun }),

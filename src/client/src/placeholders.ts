@@ -21,7 +21,7 @@ export const PLACEHOLDERS: Placeholder[] = [
   {
     id: 'm2-layer',
     title: 'DWG 图层约定',
-    desc: '各院点位图层/块名映射待对齐制图规范',
+    desc: '各院点位图层/块名映射待对齐制图规范 (GUI「扫图层」按钮 + scripts/dwg_layer_scan.py 可出频率报告辅助决策)',
     domain: '出图规范',
     owner: '制图规范',
   },

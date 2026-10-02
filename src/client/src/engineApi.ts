@@ -1,7 +1,7 @@
 import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult,
         type DslRuleItem, type DslValidateResp, type DslApplyResp,
         type ClashResult, type ConflictResult,
-        type CollabSnapshot } from './useEngineStore';
+        type CollabSnapshot, type DwgScanResult } from './useEngineStore';
 
 // 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
 // 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
@@ -189,6 +189,21 @@ export async function collabRelease(
     store.setCollabSnapshot(result);
     store.appendCollabOp(result);
   }
+  return result;
+}
+
+// ─── M2 制图约定对齐工具 (bridge.py I 段, 扫 DWG → 图层/块名频率报告) ───
+// GET /api/dwg-scan?sample=X.dxf → DwgScanResult (诚实两态: 有数据/缺图层空报告)。
+// 专家据此把 docs/element-upstream-contract.md §5 的 TBD 映射 dict 回填成选择题。
+
+export async function runDwgScan(sample: string): Promise<DwgScanResult | null> {
+  const store = useEngineStore.getState();
+  store.setDwgScanLoading(true);
+  const result = await getJson<DwgScanResult>(
+    `/api/dwg-scan?sample=${encodeURIComponent(sample)}`,
+  );
+  store.setDwgScanLoading(false);
+  if (result) store.setDwgScan(result);
   return result;
 }
 

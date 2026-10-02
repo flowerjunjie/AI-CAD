@@ -3,7 +3,8 @@ import './App.css';
 import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
         runClashCheck, runConflict, runAgentConfirm, runAgentStart,
-        fetchCollabSnapshot, collabAcquire, collabRelease } from './engineApi';
+        fetchCollabSnapshot, collabAcquire, collabRelease,
+        runDwgScan } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -26,6 +27,7 @@ function App() {
     clashResults, clashLoading, conflictResults, conflictLoading,
     confirmResults, confirmLoading,
     collabSnapshot, collabOps, collabLoading,
+    dwgScan, dwgScanLoading,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,6 +82,13 @@ function App() {
   const handleCollabRelease = useCallback(async () => {
     await collabRelease(collabDesigner, collabResource);
   }, [collabDesigner, collabResource]);
+
+  // M2 制图约定对齐 (bridge /api/dwg-scan): 扫 DWG → 图层/块名/ATTRIB 频率报告,
+  // 专家据此把映射 dict 从填空题变选择题。默认扫电气样例 (电气是唯一有真实 DWG 上游的专业)。
+  const [dwgScanSample, setDwgScanSample] = useState('electrical_sample.dxf');
+  const handleDwgScan = useCallback(async () => {
+    await runDwgScan(dwgScanSample);
+  }, [dwgScanSample]);
 
   // 人在回路确认闸 (bridge /agent/confirm): 放行/拒绝 → 真续跑。
   // session 级: 先「起图挂起」(runAgentStart → /agent/run) 起真实图拿 thread+真实 pending,
@@ -387,6 +396,66 @@ function App() {
               </div>
             ) : (
               <p className="clash-empty">点「看快照」拉 /api/collab/snapshot · 取锁/放锁走本地持久化 (state.json)</p>
+            )}
+          </div>
+
+          {/* M2 制图约定对齐 — 扫 DWG 看图层/块名频率 (bridge I 段, 蓝紫色呼应出图规范) */}
+          <div className="dwgscan-section">
+            <div className="clash-head-row">
+              <h3>DWG 制图约定 <span className="collab-tag">M2</span></h3>
+              <div className="dwgscan-controls">
+                <select
+                  value={dwgScanSample}
+                  onChange={(e) => setDwgScanSample(e.target.value)}
+                  className="conflict-select"
+                >
+                  {['electrical_sample.dxf', 'hvac_sample.dxf',
+                    'plumbing_sample.dxf', 'structural_sample.dxf'].map((s) => (
+                    <option key={s} value={s}>{s.replace('_sample.dxf', '')}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={handleDwgScan}
+                  disabled={!engineConnected || dwgScanLoading}
+                >
+                  {dwgScanLoading ? '扫描中…' : '扫图层'}
+                </button>
+              </div>
+            </div>
+            {dwgScan ? (
+              <div className={`clash-item ${dwgScan.layer_count > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                <div className="clash-line">
+                  <span className="clash-kind">{dwgScan.sample}</span>
+                  <span className="clash-scope">
+                    图层 {dwgScan.layer_count} · INSERT {dwgScan.insert_total}
+                  </span>
+                </div>
+                {Object.entries(dwgScan.layers).slice(0, 6).map(([layer, info]) => (
+                  <div key={layer} className="clash-line">
+                    <span className="clash-kind dwgscan-layer">{layer}</span>
+                    <span className="clash-ids">
+                      {Object.entries(info.entity_counts).map(([t, n]) => `${t}×${n}`).join(' ')}
+                    </span>
+                    {info.block_names.length > 0 && (
+                      <span className="clash-detail">块: {info.block_names.slice(0, 4).join(', ')}</span>
+                    )}
+                  </div>
+                ))}
+                {Object.keys(dwgScan.attrib_tags).length > 0 && (
+                  <div className="clash-line">
+                    <span className="clash-kind dwgscan-attr">ATTRIB</span>
+                    <span className="clash-detail">
+                      {Object.entries(dwgScan.attrib_tags).map(([t, n]) => `${t}×${n}`).join(' ')}
+                    </span>
+                  </div>
+                )}
+                <p className="clash-empty">
+                  频率报告 · 专家据此回填映射 dict (docs/element-upstream-contract.md §5), 不判定 kind 归属
+                </p>
+              </div>
+            ) : (
+              <p className="clash-empty">点「扫图层」扫 {dwgScanSample} → 图层/块名/ATTRIB 频率报告</p>
             )}
           </div>
 
