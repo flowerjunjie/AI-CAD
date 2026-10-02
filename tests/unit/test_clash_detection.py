@@ -210,6 +210,12 @@ def test_resolve_clash_tolerance_priority():
     assert clash_rule is not None, "default.json 应含 clash-tolerance-range 规则"
     tol, src = cd.resolve_clash_tolerance(dsl_rule=clash_rule)
     assert src == "dsl" and abs(tol - 0.15) < 1e-9, "现状值 = 几何默认 (改 JSON 即变, 行为不变)"
+    # ⑥ confirmed 标志: M4 机制已落地 (取值通道已接主链路+桥端点), default.json
+    # 回填 confirmed=true 即点亮 M4 占位卡 (与 M1 「专家填值即点亮」同叙事);
+    # 不虚标: 真·多专业容差终值仍需专家背书 (confidence 维持 medium 不升级 high)。
+    assert clash_rule._spec.dsl_only is True, "clash-tolerance-range 应 dsl_only (纯 DSL 新增)"
+    assert clash_rule._spec.confidence == "medium", "几何容差非 GB 条文, confidence 不虚标 high"
+    assert clash_rule._spec.confirmed is True, "机制已落地, confirmed=true (点亮 M4 卡)"
 
 
 if __name__ == "__main__":

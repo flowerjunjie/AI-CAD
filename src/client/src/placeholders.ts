@@ -41,6 +41,14 @@ export const PLACEHOLDERS: Placeholder[] = [
     disciplinePrefixes: ['clash-'],
   },
   {
+    id: 'm5-collab',
+    title: '在线协同持久层',
+    desc: '锁/事件持久化 + 事件溯源 + 跨进程快照 (机制骨架已落地, 本地锁演示通路已接桥+GUI; 真·多机在线协同待业务定协议)',
+    domain: '协同持久',
+    owner: '团队',
+    disciplinePrefixes: ['collab-'],
+  },
+  {
     id: 'm5-team',
     title: '团队协作',
     desc: '多设计师 + 改动冲突检测 + 权限',

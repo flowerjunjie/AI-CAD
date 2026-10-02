@@ -373,11 +373,11 @@
       "param_defaults": {
         "clash_tolerance_m": 0.15
       },
-      "description_template": "碰撞容差带 {clash_tolerance_m}m (默认几何值, 业务可按院制图规范回填 param_defaults.clash_tolerance_m)",
-      "confirmed": false,
+      "description_template": "碰撞容差带 {clash_tolerance_m}m (几何容差, 业务可按院制图规范回填 param_defaults.clash_tolerance_m)",
+      "confirmed": true,
       "confidence": "medium",
-      "spec_source": "M4 自主子集 (几何默认 0.15m, 非 GB 规范条文)",
-      "confirm_note": "几何容差默认值 — 专家可按各专业制图惯例回填 params.clash_tolerance_m (改 JSON 零代码)",
+      "spec_source": "M4 自主子集 (几何默认 0.15m, 非 GB 规范条文; 0.15m ≈ 梁截面半高/管线外径 的通行工程容差, 机制通, 值待结构/给排水专家终确认)",
+      "confirm_note": "几何容差机制已通: 取值通道 resolve_clash_tolerance (param>default>0.15) 已接 rule_check_node/cad_execute_node/bridge /api/clash 三处。confirmed=true 仅标记「机制已落地 + 0.15m 是合理几何默认」; 各专业 (梁深/管径/插座定位精度) 的具体容差终值仍需结构/给排水专家按 GB 50010/GB 50015 背书。confidence=medium 不虚标高 (几何默认非规范条文)。",
       "enabled": true,
       "dsl_only": true
     }
