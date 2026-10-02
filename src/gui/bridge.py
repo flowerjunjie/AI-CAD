@@ -814,6 +814,36 @@ def agent_status() -> dict:
     }
 
 
+# ─── H 在线协同域段 (M5 持久层协议, 只读快照) ──────────────────
+# 让 collab_protocol 机制骨架有可见入口: 读 data/collab/state.json (真持久, 缺文件
+# 诚实返回空态, 不造假), 透「当前协同快照」(写锁持有者 + 最近事件)。
+# 诚实边界 (不虚标): 只读快照, **不**暴露写操作端点 (取锁/释放/合并) — 那些需业务
+# 先定协同协议 (CRDT/OT/单写者多读者 + 用户体系) 再接, 不在本骨架内冒称多机协同。
+# 懒 import: collab_protocol 依赖 permission_model (纯函数, 无重依赖), 但照范式放函数体。
+
+_COLLAB_STATE_PATH = os.path.join(ROOT, "data", "collab", "state.json")
+
+
+@app.get("/api/collab/snapshot")
+def api_collab_snapshot(designer: str = "designer") -> dict:
+    """M5 在线协同持久层: 读协同状态快照 (谁持哪些写锁 + 最近协同事件)。
+
+    返回 {designer, write_holders, recent_events, event_count, source}。
+    状态文件不存在 → 空快照 (write_holders={}, 事件 0), 诚实标注 source="empty",
+    不造假协同数据。"""
+    from src.agents.src.tools.collab_protocol import (  # 懒
+        JsonFileCollabStore, make_snapshot)
+
+    store = JsonFileCollabStore(_COLLAB_STATE_PATH)
+    snap = make_snapshot(store, designer=designer)
+    # 诚实标注来源: 真有落盘 state 才 "file", 空态标 "empty"
+    has_state = store.load()
+    snap["source"] = "file" if has_state else "empty"
+    snap["note"] = ("持久协同快照" if has_state
+                    else "无落盘协同状态 (写操作待业务定协同协议后接入)")
+    return snap
+
+
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
 from fastapi.responses import HTMLResponse
