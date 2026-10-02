@@ -24,21 +24,26 @@
 
 ```
   工程底座（全部实跑验证）
-  ✅ 规则引擎         30 硬编码类 + 14 DSL 规则, 命中/放行/参数覆盖
-  ✅ 多专业接入        给排水/电气/暖通/结构 四专业全通 (409 测试)
+  ✅ 规则引擎         30 硬编码类 + 18 DSL 规则, 命中/放行/参数覆盖
+  ✅ 多专业接入        给排水/电气/暖通/结构 四专业全通 (419 测试)
   ✅ 上游 DWG 解析     一份 INSERT 底座 + N 专业映射 (无孤儿模块)
   ✅ LLM Agent        LangGraph 全链路, --llm/--no-llm 双路径可验
   ✅ 出图 + 校验        DWG 生成 + 5 专业出图(建筑/给排水/结构/电气/暖通) + PNG 户型图渲染
   ✅ RAG 规范库        ChromaDB 本地, 数据不出境
   ✅ 规则写回落盘       /api/rules/dsl/apply 人工确认闸 → 写回 default.json (Phase 2)
   ✅ 质量护栏         信任边界 eval / 假绿双护栏 / 硬编码类 0 改动
+  ✅ M2 制图约定对齐工具  dwg_layer_scan 扫真实 DXF → 图层/块名/ATTRIB 频率报告 (scripts/dwg_layer_scan.py,
+                     把「各院 DWG 图层/块名映射」从填空题变选择题, 5 测试)
+  ✅ M4 碰撞容差取值通道  clash-tolerance-range DSL 规则 + resolve_clash_tolerance 优先级
+                     (param>default>几何默认), 专家改 JSON params.clash_tolerance_m 即调参零代码
 
   待各专业专家补（占位, 机制已通、值待定）
   ▢ 规范数值          给排水/结构 已回填(GB 50015/50010/50011, confidence low~medium); 电气/暖通 部分占位 (改 JSON 即可)
-  ▢ DWG 图层约定      各院"点位画法/块名"映射 = TBD (改 dict 即可)
+  ▢ DWG 图层约定      各院"点位画法/块名"映射 = TBD (改 dict 即可; M2 扫描工具可辅助决策)
   ✅ 出图深化          图层着色(23 层 ACI+线宽, 含 COLUMN_FILL) + DASHED/CENTERLINE 线型
                      + 梁/柱截面实填充(HATCH) 已落地 (M3 图层着色/线宽/梁填充 + 本轮补柱填充)
-  ✅ 多专业碰撞检测    管线穿梁/插座撞梁/风管撞梁 自动检测 (M4, clash_detection 几何库 + 主链路 + 出图红圈)
+  ✅ 多专业碰撞检测    管线穿梁/插座撞梁/风管撞梁 自动检测 (M4, clash_detection 几何库 + 主链路 + 出图红圈
+                     + 容差取值通道 param>default, confirmed=true 点亮 M4 占位卡)
   ✅ 改动冲突检测     两稿 raw JSON 按元素 id 比对 (M5 自主子集, conflict_detection 纯函数库)
   ✅ 人在回路       session 级真人在回路: 起真实图挂起 (/agent/run) → 逐 task 确认 → 同 thread 真续跑
                      (graph interrupt+checkpointer + start_agent_run_suspended/resume_agent_run, 前端确认闸区块)
@@ -49,12 +54,13 @@
                      10 测试, JSON 存储可注入); 本地锁演示通路已接桥+GUI: /api/collab/snapshot +
                      /api/collab/acquire|release (本地单进程演示, 非跨设计师同步; 真·多机在线协同
                      socket/消息总线/CRDT 仍占位, 需业务定协同协议)
+                     collab-lock-integrity DSL 规则 confirmed=true 点亮 M5 协同占位卡 (机制已落地, 不虚标)
 ```
 
 ## 一句话实力证明（数据背书）
 
 ```
-  281 passed / 5 skipped · 5 专业 · 14 DSL · 30 硬编码类 · M3 出图深化 + M4 碰撞检测
+  419 passed / 5 skipped · 5 专业 · 18 DSL · 30 硬编码类 · M3 出图深化 + M4 碰撞检测
   加一个新专业 = 改 JSON + 元素模型 + 分发表一项, 主链路循环体 0 行改动
   各专业专家"确认数值 + 定约定"即可点亮对应专业, 无需写核心代码
 ```
@@ -64,12 +70,12 @@
 ```
   已达成                              下一步（不需重写架构, 逐个点亮）
   Phase0-1 预研→MVP(墙厚/门窗/人在回路)  M1 数值终确认  ← 各专业专家(已部分回填)
-  Phase2   规则DSL化+编辑器+写回落盘     M2 图层约定    ← 各院制图规范
+  Phase2   规则DSL化+编辑器+写回落盘     M2 图层约定    ← 各院制图规范 (dwg_layer_scan 工具辅助)
   Phase3   四专业出图+给排水条文回填     M3 出图深化    ← 图层着色+线宽标准 (✅ M3 已落地)
-                                               M4 碰撞检测    ← 管线/电气/暖通 × 结构 (✅ M4 已落地)
-                                               M5 团队协作    ← 改动冲突检测 ✅ (权限模型占位)
+                                               M4 碰撞检测    ← 管线/电气/暖通 × 结构 (✅ M4 已落地 + 容差取值通道)
+                                               M5 团队协作    ← 改动冲突检测 ✅ / 本地锁演示 ✅ (权限模型+在线协同占位)
 ```
 
 ---
-> **展示话术**：架构已证明"多专业可扩展"的底座是真跑通的（四专业出图、409 测试、LLM 出图、session 级人在回路、95% 覆盖率）。
+> **展示话术**：架构已证明"多专业可扩展"的底座是真跑通的（四专业出图、419 测试、LLM 出图、session 级人在回路、95% 覆盖率）。
 > 剩下的不是"能不能做"，而是"各专业专家把数值和约定填进来"——**架构把复杂度消化了，专业价值留给专业的人。**
