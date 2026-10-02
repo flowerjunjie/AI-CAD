@@ -380,6 +380,25 @@
       "confirm_note": "几何容差机制已通: 取值通道 resolve_clash_tolerance (param>default>0.15) 已接 rule_check_node/cad_execute_node/bridge /api/clash 三处。confirmed=true 仅标记「机制已落地 + 0.15m 是合理几何默认」; 各专业 (梁深/管径/插座定位精度) 的具体容差终值仍需结构/给排水专家按 GB 50010/GB 50015 背书。confidence=medium 不虚标高 (几何默认非规范条文)。",
       "enabled": true,
       "dsl_only": true
+    },
+    {
+      "rule_id": "collab-lock-integrity",
+      "name": "协同锁完整性检查 (机制层, 非业务约定)",
+      "code_ref": "M5 collab_protocol.persistent_acquire/release 锁态一致性 (append-only 事件溯源)",
+      "severity": "info",
+      "element_types": [
+        "design_sheet"
+      ],
+      "predicate": "True",
+      "params": {},
+      "param_defaults": {},
+      "description_template": "协同持久层机制已落地 (锁/事件持久化 + 跨进程快照 + 本地锁演示通路); 真·多机在线协同 (CRDT/OT/socket) 待业务定协议后接入",
+      "confirmed": true,
+      "confidence": "medium",
+      "spec_source": "M5 自主子集 (机制骨架 + 本地锁演示通路已接桥+GUI, 非跨设计师同步)",
+      "confirm_note": "机制已通 (persistent_acquire/release 落 data/collab/state.json + 事件溯源 + make_snapshot 跨进程), 本地锁演示通路已接 /api/collab/acquire|release + GUI 面板。confirmed=true 标记「机制已落地」; 真·多机在线协同协议 (CRDT/OT/单写者多读者) 仍需业务定夺, confidence 维持 medium 不虚标。",
+      "enabled": true,
+      "dsl_only": true
     }
   ]
 }
