@@ -53,6 +53,7 @@ HIDDEN_IMPORTS = [
     "src.agents.src.tools.conflict_detection",
     "src.agents.src.tools.permission_model",
     "src.agents.src.tools.collab_protocol",
+    "src.agents.src.tools.dwg_layer_scan",
     "src.rules.src.engine",
     "src.rules.src.dsl",
     "src.rules.src.residential",
