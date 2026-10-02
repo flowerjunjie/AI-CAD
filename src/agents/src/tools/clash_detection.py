@@ -131,6 +131,33 @@ def _pts_of(raw: dict, key: str) -> list:
     return out
 
 
+def resolve_clash_tolerance(default_m: float = 0.15,
+                            dsl_rule: "object | None" = None,
+                            params: "dict | None" = None) -> tuple[float, str]:
+    """碰撞容差取值通道 (M4 ← default.json 回填, 同 M1 数值回填范式)。
+
+    优先级 (高→低):
+      ① params['clash_tolerance_m']   — 会话级参数覆盖 (引擎/前端透传)
+      ② dsl_rule.clash_tolerance_m    — DSL 规则 params 里的显式覆盖
+      ③ default_m                     — 几何默认 (0.15m, 与既有调用一致)
+    返回 (容差米数, 来源标注 'param'|'dsl'|'default') — 来源供 GUI 透出, 不虚标。
+
+    设计边界 (诚实): 不自动读 default.json 文件 — 由调用方把 dsl_rule/params 喂进来
+    (主链路从 state, 桥端点从 query), 本函数只做「取值 + 标注来源」的纯判定。
+    """
+    if isinstance(params, dict):
+        v = params.get("clash_tolerance_m")
+        if isinstance(v, (int, float)) and v > 0:
+            return float(v), "param"
+    if dsl_rule is not None:
+        v = getattr(dsl_rule, "clash_tolerance_m", None)
+        if v is None and hasattr(dsl_rule, "params"):
+            v = (getattr(dsl_rule, "params") or {}).get("clash_tolerance_m")
+        if isinstance(v, (int, float)) and v > 0:
+            return float(v), "dsl"
+    return float(default_m), "default"
+
+
 def detect_clashes(raw: dict, tolerance_m: float = 0.15) -> list[dict]:
     """跨专业碰撞检测。raw 是 raw_data dict (键缺失优雅跳过)。
 

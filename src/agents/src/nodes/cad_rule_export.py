@@ -598,15 +598,20 @@ def cad_execute_node(state: dict) -> dict:
                 # M4 跨专业碰撞出图侧: 对 raw_data 跑 detect_clashes, 每个碰撞画
                 # 红色警示圈 (CLASH/CLASH_LABEL 层)。碰撞点坐标取 kind 对应的
                 # 线段中点或点位坐标 (见 _clash_point)。无碰撞 → 0 实体, 既有出图不变。
-                from src.agents.src.tools.clash_detection import detect_clashes
+                # 容差同 rule_check_node 取值通道: state 级覆盖 > 几何默认 0.15。
+                from src.agents.src.tools.clash_detection import (
+                    detect_clashes, resolve_clash_tolerance)
                 raw_data = state.get("raw_data", {}) or {}
+                _clash_tol, _clash_tol_src = resolve_clash_tolerance(
+                    default_m=0.15, params=state.get("clash_params"))
                 clash_count = 0
-                for c in detect_clashes(raw_data, tolerance_m=0.15):
+                for c in detect_clashes(raw_data, tolerance_m=_clash_tol):
                     cx, cy = _clash_point(raw_data, c)
                     writer.add_clash_marker(cx, cy, c["kind"], label=c["kind"].upper())
                     clash_count += 1
                 results.append({"task_id": task_id, "status": "completed",
-                                "clashes": clash_count})
+                                "clashes": clash_count,
+                                "tolerance_m": _clash_tol, "tolerance_source": _clash_tol_src})
 
             elif task_type == "conflict":
                 # M5 两稿改动冲突检测 (可自主子集): 对 raw_data (稿A) 与
@@ -711,8 +716,23 @@ def rule_check_node(state: dict) -> dict:
 
     # 多专业碰撞：管线/电气/暖通 段与点位 vs 结构梁/柱 (几何层, 非规范条文)
     # 只追加, 不改既有 _ELEMENT_CHECKS / 门窗碰撞逻辑; 无碰撞样本零新增。
-    for c in detect_clashes(raw, tolerance_m=0.15):
+    # M4 容差取值通道: state.clash_tolerance_m (会话级覆盖) > default.json 规则参数
+    # (由前端/引擎透传, 本链路未接入时保持 0.15 默认, 来源标注 honest) > 几何默认。
+    from src.agents.src.tools.clash_detection import resolve_clash_tolerance
+    _clash_rule = None
+    try:
+        _clash_rule = engine.get_rule("clash-tolerance-range")  # 若 DSL 有该规则
+    except Exception:
+        _clash_rule = None
+    _tol, _tol_src = resolve_clash_tolerance(
+        default_m=0.15,
+        dsl_rule=_clash_rule,
+        params=state.get("clash_params"),
+    )
+    for c in detect_clashes(raw, tolerance_m=_tol):
         violations.append(_clash_violation(c))
+    # 来源透出 (供 GUI / 报告标注, 不虚标): 默认走 default 时 0 改动行为不变
+    state["clash_tolerance_used"] = {"value_m": _tol, "source": _tol_src}
 
     # M5 两稿改动冲突：仅当 state 提供第二稿 (conflict_raw_b) 时比对, 记一条汇总
     # 违规。无第二稿 → 0 新增, 默认样本 (仅 raw_data) 零影响。

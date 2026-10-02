@@ -556,6 +556,22 @@ body {
 }
 .conflict-select:focus { outline: none; border-color: #e91e8f; }
 
+/* M5 协同持久层区块 (本地锁演示): 品红色系 = 呼应出图 CLASH 层 (碰撞/协同同域) */
+.collab-section { margin-top: 16px; }
+.collab-section h3 {
+  font-size: 13px; color: #e91e8f; font-weight: 700; margin-bottom: 8px;
+}
+.collab-tag {
+  font-size: 9px; font-weight: 600; color: #9e9e9e;
+  border: 1px solid #555; border-radius: 8px; padding: 1px 5px; margin-left: 6px;
+}
+.collab-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.collab-release-btn {
+  background: #16213e; border: 1px solid #e91e8f; color: #e91e8f;
+  font-size: 11px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+}
+.collab-release-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* 人在回路确认闸区块 (演示通路): 绿色系 = "放行/通过" 语义, 呼应 clash-ok */
 .confirm-section { margin-top: 16px; }
 .confirm-section h3 {

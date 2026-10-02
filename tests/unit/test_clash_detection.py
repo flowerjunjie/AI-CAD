@@ -177,6 +177,41 @@ def test_detect_clashes_skip_missing_keys():
     assert res == []
 
 
+# ── M4 容差取值通道 (resolve_clash_tolerance, default.json 回填范式) ──
+
+class _FakeDslRule:
+    """仿 ParametricRule: 带 .params 的 DSL 规则对象 (无 .clash_tolerance_m 属性,
+    走 getattr → params dict 路径, 与真实 ParametricRule 行为一致)。"""
+    def __init__(self, params: dict):
+        self.params = params
+
+
+def test_resolve_clash_tolerance_priority():
+    """取值优先级: params 显式 > DSL 规则 params > 几何默认; 来源标注不虚标。"""
+    cd = _import()
+    # ① 全空 → 几何默认 0.15, source=default
+    assert cd.resolve_clash_tolerance() == (0.15, "default")
+    assert cd.resolve_clash_tolerance(default_m=0.2, dsl_rule=None, params=None) == (0.2, "default")
+    # ② DSL 规则 params 覆盖 (专家回填 default.json 即生效, 零代码)
+    rule = _FakeDslRule({"clash_tolerance_m": 0.3})
+    assert cd.resolve_clash_tolerance(dsl_rule=rule) == (0.3, "dsl")
+    # ③ 会话级 params 压过 DSL (桥端点 query tolerance_m / 引擎 state 透传)
+    assert cd.resolve_clash_tolerance(dsl_rule=rule,
+                                      params={"clash_tolerance_m": 0.5}) == (0.5, "param")
+    # ④ 非法值 (0/负/非数) 不采信, 逐级降级
+    assert cd.resolve_clash_tolerance(params={"clash_tolerance_m": 0}) == (0.15, "default")
+    assert cd.resolve_clash_tolerance(dsl_rule=_FakeDslRule({"clash_tolerance_m": -1}),
+                                      params={"clash_tolerance_m": "abc"}) == (0.15, "default")
+    # ⑤ 真实 ParametricRule 兼容性: 从 default.json 加载的 clash-tolerance-range 规则
+    from src.rules.src.dsl import DslRuleProvider
+    provider = DslRuleProvider(os.path.join(project_root, "src", "rules", "rules", "default.json"))
+    rules = provider.load()
+    clash_rule = next((r for r in rules if r.rule_id == "clash-tolerance-range"), None)
+    assert clash_rule is not None, "default.json 应含 clash-tolerance-range 规则"
+    tol, src = cd.resolve_clash_tolerance(dsl_rule=clash_rule)
+    assert src == "dsl" and abs(tol - 0.15) < 1e-9, "现状值 = 几何默认 (改 JSON 即变, 行为不变)"
+
+
 if __name__ == "__main__":
     test_seg_intersect_orthogonal()
     test_seg_intersect_parallel_no_touch()
@@ -193,6 +228,7 @@ if __name__ == "__main__":
     test_detect_clashes_no_collision_returns_empty()
     test_detect_clashes_empty_input()
     test_detect_clashes_skip_missing_keys()
+    test_resolve_clash_tolerance_priority()
     print("OK: all clash detection tests passed")
 
 

@@ -557,16 +557,37 @@ def _load_sample_raw(sample: str) -> dict:
 
 
 @app.get("/api/clash")
-def api_clash(sample: str = "residential_100sqm.json", tolerance_m: float = 0.15) -> dict:
+def api_clash(sample: str = "residential_100sqm.json",
+              tolerance_m: Optional[float] = None) -> dict:
     """M4 跨专业碰撞: 读 sample 顶层元素数据调 detect_clashes。
 
-    返回 {sample, tolerance_m, clashes: [{a_id,b_id,kind,category,detail}], count}。
+    容差取值通道 (M4 ← default.json 回填, 同 M1 数值范式):
+      ① query tolerance_m 显式传 → 来源 "param"
+      ② default.json 的 clash-tolerance-range 规则 params.clash_tolerance_m
+         → 来源 "dsl" (专家改 JSON 即生效, 零代码)
+      ③ 几何默认 0.15m → 来源 "default"
+    返回 {sample, tolerance_m, tolerance_source, clashes: [...], count}。
     无碰撞 → count=0 空列表 (诚实, 不造假)。"""
-    from src.agents.src.tools.clash_detection import detect_clashes  # 懒
+    from src.agents.src.tools.clash_detection import (  # 懒
+        detect_clashes, resolve_clash_tolerance)
 
+    dsl_rule = None
+    try:
+        from src.agents.src.nodes.cad_rule_export import _dsl_rules_path
+        from src.rules.src.dsl import load_dsl_rules
+        for r in load_dsl_rules(_dsl_rules_path()):
+            if r.rule_id == "clash-tolerance-range":
+                dsl_rule = r
+                break
+    except Exception:
+        dsl_rule = None  # JSON 缺/损坏 → 降级几何默认, 不崩
+    tol, tol_src = resolve_clash_tolerance(
+        default_m=0.15, dsl_rule=dsl_rule,
+        params={"clash_tolerance_m": tolerance_m} if tolerance_m else None,
+    )
     raw = _load_sample_raw(sample)
-    clashes = detect_clashes(raw, tolerance_m=tolerance_m)
-    return {"sample": sample, "tolerance_m": tolerance_m,
+    clashes = detect_clashes(raw, tolerance_m=tol)
+    return {"sample": sample, "tolerance_m": tol, "tolerance_source": tol_src,
             "clashes": clashes, "count": len(clashes)}
 
 
@@ -814,11 +835,14 @@ def agent_status() -> dict:
     }
 
 
-# ─── H 在线协同域段 (M5 持久层协议, 只读快照) ──────────────────
+# ─── H 在线协同域段 (M5 持久层协议: 快照 + 本地锁演示) ──────────
 # 让 collab_protocol 机制骨架有可见入口: 读 data/collab/state.json (真持久, 缺文件
-# 诚实返回空态, 不造假), 透「当前协同快照」(写锁持有者 + 最近事件)。
-# 诚实边界 (不虚标): 只读快照, **不**暴露写操作端点 (取锁/释放/合并) — 那些需业务
-# 先定协同协议 (CRDT/OT/单写者多读者 + 用户体系) 再接, 不在本骨架内冒称多机协同。
+# 诚实返回空态, 不造假)。
+# 诚实边界 (不虚标):
+#   - 快照只读: /api/collab/snapshot 透出「当前协同快照」(写锁持有者 + 最近事件)。
+#   - 锁端点 (/api/collab/acquire|release) 是**本地单进程演示通路**: 锁态落本地
+#     state.json, 无跨设计师同步/无多机仲裁 — 真·在线协同 (CRDT/OT/单写者多读者
+#     协议 + 用户体系) 需业务定协议后再接, 端点 docstring 与响应 note 均显式标注。
 # 懒 import: collab_protocol 依赖 permission_model (纯函数, 无重依赖), 但照范式放函数体。
 
 _COLLAB_STATE_PATH = os.path.join(ROOT, "data", "collab", "state.json")
@@ -841,6 +865,70 @@ def api_collab_snapshot(designer: str = "designer") -> dict:
     snap["source"] = "file" if has_state else "empty"
     snap["note"] = ("持久协同快照" if has_state
                     else "无落盘协同状态 (写操作待业务定协同协议后接入)")
+    return snap
+
+
+def _collab_store() -> object:
+    """懒建默认协同 store (data/collab/state.json, 缺目录自动建)。"""
+    from src.agents.src.tools.collab_protocol import JsonFileCollabStore
+    os.makedirs(os.path.dirname(_COLLAB_STATE_PATH), exist_ok=True)
+    return JsonFileCollabStore(_COLLAB_STATE_PATH)
+
+
+class CollabLockReq(BaseModel):
+    designer: str
+    resource_id: str
+    mode: str = "write"  # write / read (read 不互斥, 总是成功)
+
+
+@app.post("/api/collab/acquire")
+def api_collab_acquire(req: CollabLockReq) -> dict:
+    """本地取锁演示通路: persistent_acquire (load→acquire_lock→追加 lock 事件→save)。
+
+    返回 {acquired, resource_id, designer, mode, reason, write_holders}。
+    被他人写锁占用 → acquired=false + reason (诚实, 不崩)。
+    诚实标注: 本地单进程, 无跨设计师同步 — 真·在线协同待业务定协议后再接。"""
+    from src.agents.src.tools.collab_protocol import persistent_acquire, make_snapshot
+    import time
+    store = _collab_store()
+    ok, state, reason = persistent_acquire(
+        store, req.resource_id, req.designer, req.mode, now=time.time())
+    snap = make_snapshot(store, designer=req.designer)
+    snap.update({
+        "acquired": ok,
+        "resource_id": req.resource_id,
+        "designer": req.designer,
+        "mode": req.mode,
+        "reason": reason,
+        "note": "本地锁演示 (单进程, 无跨设计师同步; 真·在线协同待业务定协议)",
+    })
+    return snap
+
+
+class CollabReleaseReq(BaseModel):
+    designer: str
+    resource_id: str
+
+
+@app.post("/api/collab/release")
+def api_collab_release(req: CollabReleaseReq) -> dict:
+    """本地放锁演示通路: persistent_release (load→release_lock→追加 unlock 事件→save)。
+
+    返回 {released, resource_id, designer, write_holders}。释放后该写锁消失
+    (幂等: 无对应锁也返回 200, released=false 诚实标注)。"""
+    from src.agents.src.tools.collab_protocol import persistent_release, make_snapshot
+    store = _collab_store()
+    before = store.load()
+    held = any(l.get("resource_id") == req.resource_id and l.get("holder") == req.designer
+               and l.get("mode") == "write" for l in before.get("locks", []))
+    persistent_release(store, req.resource_id, req.designer)
+    snap = make_snapshot(store, designer=req.designer)
+    snap.update({
+        "released": held,  # 确有该写锁被放掉才 true; 无锁释放 (幂等) → false
+        "resource_id": req.resource_id,
+        "designer": req.designer,
+        "note": "本地锁演示 (单进程, 无跨设计师同步; 真·在线协同待业务定协议)",
+    })
     return snap
 
 

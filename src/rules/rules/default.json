@@ -354,6 +354,32 @@
       "confidence": "low",
       "confirmed": false,
       "confirm_note": "回填口径: 跨高比宽区间 [5, 20]。⚠️ 强依赖上游 span_m 字段 (StructuralBeam 现无该字段, 需上游按 docs/structural-upstream-contract.md 补齐跨度), 上游未补前 span_m 缺省 0 → predicate 因 span_m > 0 前置恒为 False 而放行 (不产生误报, 但也形同虚设), 上线前必须拉通。5~20 为明显异常拦截区间而非设计限值 (L/8~L/12 常用); 拿不准精确条文号, confidence 标 low, 待结构专家按 GB 50010 挠度验算口径终确认。"
+    },
+    {
+      "rule_id": "clash-tolerance-range",
+      "name": "多专业碰撞检测容差带",
+      "code_ref": "M4 clash_detection.resolve_clash_tolerance 取值通道 (几何容差, 非规范条文)",
+      "severity": "info",
+      "element_types": [
+        "structural_beam",
+        "structural_column",
+        "plumbing_pipe",
+        "electrical_outlet"
+      ],
+      "predicate": "True",
+      "params": {
+        "clash_tolerance_m": 0.15
+      },
+      "param_defaults": {
+        "clash_tolerance_m": 0.15
+      },
+      "description_template": "碰撞容差带 {clash_tolerance_m}m (默认几何值, 业务可按院制图规范回填 param_defaults.clash_tolerance_m)",
+      "confirmed": false,
+      "confidence": "medium",
+      "spec_source": "M4 自主子集 (几何默认 0.15m, 非 GB 规范条文)",
+      "confirm_note": "几何容差默认值 — 专家可按各专业制图惯例回填 params.clash_tolerance_m (改 JSON 零代码)",
+      "enabled": true,
+      "dsl_only": true
     }
   ]
 }

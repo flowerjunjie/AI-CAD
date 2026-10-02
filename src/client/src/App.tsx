@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
-        runClashCheck, runConflict, runAgentConfirm, runAgentStart } from './engineApi';
+        runClashCheck, runConflict, runAgentConfirm, runAgentStart,
+        fetchCollabSnapshot, collabAcquire, collabRelease } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -24,6 +25,7 @@ function App() {
     running, lastSample, pipelineResult, ragResults, ragQuery,
     clashResults, clashLoading, conflictResults, conflictLoading,
     confirmResults, confirmLoading,
+    collabSnapshot, collabOps, collabLoading,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +66,20 @@ function App() {
   const handleConflict = useCallback(async () => {
     await runConflict(lastSample, conflictSampleB);
   }, [lastSample, conflictSampleB]);
+
+  // M5 在线协同持久层 (bridge H 段): 本地锁演示 — 设计师对资源(图稿)取/放写锁,
+  // 快照透出写锁持有者 + 事件时间线 (append-only)。诚实标注: 单进程本地, 非跨设计师同步。
+  const [collabDesigner, setCollabDesigner] = useState('alice');
+  const [collabResource, setCollabResource] = useState('sheet-a');
+  const handleCollabSnapshot = useCallback(() => {
+    void fetchCollabSnapshot(collabDesigner);
+  }, [collabDesigner]);
+  const handleCollabAcquire = useCallback(async () => {
+    await collabAcquire(collabDesigner, collabResource, 'write');
+  }, [collabDesigner, collabResource]);
+  const handleCollabRelease = useCallback(async () => {
+    await collabRelease(collabDesigner, collabResource);
+  }, [collabDesigner, collabResource]);
 
   // 人在回路确认闸 (bridge /agent/confirm): 放行/拒绝 → 真续跑。
   // session 级: 先「起图挂起」(runAgentStart → /agent/run) 起真实图拿 thread+真实 pending,
@@ -226,6 +242,11 @@ function App() {
                   <>
                     <span className="clash-badge">{r.count}</span>
                     <span className="clash-scope">{r.sample}</span>
+                    {r.tolerance_source && (
+                      <span className="clash-detail">
+                        容差 {r.tolerance_m}m ({r.tolerance_source})
+                      </span>
+                    )}
                     {r.clashes.map((c, j) => (
                       <div key={j} className="clash-line">
                         <span className="clash-kind">{c.kind}</span>
@@ -285,6 +306,80 @@ function App() {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* M5 在线协同持久层 — 本地锁演示 (bridge H 段, 品红色呼应 CLASH 层) */}
+          <div className="collab-section">
+            <div className="clash-head-row">
+              <h3>协同持久层 <span className="collab-tag">local</span></h3>
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleCollabSnapshot}
+                disabled={!engineConnected}
+              >
+                看快照
+              </button>
+            </div>
+            <div className="collab-controls">
+              <select
+                value={collabDesigner}
+                onChange={(e) => setCollabDesigner(e.target.value)}
+                className="conflict-select"
+              >
+                {['alice', 'bob', 'carol'].map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              <select
+                value={collabResource}
+                onChange={(e) => setCollabResource(e.target.value)}
+                className="conflict-select"
+              >
+                {['sheet-a', 'sheet-b', 'plan-1'].map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleCollabAcquire}
+                disabled={!engineConnected || collabLoading}
+              >
+                {collabLoading ? '…' : '取锁'}
+              </button>
+              <button
+                className="btn-sm collab-release-btn"
+                onClick={handleCollabRelease}
+                disabled={!engineConnected || collabLoading}
+              >
+                放锁
+              </button>
+            </div>
+            {collabSnapshot ? (
+              <div className={`clash-item ${Object.keys(collabSnapshot.write_holders).length > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                <div className="clash-line">
+                  <span className="clash-kind">{collabSnapshot.source === 'file' ? '持久快照' : '空态'}</span>
+                  <span className="clash-scope">
+                    写锁 {Object.keys(collabSnapshot.write_holders).length} ·
+                    事件 {collabSnapshot.event_count}
+                  </span>
+                </div>
+                {Object.entries(collabSnapshot.write_holders).map(([res, holder]) => (
+                  <div key={res} className="clash-line">
+                    <span className="clash-kind">lock</span>
+                    <span className="clash-ids">{res} → {holder}</span>
+                  </div>
+                ))}
+                {(collabSnapshot.recent_events || []).slice(-4).map((ev) => (
+                  <div key={ev.seq} className="clash-line">
+                    <span className="clash-kind">{ev.type}</span>
+                    <span className="clash-ids">#{ev.seq} {ev.actor}/{ev.resource_id}</span>
+                  </div>
+                ))}
+                <p className="clash-empty">本地单进程演示 · 非跨设计师同步 (业务定协议后接在线协同)</p>
+              </div>
+            ) : (
+              <p className="clash-empty">点「看快照」拉 /api/collab/snapshot · 取锁/放锁走本地持久化 (state.json)</p>
+            )}
           </div>
 
           {/* 人在回路确认闸 — session 级 (起真实图挂起→逐 task 确认→同 thread 真续跑) */}

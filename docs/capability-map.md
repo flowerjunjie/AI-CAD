@@ -46,8 +46,9 @@
   ◑ 团队协作          机制骨架已通: 角色→权限→资源锁→改动审批→合并 (permission_model 纯函数库,
                      11 测试); 具体角色/权限矩阵值 = 占位配置 (DEFAULT_PERMISSIONS, 需业务定夺回填)
                      在线协同持久层协议已起骨架: 锁/事件持久化 + 事件溯源 + 跨进程快照 (collab_protocol,
-                     10 测试, JSON 存储可注入); 单人 session 级已通; 真·多机在线协同 (socket/消息总线/
-                     CRDT) 仍占位 (需业务定协同协议)
+                     10 测试, JSON 存储可注入); 本地锁演示通路已接桥+GUI: /api/collab/snapshot +
+                     /api/collab/acquire|release (本地单进程演示, 非跨设计师同步; 真·多机在线协同
+                     socket/消息总线/CRDT 仍占位, 需业务定协同协议)
 ```
 
 ## 一句话实力证明（数据背书）
