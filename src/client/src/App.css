@@ -503,6 +503,15 @@ body {
 .dsl-issue.backend { border-left-color: #e74c3c; color: #ff8a80; }
 .dsl-issue-path { font-family: 'Consolas', monospace; color: #aaa; }
 
+/* M1 数值回填区块 (专家在编辑器里点「回填并确认」→ 写盘点亮占位卡): 琥珀色呼应「待回填」语义 */
+.m1-backfill { margin-top: 14px; padding: 10px 12px; border-radius: 6px;
+  background: #0d1a12; border-left: 3px solid #f0b429; }
+.m1-backfill-title { font-size: 11px; font-weight: 700; color: #f0b429; margin-bottom: 8px;
+  font-family: 'Consolas', monospace; }
+.m1-backfill-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.m1-backfill-note { width: 100%; margin-top: 4px; }
+.m1-backfill-msg { margin-top: 6px; font-size: 11px; color: #4caf50; }
+
 /* rules-panel 内部 tab 切换 (列表 vs 编辑器) */
 .rules-pane-toggle { margin-bottom: 8px; }
 

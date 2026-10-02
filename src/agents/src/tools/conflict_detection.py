@@ -136,11 +136,24 @@ def detect_duplicate_elements(raw_a: dict, raw_b: dict,
                 "id_a": id_a,
                 "id_b": id_b,
                 "extra_ids": extra,
-                "coord": [c for c in ck],
+                "coord": _coord_to_list(ck),
                 "kind": "duplicate",
                 "tolerance_m": tolerance_m,
             })
     return out
+
+
+def _coord_to_list(ck: tuple) -> list:
+    """把 _coord_key 的归一化坐标转成「出图可直接用」的平坦 list。
+
+    点位类 ck=(x,y) → [x, y] (2 元素)。
+    线段类 ck=sorted([(x1,y1),(x2,y2)]) → [x1, y1, x2, y2] (4 元素, 端点排序)。
+    出图侧 _duplicate_point 按 len(coord) 取点位中点/线段中点, 不关心来源类。
+    """
+    if len(ck) == 2 and all(isinstance(v, (int, float)) for v in ck):
+        return [float(ck[0]), float(ck[1])]
+    # 线段类: ck = ((x1,y1),(x2,y2)) 已排序
+    return [float(v) for p in ck for v in p]
 
 
 def detect_conflicts(raw_a: dict, raw_b: dict,

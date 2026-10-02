@@ -938,6 +938,24 @@ class DXFWriter:
         txt.dxf.insert = (x, y + 0.25)
         _ = kind  # kind 由调用方拼进 label; 保留形参便于日后按 kind 分级画
 
+    def add_duplicate_marker(self, x: float, y: float, label: str = "DUP") -> None:
+        """在疑似重复元素点 (x,y) 画琥珀色重复警示圈 + 标注 (M5 出图侧, 增量)。
+
+        照 add_clash_marker 范式, 但用 DUP/DUP_LABEL 独立图层 + 琥珀色 (ACI 32),
+        与 M4 碰撞的品红 CLASH 圈区分 (碰撞=元素互撞, 重复=同坐标不同 id)。
+        纯增量: 不删不改既有实体; 无重复时不调本方法 → 既有出图 0 变化。
+        """
+        if "DUP" not in self.doc.layers:
+            self.doc.layers.new("DUP")
+        if "DUP_LABEL" not in self.doc.layers:
+            self.doc.layers.new("DUP_LABEL")
+        self.msp.add_circle(
+            (x, y), radius=0.2,
+            dxfattribs={"layer": "DUP", "color": 32, "lineweight": 30},
+        )
+        txt = self.msp.add_text(label, dxfattribs={"height": 0.15, "layer": "DUP_LABEL"})
+        txt.dxf.insert = (x, y + 0.25)
+
     def save(self, path: str) -> bool:
         """保存 DWG。出图前统一套图层着色/线宽标准 (幂等, 覆盖裸建图层)。"""
         try:

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRuleEditorStore, isRuleModified } from './useRuleEditorStore';
 import { useEngineStore } from './useEngineStore';
-import { loadDslRules, validateDslRules, applyDslRules } from './engineApi';
+import { loadDslRules, validateDslRules, applyDslRules, backfillRule } from './engineApi';
 import { localCheckAllRules } from './localPredicateCheck';
 import type { DslRuleItem, DslApplyDiff } from './useEngineStore';
 
@@ -165,10 +165,79 @@ function RuleEditorPanel() {
 
               <ParamIssues rule={selected} />
               <BackendErrorsForRule ruleId={selected.rule_id} errors={backendErrors} />
+              <M1BackfillBlock rule={selected} />
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** M1 数值回填 (专家在面板里点「回填」即点亮占位卡, 零代码改 JSON)。
+ *  单规则粒度走 /api/rules/backfill: confirmed=true + confidence 选档 + 备注。
+ *  诚实边界: 回填后提示「跑 /api/rules 验证前端点亮」, 不冒称已点亮;
+ *  confidence 默认 medium (不虚标 high), 备注写明依据条文 (业务侧如实填)。 */
+function M1BackfillBlock({ rule }: { rule: DslRuleItem }) {
+  const { engineConnected } = useEngineStore();
+  const [confidence, setConfidence] = useState<'low' | 'medium' | 'high'>(
+    (rule.confidence as 'low' | 'medium' | 'high') || 'medium');
+  const [note, setNote] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const onBackfill = async () => {
+    setBusy(true);
+    setMsg('');
+    const res = await backfillRule(rule.rule_id, {
+      confirmed: true,
+      confidence,
+      confirm_note: note.trim() || undefined,
+    });
+    setBusy(false);
+    if (res && res.status === 'applied') {
+      setMsg(`已写盘 ${rule.rule_id} (confirmed=${res.confirmed} · ${res.confidence}) · 备份 ${res.backup}`);
+      // 回填落盘后刷新规则列表 (originalRules 基线更新, 防「已改」误标)
+      loadDslRules().then((rs) => useRuleEditorStore.getState().setRules(rs));
+    } else {
+      setMsg(res ? `写盘失败 (${res.status})` : '无法连接回填端点');
+    }
+  };
+
+  return (
+    <div className="m1-backfill">
+      <div className="m1-backfill-title">M1 回填 · {rule.rule_id}</div>
+      <div className="m1-backfill-row">
+        <label className="chk">
+          <input type="checkbox" checked={!!rule.confirmed} disabled />
+          confirmed: {rule.confirmed ? 'true' : 'false'}
+        </label>
+        <select
+          className="dsl-input dsl-input-sev"
+          value={confidence}
+          onChange={(e) => setConfidence(e.target.value as 'low' | 'medium' | 'high')}
+          title="不虚标: 几何默认/机制=medium, 专家按 GB 条文背书才 high"
+        >
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+        <button
+          className="btn-primary btn-sm"
+          onClick={onBackfill}
+          disabled={!engineConnected || busy}
+          title="写 default.json + 备份; 前端按 confirmed 点亮对应占位卡"
+        >
+          {busy ? '回填中…' : '回填并确认'}
+        </button>
+      </div>
+      <input
+        className="dsl-input m1-backfill-note"
+        placeholder="回填备注 (写明依据条文, 如 GB 50010 梁高下限)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      {msg && <div className="m1-backfill-msg">{msg}</div>}
     </div>
   );
 }

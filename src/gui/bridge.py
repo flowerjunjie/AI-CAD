@@ -534,6 +534,79 @@ def api_rules_dsl_apply(req: DslRulesApplyReq) -> dict:
     }
 
 
+class RuleBackfillReq(BaseModel):
+    """POST /api/rules/backfill 入参: 单规则轻量回填 (M1 数值回填 GUI 入口)。
+
+    只改指定 rule_id 的 confirmed/confidence/confirm_note/param_defaults,
+    比 DSL apply (全量 rules 重写) 轻 — 专家在面板里点「回填」即生效, 零代码。
+    诚实边界 (不虚标): 端点只写盘 + fail-fast 重载, 不冒称已点亮 (点亮是前端
+    按 confirmed 判定); confidence 须业务侧如实填 (几何默认=medium, 专家背书=high)。"""
+
+    rule_id: str
+    confirmed: Optional[bool] = None
+    confidence: Optional[str] = None  # low / medium / high
+    confirm_note: Optional[str] = None
+    params: Optional[dict] = None  # 回填 param_defaults (数值/字符串/布尔, JSON 可序列化)
+
+
+@app.post("/api/rules/backfill")
+def api_rules_backfill(req: RuleBackfillReq) -> dict:
+    """M1 数值回填 (GUI 入口, 单规则): 写 default.json 一条规则 + 备份 + fail-fast。
+
+    流程 (照 /api/rules/dsl/apply 写盘范式, 单规则粒度):
+      1. 找不到 rule_id → 404 诚实 (列可用规则, 不误写)。
+      2. 备份 default.json.bak.<ts> → 写盘 (只改指定规则, 其余原样)。
+      3. fail-fast: 写后 DslRuleProvider.load() 重载, 失败 → 回滚 + 500 (不留坏盘)。
+    响应: {status:'applied', rule_id, backup, confirmed, confidence,
+           param_defaults, note} — note 明示「需跑 /api/rules 验证前端点亮」。"""
+    p = _dsl_default_path()
+    if not os.path.exists(p):
+        raise HTTPException(404, f"DSL 规则文件不存在: {p}")
+    with open(p, encoding="utf-8") as fh:
+        data = json.load(fh)
+    rule = next((r for r in data.get("rules", []) if r.get("rule_id") == req.rule_id), None)
+    if rule is None:
+        raise HTTPException(404, f"未找到规则 {req.rule_id}; 可用: "
+                                  f"{[r.get('rule_id') for r in data.get('rules', [])]}")
+    # confidence 白名单 (不虚标: 非法值拒绝写, 不静默降级)
+    if req.confidence is not None and req.confidence not in ("low", "medium", "high"):
+        raise HTTPException(422, f"confidence 须 low/medium/high, 实际 {req.confidence}")
+
+    if req.confirmed is not None:
+        rule["confirmed"] = req.confirmed
+    if req.confidence is not None:
+        rule["confidence"] = req.confidence
+    if req.confirm_note is not None:
+        rule["confirm_note"] = req.confirm_note
+    if req.params:
+        pd = rule.setdefault("param_defaults", {})
+        for k, v in req.params.items():
+            pd[k] = v
+            if k in rule.get("params", {}):
+                rule["params"][k] = v
+
+    # 备份 → 写盘 → fail-fast 重载兜底 (红线一: 不留坏盘)
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    backup = f"{p}.bak.{ts}"
+    shutil.copyfile(p, backup)
+    try:
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        from src.rules.src.dsl import DslRuleProvider
+        DslRuleProvider(p).load()  # fail-fast: 重载不炸
+    except Exception as e:
+        shutil.copyfile(backup, p)  # 回滚
+        raise HTTPException(500, f"回填写盘后重载失败, 已回滚: {e}")
+
+    return {
+        "status": "applied", "rule_id": req.rule_id, "backup": backup,
+        "confirmed": rule.get("confirmed"), "confidence": rule.get("confidence"),
+        "param_defaults": rule.get("param_defaults"),
+        "note": "已写盘 — 跑 GET /api/rules 验证前端按 confirmed 点亮占位卡",
+    }
+
+
 # ─── F 碰撞/冲突域段: M4 跨专业碰撞 + M5 两稿改动冲突 (只调用工具库, 不重写) ───
 # 懒 import 放函数体: module 收集期不触发 clash/conflict 重依赖。
 # 红线二: sample 不存在 → 404 诚实报错, 无碰撞/无冲突 → 0 + 空列表, 绝不造假。

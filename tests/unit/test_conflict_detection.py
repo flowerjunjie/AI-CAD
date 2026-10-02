@@ -177,6 +177,7 @@ def test_cad_execute_conflict_task_noop_without_second_draft():
     r = [x for x in res["cad_results"] if x["task_id"] == "conflict-all"][0]
     assert r["status"] == "completed" and r["conflicts"] == 0, \
         f"无第二稿应 0 冲突, 实际 {r}"
+    assert r["duplicates_marked"] == 0, "无第二稿应 0 重复标记 (no-op)"
 
 
 def test_cad_execute_conflict_task_counts_second_draft():
@@ -191,6 +192,7 @@ def test_cad_execute_conflict_task_counts_second_draft():
     res = cad_execute_node(state)
     r = [x for x in res["cad_results"] if x["task_id"] == "conflict-all"][0]
     assert r["conflicts"] == 1, f"应 1 处值冲突, 实际 {r}"
+    assert r["duplicates_marked"] == 0, "门改宽无坐标重复, 应 0 标记"
 
 
 
@@ -272,6 +274,71 @@ def test_summarize_counts_duplicate_kind():
     assert s["by_category"] == {"outlets": 1}
 
 
+# ── M5 几何等价类出图侧 (DXFWriter.add_duplicate_marker + conflict task 接线) ──
+
+def test_add_duplicate_marker_creates_dup_entities():
+    """DXFWriter.add_duplicate_marker: DUP 层 CIRCLE (琥珀色) + DUP_LABEL 层 TEXT。"""
+    from src.agents.src.tools.cad_tools import DXFWriter
+
+    w = DXFWriter()
+    w.new("AC1027")
+    w.add_duplicate_marker(1.0, 1.0, label="DUP")
+    msp = w.doc.modelspace()
+    assert len(msp.query('CIRCLE[layer=="DUP"]')) == 1, "应有 1 条 DUP 圈"
+    assert len(msp.query('TEXT[layer=="DUP_LABEL"]')) == 1, "应有 1 条 DUP 标注"
+    # 琥珀色 ACI 32 (区别于 CLASH 品红 6), 与 M4 碰撞圈视觉区分
+    circle = next(iter(msp.query('CIRCLE[layer=="DUP"]')))
+    assert circle.dxf.color == 32, f"DUP 圈应琥珀色 32, 实际 {circle.dxf.color}"
+
+
+def test_cad_execute_conflict_task_marks_duplicates():
+    """cad_execute_node task_type=conflict: 有重复元素画 DUP 圈, 无重复 0 圈。"""
+    from src.agents.src.nodes.cad_rule_export import cad_execute_node
+    import ezdxf
+
+    # 含重复元素 (o1/o2 同坐标 (1,1)) → 1 处 DUP
+    state = {"raw_data": {
+        "zones": [], "doors": [], "windows": [],
+        "outlets": [{"id": "o1", "x": 1.0, "y": 1.0},
+                    {"id": "o2", "x": 1.0, "y": 1.0}],
+    }, "conflict_raw_b": {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]},
+       "task_list": [{"id": "conflict-all", "type": "conflict"}],
+       "output_path": "/tmp/aicad_conflict_dup.dwg", "auto_mode": True}
+    res = cad_execute_node(state)
+    r = [x for x in res["cad_results"] if x["task_id"] == "conflict-all"][0]
+    assert r["duplicates_marked"] == 1, f"应 1 处重复标记, 实际 {r.get('duplicates_marked')}"
+    doc = ezdxf.readfile(res["final_dwg_path"])
+    assert len(doc.modelspace().query('CIRCLE[layer=="DUP"]')) == 1, "出图应含 1 DUP 圈"
+
+    # 无重复 (o1/o2 坐标不同) → 0 DUP 圈 (回归安全, 既有出图不变)
+    state2 = {"raw_data": {
+        "zones": [], "doors": [], "windows": [],
+        "outlets": [{"id": "o1", "x": 1.0, "y": 1.0},
+                    {"id": "o2", "x": 2.0, "y": 2.0}],
+    }, "conflict_raw_b": {"outlets": [{"id": "o1", "x": 1.0, "y": 1.5},
+                                       {"id": "o2", "x": 2.0, "y": 2.0}]},
+       "task_list": [{"id": "conflict-all", "type": "conflict"}],
+       "output_path": "/tmp/aicad_conflict_nodup.dwg", "auto_mode": True}
+    res2 = cad_execute_node(state2)
+    r2 = [x for x in res2["cad_results"] if x["task_id"] == "conflict-all"][0]
+    assert r2["duplicates_marked"] == 0, "无重复应 0 标记"
+    doc2 = ezdxf.readfile(res2["final_dwg_path"])
+    assert len(doc2.modelspace().query('CIRCLE[layer=="DUP"]')) == 0, "无重复不出 DUP 圈"
+
+
+def test_cad_execute_conflict_task_noop_no_duplicate_marker():
+    """无第二稿 → 0 冲突 0 重复标记 (no-op, 不破既有出图)。"""
+    from src.agents.src.nodes.cad_rule_export import cad_execute_node
+
+    state = {"raw_data": {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]},
+             "task_list": [{"id": "conflict-all", "type": "conflict"}],
+             "output_path": "/tmp/aicad_conflict_noop2.dwg", "auto_mode": True}
+    res = cad_execute_node(state)
+    r = [x for x in res["cad_results"] if x["task_id"] == "conflict-all"][0]
+    assert r["status"] == "completed" and r["conflicts"] == 0
+    assert r["duplicates_marked"] == 0, f"无第二稿应 0 重复标记, 实际 {r}"
+
+
 if __name__ == "__main__":
     test_diff_elements_value_conflict()
     test_diff_elements_identical_returns_empty()
@@ -292,4 +359,7 @@ if __name__ == "__main__":
     test_detect_conflicts_includes_duplicates_by_default()
     test_detect_conflicts_no_duplicates_when_disabled()
     test_summarize_counts_duplicate_kind()
+    test_add_duplicate_marker_creates_dup_entities()
+    test_cad_execute_conflict_task_marks_duplicates()
+    test_cad_execute_conflict_task_noop_no_duplicate_marker()
     print("OK: all conflict detection tests passed")

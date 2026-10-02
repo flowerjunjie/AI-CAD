@@ -325,6 +325,20 @@ def _clash_point(raw: dict, c: dict) -> tuple[float, float]:
     return 0.0, 0.0
 
 
+def _duplicate_point(d: dict) -> tuple[float, float]:
+    """重复元素标记画在哪: 取 detect_duplicate_elements 透出的 coord (已归一化)。
+    coord 缺失 → (0,0) 兜底, 不崩。管线类 coord 是端点排序 4 元 → 取中点。"""
+    ck = d.get("coord")
+    if not ck:
+        return 0.0, 0.0
+    # 点位类 coord = [x, y]; 线段类 coord = [x1,y1,x2,y2] (端点排序)
+    if len(ck) == 2:
+        return float(ck[0]), float(ck[1])
+    if len(ck) >= 4:
+        return (float(ck[0]) + float(ck[2])) / 2.0, (float(ck[1]) + float(ck[3])) / 2.0
+    return float(ck[0]), float(ck[1])
+
+
 def _layout_from_state(state: dict) -> dict:
     """从 state 提取 zones/doors/windows，跑布局引擎，返回坐标。
     有 wall_segments（真实 DWG 墙线）→ 走 partition_rooms 真实拓扑；
@@ -615,18 +629,27 @@ def cad_execute_node(state: dict) -> dict:
 
             elif task_type == "conflict":
                 # M5 两稿改动冲突检测 (可自主子集): 对 raw_data (稿A) 与
-                # conflict_raw_b (稿B) 按元素 id 比对, 只记冲突计数, 不新增出图实体。
-                # 无第二稿 (state 未带 conflict_raw_b) → detect_conflicts(raw, {}) →
-                # 稿A 全部元素变 'removed'… 为避免误报, 无稿B 时直接 0 冲突 (no-op)。
+                # conflict_raw_b (稿B) 按元素 id 比对, 记冲突计数 + 几何等价类
+                # (同坐标不同 id = 疑似重复) 画琥珀色 DUP 警示圈 (出图侧增量)。
+                # 无第二稿 (state 未带 conflict_raw_b) → 0 冲突 0 出图 (no-op)。
                 raw_data = state.get("raw_data", {}) or {}
                 raw_b = state.get("conflict_raw_b")
                 if raw_b is None:
-                    conflict_count = 0
+                    conflict_count, dup_count = 0, 0
                 else:
-                    from src.agents.src.tools.conflict_detection import detect_conflicts
-                    conflict_count = len(detect_conflicts(raw_data, raw_b))
+                    from src.agents.src.tools.conflict_detection import (
+                        detect_conflicts, detect_duplicate_elements)
+                    conflicts = detect_conflicts(raw_data, raw_b)
+                    conflict_count = len(conflicts)
+                    # 几何等价类维度出图: 同坐标不同 id 画 DUP 圈 (M5 增量, 无重复 0 实体)
+                    dup_count = 0
+                    for d in detect_duplicate_elements(raw_data, raw_b):
+                        cx, cy = _duplicate_point(d)
+                        writer.add_duplicate_marker(cx, cy, label="DUP")
+                        dup_count += 1
                 results.append({"task_id": task_id, "status": "completed",
-                                "conflicts": conflict_count})
+                                "conflicts": conflict_count,
+                                "duplicates_marked": dup_count})
 
             elif task_type == "dimension":
                 axis_count = 0

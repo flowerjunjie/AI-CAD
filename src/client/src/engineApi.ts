@@ -103,6 +103,36 @@ export async function applyDslRules(rules: DslRuleItem[], confirm: boolean): Pro
   );
 }
 
+// ─── M1 数值回填 (bridge B 段, 单规则轻量回填 — 专家在面板点「回填」即点亮占位卡) ───
+// POST /api/rules/backfill {rule_id, confirmed?, confidence?, confirm_note?, params?}
+// 单规则粒度 (比 DSL apply 全量重写轻): 改 confirmed 标志 / 参数值, 备份可回滚,
+// confidence 白名单 (low/medium/high, 不虚标)。响应 {status:'applied', confirmed, backup, note}。
+
+export interface RuleBackfillResp {
+  status: 'applied';
+  rule_id: string;
+  backup: string;
+  confirmed?: boolean;
+  confidence?: string;
+  param_defaults?: Record<string, unknown>;
+  note?: string;
+}
+
+export async function backfillRule(
+  ruleId: string,
+  payload: {
+    confirmed?: boolean;
+    confidence?: 'low' | 'medium' | 'high';
+    confirm_note?: string;
+    params?: Record<string, unknown>;
+  },
+): Promise<RuleBackfillResp | null> {
+  return postJson<RuleBackfillResp, typeof payload & { rule_id: string }>(
+    '/api/rules/backfill',
+    { rule_id: ruleId, ...payload },
+  );
+}
+
 // ─── M4 碰撞 / M5 冲突 (bridge.py F 段) ───
 // GET /api/clash?sample=X        → ClashResult (无碰撞 count=0 空列表)
 // GET /api/conflict?sample_a=&sample_b= → ConflictResult (同稿自比 0 冲突)
