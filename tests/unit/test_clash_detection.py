@@ -213,9 +213,13 @@ def test_resolve_clash_tolerance_priority():
     # ⑥ confirmed 标志: M4 机制已落地 (取值通道已接主链路+桥端点), default.json
     # 回填 confirmed=true 即点亮 M4 占位卡 (与 M1 「专家填值即点亮」同叙事);
     # 不虚标: 真·多专业容差终值仍需专家背书 (confidence 维持 medium 不升级 high)。
-    assert clash_rule._spec.dsl_only is True, "clash-tolerance-range 应 dsl_only (纯 DSL 新增)"
-    assert clash_rule._spec.confidence == "medium", "几何容差非 GB 条文, confidence 不虚标 high"
-    assert clash_rule._spec.confirmed is True, "机制已落地, confirmed=true (点亮 M4 卡)"
+    import json
+    raw_rules = json.load(open(os.path.join(project_root, "src", "rules", "rules", "default.json"),
+                               encoding="utf-8"))["rules"]
+    clash_spec_raw = next(r for r in raw_rules if r.get("rule_id") == "clash-tolerance-range")
+    assert clash_spec_raw.get("dsl_only") is True, "clash-tolerance-range 应 dsl_only (纯 DSL 新增)"
+    assert clash_spec_raw.get("confidence") == "medium", "几何容差非 GB 条文, confidence 不虚标 high"
+    assert clash_spec_raw.get("confirmed") is True, "机制已落地, confirmed=true (点亮 M4 卡)"
 
 
 if __name__ == "__main__":
