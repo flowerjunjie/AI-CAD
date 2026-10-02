@@ -56,20 +56,58 @@ def test_collab_snapshot_with_state(tmp_path):
     print("PASS test_collab_snapshot_with_state")
 
 
-def test_no_write_collab_endpoints():
-    """诚实边界: 只读快照端点存在, 但**没有**取锁/释放/合并 写操作端点
-    (那些要业务定协同协议才接, 骨架不冒称在线协同)。"""
+def test_no_cross_designer_sync_endpoint():
+    """诚实边界: 快照 + 本地锁端点存在, 但**没有**跨设计师同步端点
+    (多机在线协同 CRDT/OT/单写者多读者协议 + 用户体系, 需业务定协议才接)。
+    本地锁端点 acquire/release 存在 (单进程演示通路, 落本地 state.json)。"""
     paths = {r.path for r in app.routes if hasattr(r, "path")}
     assert "/api/collab/snapshot" in paths
-    # 写操作端点不该存在 (冒称 = 造假)
-    for forbidden in ("/api/collab/lock", "/api/collab/release", "/api/collab/merge"):
-        assert forbidden not in paths, f"{forbidden} 不该在骨架内暴露 (需业务定协议)"
-    print("PASS test_no_write_collab_endpoints")
+    assert "/api/collab/acquire" in paths
+    assert "/api/collab/release" in paths
+    # 跨设计师/多机端点不该存在 (冒称在线协同 = 造假)
+    for forbidden in ("/api/collab/sync", "/api/collab/broadcast", "/api/collab/merge"):
+        assert forbidden not in paths, f"{forbidden} 不该在本骨架内暴露 (需业务定协议)"
+    print("PASS test_no_cross_designer_sync_endpoint")
+
+
+def test_local_lock_endpoints(tmp_path):
+    """本地锁演示通路: acquire → 他人写锁互斥拒绝 → release 放掉 (真落盘 state.json)。"""
+    state_file = tmp_path / "state.json"
+    bridge._COLLAB_STATE_PATH = str(state_file)
+    with TestClient(app) as client:
+        r1 = client.post("/api/collab/acquire",
+                        json={"designer": "alice", "resource_id": "sheet-x", "mode": "write"})
+        assert r1.status_code == 200 and r1.json()["acquired"] is True
+        assert r1.json()["write_holders"] == {"sheet-x": "alice"}
+        # 他人写锁互斥: bob 抢同一资源 → 拒绝 + 诚实 reason
+        r2 = client.post("/api/collab/acquire",
+                        json={"designer": "bob", "resource_id": "sheet-x", "mode": "write"})
+        assert r2.status_code == 200 and r2.json()["acquired"] is False
+        assert "alice" in r2.json()["reason"]
+        # alice 再取自己锁 → 幂等成功
+        r3 = client.post("/api/collab/acquire",
+                        json={"designer": "alice", "resource_id": "sheet-x"})
+        assert r3.json()["acquired"] is True
+        # 释放 (幂等: 释放 alice 的锁)
+        r4 = client.post("/api/collab/release",
+                        json={"designer": "alice", "resource_id": "sheet-x"})
+        assert r4.status_code == 200 and r4.json()["released"] is True
+        assert r4.json()["write_holders"] == {}
+        # 无锁再放 → released=false (幂等诚实, 不崩)
+        r5 = client.post("/api/collab/release",
+                        json={"designer": "alice", "resource_id": "sheet-x"})
+        assert r5.json()["released"] is False
+    # 持久化验证: 锁操作真落盘 (state.json 存在且含 unlock 事件)
+    assert state_file.exists()
+    import json as _json
+    state = _json.loads(state_file.read_text(encoding="utf-8"))
+    assert any(e["type"] == "unlock" for e in state["events"])
+    print("PASS test_local_lock_endpoints")
 
 
 if __name__ == "__main__":
     test_collab_snapshot_empty_honest()
-    test_no_write_collab_endpoints()
+    test_no_cross_designer_sync_endpoint()
     # 注: test_collab_snapshot_with_state 需 tmp_path fixture, 只 pytest 跑 (直跑护栏)
     # 这里用一个临时目录手动补一个 (无 fixture, 直跑也能验有 state 态)
     import tempfile

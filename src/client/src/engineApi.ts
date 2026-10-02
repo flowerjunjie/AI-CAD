@@ -1,6 +1,7 @@
 import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult,
         type DslRuleItem, type DslValidateResp, type DslApplyResp,
-        type ClashResult, type ConflictResult } from './useEngineStore';
+        type ClashResult, type ConflictResult,
+        type CollabSnapshot } from './useEngineStore';
 
 // 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
 // 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
@@ -130,6 +131,63 @@ export async function runConflict(sampleA: string, sampleB: string): Promise<Con
   store.setConflictLoading(false);
   if (result) {
     store.setConflictResults([...store.conflictResults, result]);
+  }
+  return result;
+}
+
+// ─── M5 在线协同持久层 (bridge.py H 段, 本地锁演示通路) ───
+// GET  /api/collab/snapshot?designer=X → CollabSnapshot (诚实两态 source=file|empty)
+// POST /api/collab/acquire  {designer, resource_id, mode} → 取锁 (被占 → acquired=false + reason)
+// POST /api/collab/release  {designer, resource_id} → 放锁 (无锁幂等 released=false)
+// 诚实标注: 本地单进程演示, 非跨设计师同步 (响应 note 字段明示)。
+
+/** POST /api/collab/acquire|release 响应 (快照 + 操作结果, 诚实标注本地演示)。 */
+export interface CollabLockOp extends CollabSnapshot {
+  acquired?: boolean;
+  released?: boolean;
+  resource_id: string;
+  designer: string;
+  mode?: string;
+  reason?: string;
+}
+
+export async function fetchCollabSnapshot(designer: string): Promise<CollabSnapshot | null> {
+  const store = useEngineStore.getState();
+  const snap = await getJson<CollabSnapshot>(
+    `/api/collab/snapshot?designer=${encodeURIComponent(designer)}`,
+  );
+  if (snap) store.setCollabSnapshot(snap);
+  return snap;
+}
+
+export async function collabAcquire(
+  designer: string, resourceId: string, mode = 'write',
+): Promise<CollabLockOp | null> {
+  const store = useEngineStore.getState();
+  store.setCollabLoading(true);
+  const result = await postJson<CollabLockOp, { designer: string; resource_id: string; mode: string }>(
+    '/api/collab/acquire', { designer, resource_id: resourceId, mode },
+  );
+  store.setCollabLoading(false);
+  if (result) {
+    store.setCollabSnapshot(result);  // 操作响应即新快照
+    store.appendCollabOp(result);
+  }
+  return result;
+}
+
+export async function collabRelease(
+  designer: string, resourceId: string,
+): Promise<CollabLockOp | null> {
+  const store = useEngineStore.getState();
+  store.setCollabLoading(true);
+  const result = await postJson<CollabLockOp, { designer: string; resource_id: string }>(
+    '/api/collab/release', { designer, resource_id: resourceId },
+  );
+  store.setCollabLoading(false);
+  if (result) {
+    store.setCollabSnapshot(result);
+    store.appendCollabOp(result);
   }
   return result;
 }

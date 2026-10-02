@@ -51,10 +51,11 @@ export interface ClashItem {
   detail: string;        // 中文说明 (如 "管段与梁段相交")
 }
 
-/** GET /api/clash 响应 (bridge.py F 段)。 */
+/** GET /api/clash 响应 (bridge.py F 段, M4 容差取值通道: param > dsl > default)。 */
 export interface ClashResult {
   sample: string;
   tolerance_m: number;
+  tolerance_source?: 'param' | 'dsl' | 'default';  // 来源标注 (诚实: 不虚标)
   clashes: ClashItem[];
   count: number;
 }
@@ -83,6 +84,37 @@ export interface ConflictResult {
     added: number;
     removed: number;
   };
+}
+
+// ─── M5 在线协同持久层 (bridge.py H 段, 本地锁演示通路) ───
+
+/** 单条协同事件 (append-only, collab_protocol.append_event 的持久化形态)。 */
+export interface CollabEvent {
+  seq: number;
+  type: string;         // lock / unlock / approve / reject / merge
+  actor: string;
+  resource_id: string;
+  payload?: Record<string, unknown>;
+}
+
+/** GET /api/collab/snapshot 响应 (bridge.py H 段, 诚实两态 source=file|empty)。 */
+export interface CollabSnapshot {
+  designer: string;
+  write_holders: Record<string, string>;  // resource_id → 持锁设计师
+  recent_events: CollabEvent[];
+  event_count: number;
+  source: 'file' | 'empty';
+  note?: string;
+}
+
+/** POST /api/collab/acquire|release 响应 (快照 + 操作结果 + 诚实标注)。 */
+export interface CollabLockOp extends CollabSnapshot {
+  acquired?: boolean;    // acquire 才有: 取锁是否成功 (被占 → false + reason)
+  released?: boolean;    // release 才有: 确有该锁被放掉
+  resource_id: string;
+  designer: string;
+  mode?: string;
+  reason?: string;
 }
 
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
@@ -155,6 +187,10 @@ interface EngineState {
   clashLoading: boolean;
   conflictResults: ConflictResult[];
   conflictLoading: boolean;
+  // M5 在线协同持久层 (bridge H 段, 本地锁演示)
+  collabSnapshot: import('./useEngineStore').CollabSnapshot | null;
+  collabOps: import('./engineApi').CollabLockOp[];
+  collabLoading: boolean;
   // 人在回路确认闸 (bridge G 段, 演示通路)
   confirmResults: import('./engineApi').AgentConfirmResult[];
   confirmLoading: boolean;
@@ -171,6 +207,9 @@ interface EngineState {
   setClashLoading: (l: boolean) => void;
   setConflictResults: (c: ConflictResult[]) => void;
   setConflictLoading: (l: boolean) => void;
+  setCollabSnapshot: (s: import('./useEngineStore').CollabSnapshot | null) => void;
+  appendCollabOp: (op: import('./engineApi').CollabLockOp) => void;
+  setCollabLoading: (l: boolean) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
   setAgentRun: (r: import('./engineApi').AgentRunResult | null) => void;
@@ -190,6 +229,9 @@ export const useEngineStore = create<EngineState>((set) => ({
   clashLoading: false,
   conflictResults: [],
   conflictLoading: false,
+  collabSnapshot: null,
+  collabOps: [],
+  collabLoading: false,
   confirmResults: [],
   confirmLoading: false,
   agentRun: null,
@@ -204,6 +246,9 @@ export const useEngineStore = create<EngineState>((set) => ({
   setClashLoading: (clashLoading) => set({ clashLoading }),
   setConflictResults: (conflictResults) => set({ conflictResults }),
   setConflictLoading: (conflictLoading) => set({ conflictLoading }),
+  setCollabSnapshot: (collabSnapshot) => set({ collabSnapshot }),
+  appendCollabOp: (op) => set((s) => ({ collabOps: [...s.collabOps, op] })),
+  setCollabLoading: (collabLoading) => set({ collabLoading }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
   setAgentRun: (agentRun) => set({ agentRun }),
