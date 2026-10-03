@@ -174,11 +174,20 @@ def _confirmed_rule_ids() -> set[str]:
 
 @app.get("/api/rules")
 def api_rules() -> List[dict]:
+    """规则列表 + confirmed 状态 + M4 容差来源 (clash-tolerance-range 专有)。
+
+    M4 容差 + M1 卡联动: 只对 rule_id='clash-tolerance-range' 的规则透出
+    tolerance_source + tolerance_m (复用 resolve_clash_tolerance 取值通道,
+    与 /api/clash 同源同判据), 让 M1 卡不只在看冲突时、在规则列表也能看到
+    「现在生效哪档容差值 + 来源」。**其他规则该字段 null** (诚实, 不给所有规则
+    乱套来源 — 只有 M4 碰撞容差走 DSL 取值通道)。"""
     engine = _load_rules_module()
     confirmed = _confirmed_rule_ids()
+    # M4 容差来源通道 (与 /api/clash 同源: dsl 规则在控 → 'dsl', 几何默认 → 'default')
+    clash_tol, clash_tol_src = _clash_tolerance_source()
     out = []
     for r in engine.list_rules():
-        out.append({
+        item = {
             "rule_id": r.rule_id,
             "name": r.name,
             "code_ref": r.code_ref,
@@ -186,8 +195,37 @@ def api_rules() -> List[dict]:
             "source": _rule_source(r),
             "enabled": True,
             "confirmed": r.rule_id in confirmed,
-        })
+        }
+        # 仅 M4 碰撞容差规则带取值来源 (不虚标: 其余规则 null)
+        if r.rule_id == "clash-tolerance-range":
+            item["tolerance_source"] = clash_tol_src
+            item["tolerance_m"] = clash_tol
+        else:
+            item["tolerance_source"] = None
+            item["tolerance_m"] = None
+        out.append(item)
     return out
+
+
+def _clash_tolerance_source() -> tuple[float, str]:
+    """M4 容差取值来源 (供 /api/rules 透出 clash-tolerance-range 规则当前生效值)。
+
+    复用 resolve_clash_tolerance 优先级 (dsl 规则在控 > 几何默认):
+      - default.json 的 clash-tolerance-range 规则在引擎里 (expert 回填过) → 'dsl'
+      - 规则缺失/JSON 损坏 → 几何默认 0.15 → 'default' (诚实降级, 不崩)
+    与 /api/clash 的 tolerance_source 判据一致 (同源, 不两套逻辑)。"""
+    from src.agents.src.tools.clash_detection import resolve_clash_tolerance
+    dsl_rule = None
+    try:
+        from src.agents.src.nodes.cad_rule_export import _dsl_rules_path
+        from src.rules.src.dsl import load_dsl_rules
+        for r in load_dsl_rules(_dsl_rules_path()):
+            if r.rule_id == "clash-tolerance-range":
+                dsl_rule = r
+                break
+    except Exception:
+        dsl_rule = None
+    return resolve_clash_tolerance(default_m=0.15, dsl_rule=dsl_rule, params=None)
 
 
 @app.get("/api/rule-violations")

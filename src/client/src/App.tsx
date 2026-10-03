@@ -688,15 +688,23 @@ function App() {
             const allLit = p.disciplinePrefixes?.length
               ? litPrefixes.length === p.disciplinePrefixes.length
               : false;
-            // M4 容差 + M1 卡联动: m4-collision 卡点亮时, 透出当前容差取值来源
-            // (取自最近一次 M4 碰撞检测的 tolerance_source: param/dsl/default),
-            // 让专家看到「现在生效的是哪档值」 — 不虚标, 没跑过碰撞检测则不显示。
-            const m4TolSource = p.id === 'm4-collision'
-              ? [...clashResults].reverse().find((r) => r.tolerance_source)?.tolerance_source
-              : undefined;
-            const m4TolVal = p.id === 'm4-collision'
-              ? [...clashResults].reverse().find((r) => r.tolerance_m !== undefined)?.tolerance_m
-              : undefined;
+            // M4 容差 + M1 卡联动: m4-collision 卡点亮时, 透出当前容差取值来源。
+            // 首选 /api/rules 的 clash-tolerance-range.tolerance_source (规则列表自带,
+            // 不依赖跑过碰撞检测); 兜底最近一次 M4 检测的 tolerance_source。
+            // 不虚标: 两个来源都没有 (规则未 confirmed + 没跑过检测) 则不显示。
+            let m4TolSource: string | undefined;
+            let m4TolVal: number | undefined;
+            if (p.id === 'm4-collision') {
+              const clashRule = rules.find((r) => r.rule_id === 'clash-tolerance-range');
+              if (clashRule?.tolerance_source) {
+                m4TolSource = clashRule.tolerance_source;
+                m4TolVal = clashRule.tolerance_m ?? undefined;
+              } else {
+                const lastClash = [...clashResults].reverse().find((r) => r.tolerance_source);
+                m4TolSource = lastClash?.tolerance_source;
+                m4TolVal = lastClash?.tolerance_m;
+              }
+            }
             return (
               <div
                 key={p.id}

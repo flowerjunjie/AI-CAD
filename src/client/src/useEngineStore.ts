@@ -8,6 +8,9 @@ export interface RuleItem {
   source: 'hardcoded' | 'dsl';
   enabled: boolean;
   confirmed?: boolean;
+  // M4 容差 + M1 卡联动: 仅 clash-tolerance-range 规则透出 (其余 null, 诚实不乱套)
+  tolerance_source?: 'param' | 'dsl' | 'default' | null;
+  tolerance_m?: number | null;
 }
 
 export interface Violation {

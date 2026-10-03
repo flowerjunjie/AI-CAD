@@ -118,21 +118,53 @@ def test_rag_search_zero_hit_note(monkeypatch):
 def test_rules_confirmed_passthrough():
     """/api/rules 每条规则透出 confirmed 布尔 (读 default.json confirmed=true 集合)。
 
-    全字段稳定 {rule_id,name,code_ref,severity,source,enabled,confirmed};
-    source ∈ {hardcoded,dsl}; confirmed 为 bool。真引擎跑, 不造假。
+    全字段稳定 {rule_id,name,code_ref,severity,source,enabled,confirmed,
+    tolerance_source,tolerance_m}; source ∈ {hardcoded,dsl}; confirmed 为 bool。
+    M4 容差 + M1 卡联动: clash-tolerance-range 规则带 tolerance_source/m,
+    **其余规则 tolerance_source=None** (诚实, 不给所有规则乱套来源)。真引擎跑, 不造假。
     """
     with TestClient(app) as client:
         resp = client.get("/api/rules")
         assert resp.status_code == 200
         rules = resp.json()
         assert len(rules) > 0
+        clash_rules = [r for r in rules if r["rule_id"] == "clash-tolerance-range"]
         for r in rules:
             for key in ("rule_id", "name", "code_ref", "severity",
-                       "source", "enabled", "confirmed"):
+                       "source", "enabled", "confirmed",
+                       "tolerance_source", "tolerance_m"):
                 assert key in r, f"字段 {key} 未透出"
             assert r["source"] in ("hardcoded", "dsl")
             assert isinstance(r["confirmed"], bool)
             assert r["enabled"] is True
+        # M4 容差来源: clash-tolerance-range 规则带取值来源 (与 /api/clash 同源)
+        if clash_rules:
+            cr = clash_rules[0]
+            assert cr["tolerance_source"] in ("param", "dsl", "default"), \
+                f"clash 规则应带来源, 实际 {cr.get('tolerance_source')}"
+            assert isinstance(cr["tolerance_m"], (int, float)), \
+                f"clash 规则应带容差值, 实际 {cr.get('tolerance_m')}"
+        # 诚实: 非 clash 规则 tolerance_source 全 None (不乱套来源)
+        for r in rules:
+            if r["rule_id"] != "clash-tolerance-range":
+                assert r["tolerance_source"] is None, \
+                    f"非 clash 规则 {r['rule_id']} 不该有容差来源"
+                assert r["tolerance_m"] is None
+
+
+def test_rules_clash_tolerance_source_matches_clash_endpoint():
+    """/api/rules 的 clash-tolerance-range.tolerance_source 与 /api/clash 同源 (一致性)。
+
+    M4 容差取值通道只有一套逻辑 (resolve_clash_tolerance): /api/rules 与 /api/clash
+    默认 (无 query 覆盖) 都走 dsl 规则在控 → 来源应一致 (同源, 不两套判据)。"""
+    with TestClient(app) as client:
+        rules = client.get("/api/rules").json()
+        clash = next((r for r in rules if r["rule_id"] == "clash-tolerance-range"), None)
+        assert clash is not None, "default.json 应含 clash-tolerance-range 规则"
+        clash_ep = client.get(f"/api/clash?sample={_SAMPLE}").json()
+        assert clash["tolerance_source"] == clash_ep["tolerance_source"], \
+            f"/api/rules 与 /api/clash 容差来源应一致: {clash['tolerance_source']} vs {clash_ep['tolerance_source']}"
+        assert clash["tolerance_m"] == clash_ep["tolerance_m"]
 
 
 def test_rule_violations_bad_door():
