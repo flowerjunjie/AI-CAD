@@ -2,7 +2,8 @@
 
 > 生成日期: 2026-09-24 · 最后同步: 2026-10-03（M5 duplicate 出图 + M1 回填 CLI/GUI + M2 扫描工具 + M5 协同+duplicate 联动 + M4 容差→M1 卡 + M4 来源→/api/rules）
 > 项目状态: **四专业出图 + 规则 DSL 引擎 + 写回落盘 + LLM Agent 全链路 + M3 出图深化 + M4 碰撞 + M5 冲突/duplicate + M1 回填 + M2 制图对齐工具** ✅
-> 测试: **447 passed / 5 skipped / 0 failed** · 冒烟脚本秒级验证（52 个测试文件: 48 unit + 4 integration）
+> 测试: **当前水位见 [docs/test-status.md](docs/test-status.md)（单一事实源）· 冒烟脚本秒级验证**。
+> 历史段落带「数据截止 2026-09-30」等时间戳的 409/294/300 是演进快照，**不随水位改**。
 >
 > **界面快速入口**：双击 `build/dist/ai_cad_gui/ai_cad_gui.exe`（交付态，端口自动探测，浏览器自动弹出）
 > 开发态入口：`python start_gui.py`（需 node/vite，端口 3000）
@@ -135,9 +136,9 @@
 
 ### 2.5 工程质量护栏（可复现性证明）
 
-- **409 passed / 5 skipped / 0 failed** 全量测试（47 个测试文件）；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
+- **全量测试当前水位见 [docs/test-status.md](docs/test-status.md)（单一事实源）**；`scripts/smoke_test.py` 秒级验证核心不变量（小改动 0.4s 出结果）。
 - 硬编码规则类 0 改动红线（git diff 校验）；新增测试"全量绿 + 单跑绿"双护栏（防假绿）。
-- **51 个 commit** 的完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交。
+- 完整演进史——每个专业接入、每个护栏都是独立可回溯的原子提交（commit 数见 `git log --oneline | wc -l`）。
 
 ---
 
@@ -225,7 +226,7 @@ python run.py --no-llm
 python run.py --llm --render         # 出 preview.png + report.html
 
 # ④ 完整测试（commit 前 / CI）
-python -m pytest tests/ -q           # 409 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q           # 当前水位见 docs/test-status.md（单一事实源）
 ```
 
 ---
