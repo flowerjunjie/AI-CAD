@@ -1044,6 +1044,65 @@ def api_collab_release(req: CollabReleaseReq) -> dict:
     return snap
 
 
+@app.get("/api/collab/elements")
+def api_collab_elements(sample: str = "residential_100sqm.json") -> dict:
+    """M5 协同 + duplicate 联动: 列出 sample 的「可锁资源」元素清单 + 重复标记。
+
+    把协同面板硬编码的资源下拉 (sheet-a/sheet-b) 换成**真实 CAD 元素 id**,
+    并在取锁前标出哪些是「同坐标不同 id 的疑似重复」— 设计师锁元素前先看
+    「这个元素疑似跟另一个 id 画在同一位置, 要不要先核对再锁」。
+
+    返回 {sample, resources: [{id, category, duplicate_of, coord}],
+          duplicate_count, note}。
+      - resources: 该 sample 全部带 id 元素 ( doors/outlets/pipes/... 各 id)
+      - duplicate_of: 若该 id 与另一 id 同坐标, 记重复对端 id (无重复 null)
+      - duplicate_count: 同坐标不同 id 的组数 (几何等价类维度, M5)
+
+    诚实边界 (不虚标): 只报「几何重复」线索, **不**判业务上是否允许同坐标 —
+    取锁前的提示是「建议先核对」, 不是「禁止锁」。资源清单来自真实 sample 元素,
+    缺元素键优雅跳过。懒 import: conflict_detection 纯函数库。"""
+    from src.agents.src.tools.conflict_detection import (  # 懒
+        detect_duplicate_elements)
+
+    # 协同元素清单要全量元素 id (不只 6 个 clash 键), 直接读 sample 顶层,
+    # 不复用 _load_sample_raw (它按 _CLASH_SAMPLE_KEYS 截断, 会漏 doors/walls 等)。
+    p = os.path.join(ROOT, "data", "sample", sample)
+    if not os.path.exists(p):
+        raise HTTPException(404, f"样本不存在: {sample}")
+    with open(p, encoding="utf-8") as fh:
+        full = json.load(fh)
+    raw = {k: v for k, v in full.items() if isinstance(v, list)}
+    # 全量元素 id 清单 (带坐标类: 插座/管线/梁柱, 供协同面板选资源)
+    resources: list[dict] = []
+    for key, items in raw.items():
+        for el in (items or []):
+            if not isinstance(el, dict):
+                continue  # 元素须是 dict (带 id); 纯标量/字符串跳过, 不崩
+            eid = el.get("id")
+            if eid is None:
+                continue
+            resources.append({"id": eid, "category": key,
+                              "duplicate_of": None, "coord": None})
+    # duplicate 维度: 同坐标不同 id → 标重复对端 (取锁前提示「疑似重复」)
+    dupes = detect_duplicate_elements(raw, raw)  # 同稿自比, 只抓几何重复
+    by_id: dict[str, dict] = {r["id"]: r for r in resources}
+    duplicate_count = 0
+    for d in dupes:
+        duplicate_count += 1
+        for eid, other in ((d["id_a"], d["id_b"]), (d["id_b"], d["id_a"])):
+            if eid in by_id:
+                by_id[eid]["duplicate_of"] = other
+                if d.get("coord"):
+                    by_id[eid]["coord"] = d["coord"]
+    return {
+        "sample": sample,
+        "resources": resources,
+        "duplicate_count": duplicate_count,
+        "note": ("资源清单 = 真实 CAD 元素 id · 重复标记 = 同坐标不同 id "
+                 "(几何等价类, 取锁前建议先核对; 不判业务归属)"),
+    }
+
+
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
 from fastapi.responses import HTMLResponse

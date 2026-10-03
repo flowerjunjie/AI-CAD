@@ -222,6 +222,22 @@ export async function collabRelease(
   return result;
 }
 
+// ─── M5 协同 + duplicate 联动 (bridge.py H 段, 取锁前看元素是否疑似重复) ───
+// GET /api/collab/elements?sample=X → CollabElements (真实 CAD 元素 id 清单
+// + duplicate_of 标记, 协同面板资源下拉数据源; 取锁前提示「疑似重复, 建议核对」)。
+// 诚实标注: 只报几何重复线索, 不判业务归属 (取锁不被禁止)。
+
+export async function fetchCollabElements(sample: string): Promise<import('./useEngineStore').CollabElements | null> {
+  const store = useEngineStore.getState();
+  store.setCollabElementsLoading(true);
+  const result = await getJson<import('./useEngineStore').CollabElements>(
+    `/api/collab/elements?sample=${encodeURIComponent(sample)}`,
+  );
+  store.setCollabElementsLoading(false);
+  if (result) store.setCollabElements(result);
+  return result;
+}
+
 // ─── M2 制图约定对齐工具 (bridge.py I 段, 扫 DWG → 图层/块名频率报告) ───
 // GET /api/dwg-scan?sample=X.dxf → DwgScanResult (诚实两态: 有数据/缺图层空报告)。
 // 专家据此把 docs/element-upstream-contract.md §5 的 TBD 映射 dict 回填成选择题。

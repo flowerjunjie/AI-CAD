@@ -582,6 +582,14 @@ body {
   font-size: 11px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
 }
 .collab-release-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* M5 协同 + duplicate 联动: 「拉元素」按钮 (拉真实 CAD 元素清单) + 取锁前重复警示 */
+.collab-scan-btn {
+  background: #16213e; border: 1px solid #7c6ee5; color: #7c6ee5;
+  font-size: 11px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+}
+.collab-scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* 取锁前「疑似重复」警示: 琥珀色 (区别于品红 hit / 绿 ok), 呼应 duplicate 冲突色 */
+.clash-item.clash-warn { border-left-color: #f5a623; background: #1a1508; }
 
 /* M2 制图约定对齐区块: 蓝紫色系 = 出图规范/图层 (区别于碰撞品红、协同琥珀) */
 .dwgscan-section { margin-top: 16px; }

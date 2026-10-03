@@ -144,6 +144,24 @@ export interface DwgScanResult {
   note?: string;
 }
 
+// ─── M5 协同 + duplicate 联动 (bridge.py H 段, 取锁前看元素是否疑似重复) ───
+
+/** 单个可锁资源元素 (bridge /api/collab/elements 的 resources[i])。 */
+export interface CollabResource {
+  id: string;
+  category: string;            // 元素类: doors/outlets/pipes...
+  duplicate_of: string | null; // 同坐标不同 id 的对端 (疑似重复, 无则 null)
+  coord?: number[];           // 坐标 (仅 duplicate 元素透出)
+}
+
+/** GET /api/collab/elements?sample=X 响应 (协同面板资源下拉的数据源)。 */
+export interface CollabElements {
+  sample: string;
+  resources: CollabResource[];
+  duplicate_count: number;
+  note?: string;
+}
+
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
 
 /** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
@@ -221,6 +239,9 @@ interface EngineState {
   // M2 制图约定对齐工具 (bridge I 段, 扫 DWG → 图层/块名频率报告)
   dwgScan: import('./useEngineStore').DwgScanResult | null;
   dwgScanLoading: boolean;
+  // M5 协同 + duplicate 联动 (bridge H 段, 取锁前看元素是否疑似重复)
+  collabElements: import('./useEngineStore').CollabElements | null;
+  collabElementsLoading: boolean;
   // 人在回路确认闸 (bridge G 段, 演示通路)
   confirmResults: import('./engineApi').AgentConfirmResult[];
   confirmLoading: boolean;
@@ -242,6 +263,8 @@ interface EngineState {
   setCollabLoading: (l: boolean) => void;
   setDwgScan: (r: import('./useEngineStore').DwgScanResult | null) => void;
   setDwgScanLoading: (l: boolean) => void;
+  setCollabElements: (r: import('./useEngineStore').CollabElements | null) => void;
+  setCollabElementsLoading: (l: boolean) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
   setAgentRun: (r: import('./engineApi').AgentRunResult | null) => void;
@@ -265,7 +288,9 @@ export const useEngineStore = create<EngineState>((set) => ({
   collabOps: [],
   collabLoading: false,
   dwgScan: null,
+  collabElements: null,
   dwgScanLoading: false,
+  collabElementsLoading: false,
   confirmResults: [],
   confirmLoading: false,
   agentRun: null,
@@ -285,6 +310,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   setCollabLoading: (collabLoading) => set({ collabLoading }),
   setDwgScan: (dwgScan) => set({ dwgScan }),
   setDwgScanLoading: (dwgScanLoading) => set({ dwgScanLoading }),
+  setCollabElements: (collabElements) => set({ collabElements }),
+  setCollabElementsLoading: (collabElementsLoading) => set({ collabElementsLoading }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
   setAgentRun: (agentRun) => set({ agentRun }),

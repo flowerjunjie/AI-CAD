@@ -4,7 +4,7 @@ import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
         runClashCheck, runConflict, runAgentConfirm, runAgentStart,
         fetchCollabSnapshot, collabAcquire, collabRelease,
-        runDwgScan } from './engineApi';
+        fetchCollabElements, runDwgScan } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -28,6 +28,7 @@ function App() {
     confirmResults, confirmLoading,
     collabSnapshot, collabOps, collabLoading,
     dwgScan, dwgScanLoading,
+    collabElements, collabElementsLoading,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +72,8 @@ function App() {
 
   // M5 在线协同持久层 (bridge H 段): 本地锁演示 — 设计师对资源(图稿)取/放写锁,
   // 快照透出写锁持有者 + 事件时间线 (append-only)。诚实标注: 单进程本地, 非跨设计师同步。
+  // M5 + duplicate 联动: 资源下拉换成真实 CAD 元素 id (/api/collab/elements),
+  // 取锁前若选中元素是「同坐标不同 id 的疑似重复」→ 琥珀色提示「建议先核对」。
   const [collabDesigner, setCollabDesigner] = useState('alice');
   const [collabResource, setCollabResource] = useState('sheet-a');
   const handleCollabSnapshot = useCallback(() => {
@@ -82,6 +85,15 @@ function App() {
   const handleCollabRelease = useCallback(async () => {
     await collabRelease(collabDesigner, collabResource);
   }, [collabDesigner, collabResource]);
+  // 加载当前 lastSample 的真实元素清单 (协同面板资源下拉数据源 + 取锁前 duplicate 提示)
+  const handleCollabElements = useCallback(async () => {
+    await fetchCollabElements(lastSample);
+  }, [lastSample]);
+  // 选中资源的重复标记 (取锁前提示用): duplicate_of 非空 = 疑似重复
+  const selectedCollabResource = collabElements?.resources?.find(
+    (r) => r.id === collabResource,
+  );
+  const collabDupWarn = selectedCollabResource?.duplicate_of ?? null;
 
   // M2 制图约定对齐 (bridge /api/dwg-scan): 扫 DWG → 图层/块名/ATTRIB 频率报告,
   // 专家据此把映射 dict 从填空题变选择题。默认扫电气样例 (电气是唯一有真实 DWG 上游的专业)。
@@ -325,7 +337,7 @@ function App() {
             ))}
           </div>
 
-          {/* M5 在线协同持久层 — 本地锁演示 (bridge H 段, 品红色呼应 CLASH 层) */}
+          {/* M5 在线协同持久层 — 本地锁演示 + duplicate 联动 (bridge H 段, 品红色呼应 CLASH 层) */}
           <div className="collab-section">
             <div className="clash-head-row">
               <h3>协同持久层 <span className="collab-tag">local</span></h3>
@@ -352,10 +364,22 @@ function App() {
                 onChange={(e) => setCollabResource(e.target.value)}
                 className="conflict-select"
               >
-                {['sheet-a', 'sheet-b', 'plan-1'].map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
+                {collabElements?.resources?.length ? collabElements.resources.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.category}/{r.id}{r.duplicate_of ? ` (≈${r.duplicate_of})` : ''}
+                  </option>
+                )) : (
+                  <option value="sheet-a">sheet-a</option>
+                )}
               </select>
+              <button
+                className="btn-sm collab-scan-btn"
+                onClick={handleCollabElements}
+                disabled={!engineConnected || collabElementsLoading}
+                title="拉当前 lastSample 的真实 CAD 元素清单 (取锁前看是否疑似重复)"
+              >
+                {collabElementsLoading ? '…' : '拉元素'}
+              </button>
               <button
                 className="btn-primary btn-sm"
                 onClick={handleCollabAcquire}
@@ -371,6 +395,16 @@ function App() {
                 放锁
               </button>
             </div>
+            {/* M5 + duplicate 联动: 选中资源疑似重复 (同坐标不同 id) → 琥珀色取锁前提示 */}
+            {collabDupWarn && (
+              <div className="clash-item clash-warn">
+                <span className="clash-kind clash-kind-dup">疑似重复</span>
+                <span className="clash-scope">
+                  {collabResource} 与 {collabDupWarn} 同坐标 (几何等价类)
+                </span>
+                <p className="clash-empty">取锁前建议先核对是否为误建 (业务上是否允许同坐标由专家定)</p>
+              </div>
+            )}
             {collabSnapshot ? (
               <div className={`clash-item ${Object.keys(collabSnapshot.write_holders).length > 0 ? 'clash-hit' : 'clash-ok'}`}>
                 <div className="clash-line">
@@ -654,6 +688,15 @@ function App() {
             const allLit = p.disciplinePrefixes?.length
               ? litPrefixes.length === p.disciplinePrefixes.length
               : false;
+            // M4 容差 + M1 卡联动: m4-collision 卡点亮时, 透出当前容差取值来源
+            // (取自最近一次 M4 碰撞检测的 tolerance_source: param/dsl/default),
+            // 让专家看到「现在生效的是哪档值」 — 不虚标, 没跑过碰撞检测则不显示。
+            const m4TolSource = p.id === 'm4-collision'
+              ? [...clashResults].reverse().find((r) => r.tolerance_source)?.tolerance_source
+              : undefined;
+            const m4TolVal = p.id === 'm4-collision'
+              ? [...clashResults].reverse().find((r) => r.tolerance_m !== undefined)?.tolerance_m
+              : undefined;
             return (
               <div
                 key={p.id}
@@ -678,6 +721,12 @@ function App() {
                         </span>
                       );
                     })}
+                  </div>
+                )}
+                {/* M4 容差来源透出 (卡联动): 点亮态才显示, 没跑过检测不虚标 */}
+                {allLit && m4TolSource && (
+                  <div className="ph-tol-source">
+                    容差 {m4TolVal ?? '?'} m · 来源 <b>{m4TolSource}</b>
                   </div>
                 )}
                 <div className="ph-domain">{p.domain}</div>

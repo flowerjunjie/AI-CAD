@@ -105,6 +105,70 @@ def test_local_lock_endpoints(tmp_path):
     print("PASS test_local_lock_endpoints")
 
 
+def test_collab_elements_lists_real_ids_and_duplicate_flag():
+    """M5 协同 + duplicate 联动: /api/collab/elements 吐真实 CAD 元素 id 清单
+    + 重复标记 (duplicate_of), 协同面板资源下拉数据源。
+    residential sample 无几何重复 → duplicate_count=0 (诚实, 不造假)。"""
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/elements",
+                         params={"sample": "residential_100sqm.json"})
+    assert resp.status_code == 200, f"应 200, 实际 {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert body["sample"] == "residential_100sqm.json"
+    # 真实元素 id 清单 (doors/walls/pipes/outlets/... 全量, 非硬编码 sheet-a)
+    ids = {r["id"] for r in body["resources"]}
+    assert len(body["resources"]) >= 10, f"应列真实元素, 实际 {len(body['resources'])}"
+    assert "d1" in ids or any(i.startswith("d") for i in ids), "应含门元素 id"
+    # 每条资源带 category + duplicate_of (无重复为 None) + 诚实 note
+    for r in body["resources"]:
+        assert "category" in r and "duplicate_of" in r, f"资源缺字段: {r}"
+    assert body["note"], "应诚实标注『不判业务归属』"
+    print("PASS test_collab_elements_lists_real_ids_and_duplicate_flag")
+
+
+def test_collab_elements_missing_sample_404():
+    """sample 不存在 → 404 诚实, 不造假资源清单。"""
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/elements", params={"sample": "no_such.json"})
+    assert resp.status_code == 404, f"缺样本应 404, 实际 {resp.status_code}"
+    print("PASS test_collab_elements_missing_sample_404")
+
+
+def test_collab_elements_duplicate_marking():
+    """构造同坐标不同 id 元素 → duplicate_count > 0 + 互标 duplicate_of。
+
+    往 residential sample 拷一份 + 造两个同坐标不同 id 插座, 验端点真命中。"""
+    import json as _json
+    import os as _os
+    # 读真实 sample, 造一份含重复的副本 (放 tmp, 不污染真盘)
+    src = _os.path.join(project_root, "data", "sample", "residential_100sqm.json")
+    with open(src, encoding="utf-8") as fh:
+        data = _json.load(fh)
+    # 把两个插座放同坐标不同 id (o1/o2 都 (1,1))
+    data["outlets"] = [
+        {"id": "o1", "x": 1.0, "y": 1.0},
+        {"id": "o2", "x": 1.0, "y": 1.0},
+    ]
+    tmp_sample = _os.path.join(project_root, "data", "sample", "_tmp_dup_test.json")
+    with open(tmp_sample, "w", encoding="utf-8") as fh:
+        _json.dump(data, fh)
+    try:
+        with TestClient(app) as client:
+            resp = client.get("/api/collab/elements",
+                             params={"sample": "_tmp_dup_test.json"})
+        assert resp.status_code == 200, f"应 200, 实际 {resp.status_code}: {resp.text}"
+        body = resp.json()
+        # o1/o2 同坐标 → duplicate_count=1 + 互标 duplicate_of
+        assert body["duplicate_count"] >= 1, f"应检出重复, 实际 {body['duplicate_count']}"
+        by_id = {r["id"]: r for r in body["resources"]}
+        assert by_id["o1"]["duplicate_of"] == "o2", f"o1 应标 o2, 实际 {by_id['o1']}"
+        assert by_id["o2"]["duplicate_of"] == "o1", "o2 应标 o1"
+        print("PASS test_collab_elements_duplicate_marking")
+    finally:
+        if _os.path.exists(tmp_sample):
+            _os.remove(tmp_sample)
+
+
 if __name__ == "__main__":
     test_collab_snapshot_empty_honest()
     test_no_cross_designer_sync_endpoint()
@@ -122,4 +186,6 @@ if __name__ == "__main__":
             r = client.get("/api/collab/snapshot")
             assert r.json()["write_holders"].get("s1") == "carol"
         bridge._COLLAB_STATE_PATH = _os.path.join(project_root, "no-such-collab-<none>.json")
+    # 注: test_collab_elements_* 读真实 data/sample (residential), 直跑也能验
+    #   (不碰 tmp, 无 fixture 依赖), 在 pytest 全量里跑; 直跑只列上面 3 个核心
     print("OK: all collab snapshot endpoint tests passed")

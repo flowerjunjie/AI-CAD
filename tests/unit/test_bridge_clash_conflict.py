@@ -67,10 +67,12 @@ def _build_clashing_raw() -> dict:
 
 
 def test_clash_sample_present_no_fake():
-    """/api/clash 默认 sample 存在 → 200, 返回结构固定 {sample, tolerance_m, clashes, count}。
+    """/api/clash 默认 sample 存在 → 200, 返回结构固定 {sample, tolerance_m, tolerance_source, clashes, count}。
 
     residential_100sqm.json 几何上无跨专业碰撞 → count=0 空列表 (诚实, 不造假)。
-    本用例守护的是「结构稳定 + 不崩」, 命中路径由 monkeypatch 用例覆盖。
+    M4 容差 + M1 卡联动: tolerance_source 透出取值来源 (默认走 default.json 规则
+    → 'dsl', 显式 query 覆盖 → 'param'), 让前端 M4 占位卡看到「现在生效哪档值」。
+    本用例守护的是「结构稳定 + 不崩 + 来源标注不虚标」, 命中路径由 monkeypatch 用例覆盖。
     """
     with TestClient(app) as client:
         resp = client.get(f"/api/clash?sample={_SAMPLE}")
@@ -79,8 +81,26 @@ def test_clash_sample_present_no_fake():
         assert body["sample"] == _SAMPLE
         assert body["count"] == len(body["clashes"])
         assert body["tolerance_m"] == 0.15
+        # M4 容差来源透出: 默认 (无 query 覆盖) 走 default.json clash-tolerance-range
+        # 规则 params → 来源 "dsl" (专家改 JSON 即变值, 不虚标成 "param")
+        assert body["tolerance_source"] == "dsl", \
+            f"默认容差应走 dsl 来源, 实际 {body.get('tolerance_source')}"
         # 无碰撞时: 空列表且 count=0 (诚实降级, 不造假)
         assert body["clashes"] == [] and body["count"] == 0
+
+
+def test_clash_tolerance_source_param_override():
+    """M4 容差 + M1 卡联动: 显式 query tolerance_m=0.3 → 来源 "param" (压过 dsl)。
+
+    前端 M4 占位卡据此透出「现在生效 param 档」; 显式 param 优先于 default.json
+    规则值 (resolve_clash_tolerance 优先级: param > dsl > default)。"""
+    with TestClient(app) as client:
+        resp = client.get(f"/api/clash?sample={_SAMPLE}&tolerance_m=0.3")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["tolerance_m"] == 0.3
+        assert body["tolerance_source"] == "param", \
+            f"显式 query 应走 param 来源, 实际 {body.get('tolerance_source')}"
 
 
 def test_clash_missing_sample_404():
