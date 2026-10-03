@@ -120,9 +120,40 @@ def test_test_status_last_refresh_line_present():
     print("PASS test_test_status_last_refresh_line_present")
 
 
+def test_test_status_trend_table_is_anchored():
+    r"""水位趋势表必须存在 + 每行带 commit/日期锚点 (防趋势退化成裸数字)。
+
+    趋势表是历史快照: 护栏要认得它「该放行」, 判据 = 表在 + 表头含 commit 列 +
+    每个数据行都有日期或 commit 锚 (正则 \d{4}-\d{2}-\d{2} 或 6 位 hex)。
+    若趋势表被误删成「只有数字没有锚点」, 本测试炸 — 那等于把历史造假了。"""
+    body = _read("docs/test-status.md")
+    assert "水位趋势" in body, "test-status.md 应含「水位趋势」段 (历史快照)"
+    # 趋势表头: 必含 commit/日期列 (锚点来源)
+    m = re.search(r"## 水位趋势.*?\n(.*?\n)*?(?=\n## |\Z)", body, re.S)
+    assert m, "水位趋势段应可定位"
+    table = m.group(0)
+    assert re.search(r"commit|日期", table), "趋势表头应含 commit/日期列 (锚点)"
+    # 每个数据行 (以 | 开头, 非表头/分隔行) 必须带日期或 commit 锚
+    data_rows = [
+        ln for ln in table.splitlines()
+        if ln.strip().startswith("|")
+        and not re.match(r"^\|[\s:|\-]+\|$", ln.strip())   # 跳过分隔行
+        and not re.search(r"日期\s*\|", ln)                  # 跳过表头行
+    ]
+    anchored = 0
+    for row in data_rows:
+        if re.search(r"\d{4}-\d{2}-\d{2}|\b[0-9a-f]{6,7}\b", row):
+            anchored += 1
+    assert data_rows, "趋势表无数据行 (退化成空表)"
+    assert anchored == len(data_rows), \
+        f"趋势表 {len(data_rows)-anchored} 行缺 commit/日期锚 (防造假, 每行必须锚定)"
+    print(f"PASS test_test_status_trend_table_is_anchored ({anchored}/{len(data_rows)} 行带锚)")
+
+
 if __name__ == "__main__":
     test_single_source_exists_with_live_number()
     test_single_source_number_is_sane()
     test_live_docs_reference_single_source_not_hardcode()
     test_test_status_last_refresh_line_present()
+    test_test_status_trend_table_is_anchored()
     print("OK: doc test-water-level single-source guardrail tests passed")

@@ -10,10 +10,10 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   451 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   452 passed / 5 skipped / 0 failed
 ```
 
-- **测试文件**：53（49 unit + 4 integration；含 2026-10-03 新增的文档水位护栏 test_doc_test_waterlevel）
+- **测试文件**：53（49 unit + 4 integration；含 2026-10-03 新增的文档水位护栏 test_doc_test_waterlevel，5 测试）
 - **5 skipped**：外部依赖用例（4 条 langgraph 框架需 `AI_CAD_RUN_FRAMEWORK=1`；
   1 条 LLM 需 `AGNES_API_KEY`），非缺陷。
 - **冒烟**：`python scripts/smoke_test.py` 秒级验 5 大核心不变量（0.4s）。
@@ -24,10 +24,27 @@ python -m pytest tests/ -q   →   451 passed / 5 skipped / 0 failed
 ```bash
 # 1. 实跑拿权威数字
 python -m pytest tests/ -q 2>&1 | tail -1
-# 2. 把上面那行数字填进「当前水位」代码块 (只改 451 这处, 别碰历史段落)
+# 2. 把上面那行数字填进「当前水位」代码块 (只改 452 这处, 别碰历史段落)
+# 3. 往「水位趋势」表尾追加一行 (日期 + passed + 触发 + commit), 绝不回改历史行
 ```
 
 **约定**：CI / 收口 commit 前，把实跑数字回填到本文「当前水位」段；
 **绝不**把带时间戳的历史段落（如 DELIVERY 第 250 行"数据截止 2026-09-30 … 409"）当活数字改。
 
-*最后刷新：2026-10-03 · 451 passed / 5 skipped / 0 failed（对应 commit `4812064` 后 + 文档水位护栏 4 测试）*
+## 水位趋势（历史快照，带 commit 锚点，不随当前水位改）
+
+> 每条 = 某次推水位时的快照，**必须带 commit 短哈希 + 日期**（这是护栏认得
+> 出「历史段落」的特征：带 commit 锚点的活数字放行，不判成裸活数字）。
+> 推水位时**往表尾追加一行**，绝不回改历史行（那是审计痕迹，改了造假）。
+
+| 日期 | passed | 触发 | commit | 备注 |
+|------|-------|------|--------|------|
+| 2026-09-30 | 409 | 人在回路 session 级 + M5 权限/协同骨架 | `4812064~`* | 打包交付基线（历史锚点，见 DELIVERY §250 行） |
+| 2026-10-03 | 447 | M5 duplicate 出图 + M1 回填 + M2 扫描 + 两轮联动 | `4812064` | 文档同步收口水位 |
+| 2026-10-03 | 451 | + 文档水位单一源护栏（test_doc_test_waterlevel 4 测试） | `1a38ba9` | 单一事实源 + 回归护栏 |
+| 2026-10-03 | 452 | + 水位趋势表护栏（test_doc_test_waterlevel 5 测试） | 本轮 | 趋势表带 commit 锚, 护栏认历史快照 |
+
+\* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
+趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
+
+*最后刷新：2026-10-03 · 452 passed / 5 skipped / 0 failed（水位趋势表护栏落地）*
