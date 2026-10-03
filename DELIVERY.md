@@ -1,8 +1,8 @@
 # AI-CAD · 技术实力展示与交付报告
 
-> 生成日期: 2026-09-24 · 最后同步: 2026-09-28（M3 出图深化 + M4 多专业碰撞检测落地）
-> 项目状态: **四专业出图 + 规则 DSL 引擎 + 写回落盘 + LLM Agent 全链路 + M3 出图深化 + M4 碰撞检测** ✅
-> 测试: **281 passed / 5 skipped / 0 failed** · 冒烟脚本秒级验证
+> 生成日期: 2026-09-24 · 最后同步: 2026-10-03（M5 duplicate 出图 + M1 回填 CLI/GUI + M2 扫描工具 + M5 协同+duplicate 联动 + M4 容差→M1 卡 + M4 来源→/api/rules）
+> 项目状态: **四专业出图 + 规则 DSL 引擎 + 写回落盘 + LLM Agent 全链路 + M3 出图深化 + M4 碰撞 + M5 冲突/duplicate + M1 回填 + M2 制图对齐工具** ✅
+> 测试: **447 passed / 5 skipped / 0 failed** · 冒烟脚本秒级验证（52 个测试文件: 48 unit + 4 integration）
 >
 > **界面快速入口**：双击 `build/dist/ai_cad_gui/ai_cad_gui.exe`（交付态，端口自动探测，浏览器自动弹出）
 > 开发态入口：`python start_gui.py`（需 node/vite，端口 3000）
@@ -72,17 +72,62 @@
   出图侧 `task_type=clash` 画品红警示圈（CLASH 层，有碰撞才出，无碰撞 0 实体）。
 - 无碰撞样本违规数不变（回归安全），真实碰撞样本可肉眼定位。
 
-### 2.3.3 M5 改动冲突检测（两稿 raw JSON 比对，自主子集）
+### 2.3.3 M5 改动冲突检测（两稿 raw JSON 比对 + 几何等价类维度，自主子集）
 
 - 核心库 `conflict_detection.py`（纯函数，仿 M4 范式）：`diff_elements` +
   `detect_conflicts` + `summarize_conflicts`，按元素类 + id 对齐比对，
   覆盖 value（同 id 字段值不同，含嵌套 list 深比较 / 缺字段）/
   added（稿 B 新增）/ removed（稿 B 删除）三类冲突。
+- **几何等价类维度（M5 扩展）**：`detect_duplicate_elements` 抓「同坐标不同 id
+  = 疑似重复元素」——跨两稿全量扫，点位类（插座 x/y）按 2 元坐标、线段类
+  （管线 start/end）按端点排序 4 元归一化（方向不敏感，同几何反向不算重复），
+  组内 >1 个不同 id 即判重复。只报「几何重复」线索，不判业务归属（业务上是否
+  允许同坐标由专家定，不虚标）。`detect_conflicts` 默认开启（老调用方可关，
+  向后兼容），`summarize_conflicts` 加 `duplicates` 计数。
+- **出图侧（M5 增量）**：`DXFWriter.add_duplicate_marker` 画琥珀色（ACI 32）
+  DUP/DUP_LABEL 圈，与 M4 碰撞品红 CLASH 圈视觉区分（碰撞=元素互撞，重复=同坐标
+  不同 id）；`cad_execute_node task_type=conflict` 对重复元素画 DUP 圈 + `duplicates_marked`
+  计数，无重复 0 实体（回归安全）。
 - 主链路 `task_type="conflict"` 接入（无第二稿默认 no-op，0 冲突 0 出图，
   既有测试不破）；`rule_check_node` 仅在提供 `conflict_raw_b` 且确有冲突时
   追加汇总违规。
 - **边界诚实标注**：多设计师权限模型 / 在线协同仍是占位（需业务定模型），
-  本次只落地"改动冲突检测"这一无外部依赖的自主子集。
+  本次只落地"改动冲突检测 + 几何等价类"这一无外部依赖的自主子集。
+
+### 2.3.4 M1 数值回填工具（专家定值 → default.json → 点亮占位卡，零代码）
+
+- **离线 CLI** `scripts/backfill_rule_values.py`：一行命令回填单规则的
+  `confirmed` / `confidence` / `confirm_note` / `param_defaults`（改 JSON 即点亮占位卡），
+  写盘前自动备份 `.bak`（可回滚），未找到规则列可用项，参数值 JSON 序列化。
+- **GUI 入口** `POST /api/rules/backfill`：专家在规则编辑器面板点「回填并确认」
+  即写盘 + 刷新（比 DSL apply 全量重写轻，单规则粒度）；`confidence` 白名单
+  （low/medium/high，422 拒非法，不虚标高），备份 `.bak.<ts>` + fail-fast 重载兜底
+  （红线一不留坏盘），写盘后提示「跑 /api/rules 验证点亮」（不冒称已点亮）。
+- 诚实边界：M1 数值**终确认**仍需各专业专家按 GB 条文背书（`confirmed=true` 仅
+  标记「机制已落地 + 几何/逻辑默认合理」，`confidence` 维持 medium 不虚标高）。
+
+### 2.3.5 M2 制图约定对齐工具（把「各院 DWG 图层/块名映射」从填空变选择）
+
+- 核心库 `dwg_layer_scan.py`（纯函数，仿 M4 范式）：扫真实 DXF → 图层 ×
+  实体类型 × INSERT 块名 × ATTRIB tag **频率报告**（JSON 可序列化），块名按
+  频率降序 + 同频名序（可复现），缺文件/坏 DXF → 诚实空报告（不崩不造假）。
+- **双通路**：离线 CLI `scripts/dwg_layer_scan.py <dxf>` + GUI `GET /api/dwg-scan`
+  （前端「扫图层」按钮，蓝紫区块），业务专家对着报告把 `docs/element-upstream-contract.md`
+  §5 的 TBD 映射 dict 回填成选择题——不必凭记忆口述「点位画在哪层、用什么块」。
+- 边界诚实：工具**只报频率，不判定「哪个图层=梁/柱/插座」**——那是业务约定，
+  专家看报告回填映射 dict（改 JSON 即生效，不动本工具）。
+
+### 2.3.6 M4 碰撞容差取值通道（expert-fill 即调参，与 M1 同叙事）
+
+- `clash_detection.resolve_clash_tolerance`（纯函数）：取值优先级
+  param（会话级覆盖）> dsl（`default.json` 的 `clash-tolerance-range` 规则
+  params）> 几何默认 0.15，返回 `(值, 来源标注)` 不虚标。
+- 三处硬编码 0.15 全换取值通道：`rule_check_node` / `cad_execute_node(clash)` /
+  bridge `/api/clash`（响应加 `tolerance_source` 透出）。
+- **M4 容差 → M1 卡联动**：`clash-tolerance-range` 规则 `confirmed=true` 点亮 M4
+  占位卡（与 M1「专家填值即点亮」同叙事）；容差来源透出 `/api/clash` +
+  `/api/rules`（规则列表也带 `tolerance_source`，与 /api/clash 同源同判据，
+  一致性测试钉死不漂移）。专家改 `params.clash_tolerance_m` 即变值零代码。
 
 ### 2.4 RAG 规范知识库（本地）
 

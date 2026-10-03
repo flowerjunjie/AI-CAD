@@ -25,20 +25,29 @@
 | 方法·路径 | 请求 | 响应 (JSON) | 底层来源 (已实现) |
 |---|---|---|---|
 | `GET /api/health` | – | `{"status":"ok","phase":"Phase 6","modules":{"rules":n,"dsl":m,"rag":bool,"llm":bool}}` | get_engine().list_rules() 计数 |
-| `GET /api/rules` | – | `[{rule_id,name,code_ref,severity,source,enabled}]` source∈{hardcoded,dsl} | engine.list_rules() + DSL |
+| `GET /api/rules` | – | `[{rule_id,name,code_ref,severity,source,enabled,confirmed,tolerance_source,tolerance_m}]` source∈{hardcoded,dsl}; tolerance_source 仅 clash-tolerance-range 规则带值 (M4 容差→M1 卡联动), 其余 null | engine.list_rules() + DSL + resolve_clash_tolerance |
 | `POST /api/pipeline` | `{"sample":"residential_100sqm.json","use_llm":false}` | `{"project_type","zones":[{name,type,area}],"task_count","violations":[violation],"dwg_path","preview_url"}` | run_agent_demo(inject_sample_structure=not use_llm) |
 | `GET /api/preview?sample=residential_100sqm.json` | – | 直接返回 PNG bytes (Content-Type image/png) | render_and_open 逻辑抽成只渲染不弹窗 |
 | `GET /api/rule-violations` | – | 全量规则实测违规演示 `[{...}]` | engine.check([bad elements]) 演示 |
 | `POST /api/rag/search` | `{"query":"疏散走道最小宽度"}` | `{"query","results":[{text,score,category}]}` | RAGKnowledgeBase.search (本地 chroma_db) |
-| `GET /api/clash?sample=&tolerance_m=` | – | `{sample, tolerance_m, tolerance_source, clashes:[{a_id,b_id,kind,detail}], count}` | clash_detection.detect_clashes (M4, 容差取值通道 param>default) |
-| `GET /api/conflict?sample_a=&sample_b=` | – | `{sample_a, sample_b, count, by_category, conflicts:[...], summary}` | conflict_detection.detect_conflicts (M5 两稿比对) |
+| `POST /api/rules/backfill` | `{rule_id, confirmed?, confidence?, confirm_note?, params?}` | `{status:'applied', backup, confirmed, confidence, param_defaults}` (M1 数值回填 GUI 入口, 单规则写盘+备份+fail-fast; confidence 白名单 low/medium/high 不虚标; 未知规则 404) | default.json 单规则写回 (比 DSL apply 全量重写轻) |
+| `GET /api/clash?sample=&tolerance_m=` | – | `{sample, tolerance_m, tolerance_source, clashes:[{a_id,b_id,kind,detail}], count}` | clash_detection.detect_clashes (M4, 容差取值通道 param>default, 来源透出 dsl/param/default) |
+| `GET /api/conflict?sample_a=&sample_b=` | – | `{sample_a, sample_b, count, by_category, conflicts:[...], summary{value_conflicts,added,removed,duplicates}}` | conflict_detection.detect_conflicts (M5 两稿比对 + 几何等价类 duplicate 维度) |
+| `GET /api/collab/elements?sample=` | – | `{sample, resources:[{id,category,duplicate_of,coord}], duplicate_count}` | 真实 CAD 元素 id 清单 + 重复标记 (M5 协同+冲突联动, 取锁前看疑似重复) |
 | `GET /api/collab/snapshot?designer=` | – | `{designer, write_holders, recent_events, event_count, source}` | collab_protocol.make_snapshot (M5 持久层, 只读) |
 | `POST /api/collab/acquire` | `{designer, resource_id, mode}` | 快照 + `{acquired, reason}` (本地锁演示, 非跨设计师同步) | collab_protocol.persistent_acquire |
 | `POST /api/collab/release` | `{designer, resource_id}` | 快照 + `{released}` (幂等, 无锁释放→false) | collab_protocol.persistent_release |
+| `GET /api/dwg-scan?sample=X.dxf` | – | `{sample, layers, entity_type_totals, attrib_tags, layer_count, insert_total}` | dwg_layer_scan (M2 制图约定对齐工具, 图层/块名/ATTRIB 频率报告, 不判定 kind 归属) |
 
-**M2 制图约定对齐工具 (离线 CLI, 非桥端点)**：
-`python scripts/dwg_layer_scan.py <dxf>` → 图层 × 实体类型 × INSERT 块名 × ATTRIB 频率 JSON 报告。
+**M2 制图约定对齐工具 (离线 CLI + GUI 双通路)**：
+- 离线 CLI：`python scripts/dwg_layer_scan.py <dxf>` → 图层 × 实体类型 × INSERT 块名 × ATTRIB 频率 JSON 报告。
+- GUI 通路：前端「扫图层」按钮 → `GET /api/dwg-scan` (同上报告)。
 业务专家据此把 `docs/element-upstream-contract.md` §5 的 TBD 映射 dict 回填成选择题 (选图层/块名对应哪种元素种类), 不必凭记忆口述。只报频率, 不判定 kind 归属。
+
+**M5 冲突几何等价类维度**：`/api/conflict` 的 `summary.duplicates` + `conflicts[].kind='duplicate'`
+(同坐标不同 id = 疑似重复元素, 捕捉设计师两稿「画了同位置但用了不同 id」的常见疏漏);
+出图侧 `cad_execute_node task_type=conflict` 画琥珀色 DUP 圈 (DXFWriter.add_duplicate_marker,
+与 M4 碰撞品红 CLASH 圈视觉区分, 无重复 0 实体)。
 
 **violation 结构**（引擎 `RuleViolation.to_dict()` 已固定，桥原样透出）：
 ```json
