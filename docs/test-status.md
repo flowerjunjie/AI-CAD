@@ -43,7 +43,7 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-03 | 447 | M5 duplicate 出图 + M1 回填 + M2 扫描 + 两轮联动 | `4812064` | 文档同步收口水位 |
 | 2026-10-03 | 451 | + 文档水位单一源护栏（test_doc_test_waterlevel 4 测试） | `1a38ba9` | 单一事实源 + 回归护栏 |
 | 2026-10-03 | 452 | + 水位趋势表护栏（test_doc_test_waterlevel 5 测试） | `40b5911` | 趋势表带 commit 锚, 护栏认历史快照 |
-| 2026-10-04 | 504 | M5 协同正确性地基: verify_event_log 事件日志/锁态自洽校验 + detect_deadlock 等待环检测 (机制层纯函数 + /api/collab/verify + /api/collab/deadlock-check + 端点测试) | `HEAD` | 机制层自主子集 (不需外部专家), 非多机一致 |
+| 2026-10-04 | 504 | M5 协同正确性地基: verify_event_log 事件日志/锁态自洽校验 + detect_deadlock 等待环检测 (机制层纯函数 + /api/collab/verify + /api/collab/deadlock-check + 端点测试) | `4612205` | 机制层自主子集 (不需外部专家), 非多机一致 |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
