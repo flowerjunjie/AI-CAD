@@ -559,6 +559,27 @@ body {
 .clash-detail { color: #666; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clash-empty { font-size: 12px; color: #555; }
 
+/* P5 静默失败显式化: 引擎断连/异常时检测结果区显式错误提示 (区别于空态 clash-empty) */
+.clash-err {
+  font-size: 11px; color: #ff8a80; margin: 4px 0;
+  border-left: 3px solid #e74c3c; background: #1a0f0f; padding: 4px 8px;
+}
+/* P4 结果可回溯: 「已 N 份」计数 + 「最新」标注 + 清除按钮 */
+.clash-count-note { font-size: 10px; color: #667; font-weight: 400; margin-left: 6px; }
+.clash-latest {
+  display: inline-block; font-size: 9px; font-weight: 700; color: #2ecc71;
+  background: #0d1a12; border-radius: 4px; padding: 0 5px; margin-right: 6px;
+}
+.clash-head-actions { display: flex; align-items: center; gap: 6px; }
+.clash-clear-btn {
+  background: transparent; border: 1px solid #555; color: #889;
+  font-size: 11px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+}
+.clash-clear-btn:hover { border-color: #e74c3c; color: #ff8a80; }
+/* P2 出图双通路区分: 主操作旁引导文案 + 人在回路通路说明 */
+.ctl-hint { font-size: 11px; color: #667; margin-left: 8px; }
+.confirm-hint { margin-top: 6px; }
+
 /* M5 区块的稿B 选择器 (暂只有单 sample, 预留下拉后续接真实两稿) */
 .conflict-controls { display: flex; align-items: center; gap: 6px; }
 .conflict-select {

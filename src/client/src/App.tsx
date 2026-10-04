@@ -24,7 +24,8 @@ function App() {
   const {
     engineConnected, phase, rules, violations,
     running, lastSample, pipelineResult, ragResults, ragQuery,
-    clashResults, clashLoading, conflictResults, conflictLoading,
+    clashResults, clashLoading, clashError,
+    conflictResults, conflictLoading, conflictError,
     confirmResults, confirmLoading,
     dwgScan, dwgScanLoading,
   } = useEngineStore();
@@ -125,9 +126,9 @@ function App() {
               className="btn-primary btn-sm"
               onClick={() => setPreviewKey((k) => k + 1)}
               disabled={!engineConnected}
-              title="重新拉取真户型图"
+              title="重新拉取当前出图预览 (不重跑流水线; 重跑请点中列「运行流水线」)"
             >
-              重新出图
+              刷新预览
             </button>
           </div>
 
@@ -188,8 +189,9 @@ function App() {
               启用 LLM 主导（联网·较慢）
             </label>
             <button className="btn-primary" onClick={handleRun} disabled={running || !engineConnected}>
-              {running ? '运行中…' : '运行流水线'}
+              {running ? '运行中…' : '自动出图'}
             </button>
+            <span className="ctl-hint">一键跑全链路出图 (无需人工介入); 想逐 task 把关用下方「人在回路」</span>
           </div>
 
           <div className="agent-status">
@@ -221,20 +223,35 @@ function App() {
           {/* M4 碰撞检测 — 真数据 (bridge /api/clash, 品红色呼应出图 CLASH 层) */}
           <div className="clash-section">
             <div className="clash-head-row">
-              <h3>碰撞检测</h3>
-              <button
-                className="btn-primary btn-sm"
-                onClick={handleClash}
-                disabled={!engineConnected || clashLoading}
-              >
-                {clashLoading ? '检测中…' : '检测碰撞'}
-              </button>
+              <h3>碰撞检测{clashResults.length > 1 ? <span className="clash-count-note">已 {clashResults.length} 份</span> : null}</h3>
+              <div className="clash-head-actions">
+                {clashResults.length > 0 && (
+                  <button
+                    className="btn-sm clash-clear-btn"
+                    onClick={() => { useEngineStore.getState().setClashResults([]); useEngineStore.getState().setClashError(false); }}
+                    title="清除全部碰撞检测结果"
+                  >
+                    清空
+                  </button>
+                )}
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={handleClash}
+                  disabled={!engineConnected || clashLoading}
+                >
+                  {clashLoading ? '检测中…' : '检测碰撞'}
+                </button>
+              </div>
             </div>
-            {clashResults.length === 0 && (
+            {clashError && (
+              <p className="clash-err">引擎断连或返回异常 · 本次检测未生效, 请检查右上角连接状态后重试</p>
+            )}
+            {clashResults.length === 0 && !clashError && (
               <p className="clash-empty">尚未检测 — 点「检测碰撞」跑 {lastSample} 的跨专业碰撞 (管线/暖通 vs 结构梁柱)</p>
             )}
             {clashResults.map((r, i) => (
               <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                {i === clashResults.length - 1 && <span className="clash-latest">最新</span>}
                 {r.count > 0 ? (
                   <>
                     <span className="clash-badge">{r.count}</span>
@@ -262,7 +279,7 @@ function App() {
           {/* M5 改动冲突检测 — 真数据 (bridge /api/conflict, 两稿按元素 id 比对) */}
           <div className="conflict-section">
             <div className="clash-head-row">
-              <h3>改动冲突 (两稿比对)</h3>
+              <h3>改动冲突 (两稿比对){conflictResults.length > 1 ? <span className="clash-count-note">已 {conflictResults.length} 份</span> : null}</h3>
               <div className="conflict-controls">
                 <select
                   value={conflictSampleB}
@@ -278,13 +295,26 @@ function App() {
                 >
                   {conflictLoading ? '比对中…' : '比冲突'}
                 </button>
+                {conflictResults.length > 0 && (
+                  <button
+                    className="btn-sm clash-clear-btn"
+                    onClick={() => { useEngineStore.getState().setConflictResults([]); useEngineStore.getState().setConflictError(false); }}
+                    title="清除全部冲突比对结果"
+                  >
+                    清空
+                  </button>
+                )}
               </div>
             </div>
-            {conflictResults.length === 0 && (
+            {conflictError && (
+              <p className="clash-err">引擎断连或返回异常 · 本次比对未生效, 请检查右上角连接状态后重试</p>
+            )}
+            {conflictResults.length === 0 && !conflictError && (
               <p className="clash-empty">尚未比对 — 点「比冲突」比对稿A与稿B 的元素改动 (改值/新增/删除)</p>
             )}
             {conflictResults.map((r, i) => (
               <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
+                {i === conflictResults.length - 1 && <span className="clash-latest">最新</span>}
                 {r.count > 0 ? (
                   <>
                     <span className="clash-badge">{r.count}</span>
@@ -388,6 +418,9 @@ function App() {
                 {confirmLoading ? '起图中…' : '起图挂起'}
               </button>
             </div>
+            <p className="clash-empty confirm-hint">
+              人工把关通路 — 起图挂起后逐 task 放行/拒绝 (与上方「自动出图」区分: 自动=一键全链路, 这里=同 thread 真续跑)
+            </p>
             {agentRun && (
               <div className={`clash-item ${agentRun.pending_task_count > 0 ? 'clash-hit' : 'clash-ok'}`}>
                 <span className="clash-scope">

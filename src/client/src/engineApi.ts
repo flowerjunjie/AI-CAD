@@ -148,6 +148,10 @@ export async function runClashCheck(sample: string): Promise<ClashResult | null>
   if (result) {
     // 追加而非覆盖: 多次检测不同 sample 可并存, 面板肉眼可区分
     store.setClashResults([...store.clashResults, result]);
+    store.setClashError(false);
+  } else {
+    // 断连/非 2xx → 显式 error 态 (P5 静默失败显式化, 不静默无反馈)
+    store.setClashError(true);
   }
   return result;
 }
@@ -161,6 +165,9 @@ export async function runConflict(sampleA: string, sampleB: string): Promise<Con
   store.setConflictLoading(false);
   if (result) {
     store.setConflictResults([...store.conflictResults, result]);
+    store.setConflictError(false);
+  } else {
+    store.setConflictError(true);
   }
   return result;
 }
@@ -201,7 +208,6 @@ export async function collabAcquire(
   store.setCollabLoading(false);
   if (result) {
     store.setCollabSnapshot(result);  // 操作响应即新快照
-    store.appendCollabOp(result);
   }
   return result;
 }
@@ -217,7 +223,6 @@ export async function collabRelease(
   store.setCollabLoading(false);
   if (result) {
     store.setCollabSnapshot(result);
-    store.appendCollabOp(result);
   }
   return result;
 }

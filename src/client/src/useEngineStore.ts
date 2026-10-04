@@ -268,11 +268,12 @@ interface EngineState {
   // M4 碰撞 / M5 冲突 (bridge F 段)
   clashResults: ClashResult[];
   clashLoading: boolean;
+  clashError: boolean;
   conflictResults: ConflictResult[];
   conflictLoading: boolean;
+  conflictError: boolean;
   // M5 在线协同持久层 (bridge H 段, 本地锁演示)
   collabSnapshot: import('./useEngineStore').CollabSnapshot | null;
-  collabOps: import('./engineApi').CollabLockOp[];
   collabLoading: boolean;
   // M2 制图约定对齐工具 (bridge I 段, 扫 DWG → 图层/块名频率报告)
   dwgScan: import('./useEngineStore').DwgScanResult | null;
@@ -299,10 +300,11 @@ interface EngineState {
   setRagResults: (q: string, r: RAGResult[]) => void;
   setClashResults: (c: ClashResult[]) => void;
   setClashLoading: (l: boolean) => void;
+  setClashError: (e: boolean) => void;
   setConflictResults: (c: ConflictResult[]) => void;
   setConflictLoading: (l: boolean) => void;
+  setConflictError: (e: boolean) => void;
   setCollabSnapshot: (s: import('./useEngineStore').CollabSnapshot | null) => void;
-  appendCollabOp: (op: import('./engineApi').CollabLockOp) => void;
   setCollabLoading: (l: boolean) => void;
   setDwgScan: (r: import('./useEngineStore').DwgScanResult | null) => void;
   setDwgScanLoading: (l: boolean) => void;
@@ -328,10 +330,11 @@ export const useEngineStore = create<EngineState>((set) => ({
   ragQuery: '',
   clashResults: [],
   clashLoading: false,
+  clashError: false,
   conflictResults: [],
   conflictLoading: false,
+  conflictError: false,
   collabSnapshot: null,
-  collabOps: [],
   collabLoading: false,
   dwgScan: null,
   collabElements: null,
@@ -352,10 +355,11 @@ export const useEngineStore = create<EngineState>((set) => ({
   setRagResults: (ragQuery, ragResults) => set({ ragQuery, ragResults }),
   setClashResults: (clashResults) => set({ clashResults }),
   setClashLoading: (clashLoading) => set({ clashLoading }),
+  setClashError: (clashError) => set({ clashError }),
   setConflictResults: (conflictResults) => set({ conflictResults }),
   setConflictLoading: (conflictLoading) => set({ conflictLoading }),
+  setConflictError: (conflictError) => set({ conflictError }),
   setCollabSnapshot: (collabSnapshot) => set({ collabSnapshot }),
-  appendCollabOp: (op) => set((s) => ({ collabOps: [...s.collabOps, op] })),
   setCollabLoading: (collabLoading) => set({ collabLoading }),
   setDwgScan: (dwgScan) => set({ dwgScan }),
   setDwgScanLoading: (dwgScanLoading) => set({ dwgScanLoading }),

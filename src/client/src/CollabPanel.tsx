@@ -18,7 +18,7 @@ import {
 export default function CollabPanel() {
   const {
     engineConnected, lastSample,
-    collabSnapshot, collabOps, collabLoading,
+    collabSnapshot, collabLoading,
     collabElements, collabElementsLoading,
     collabVerify, collabDeadlock, permissionMatrix,
   } = useEngineStore();
