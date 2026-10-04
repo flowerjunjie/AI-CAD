@@ -169,23 +169,96 @@ def test_collab_elements_duplicate_marking():
             _os.remove(tmp_sample)
 
 
+# ─── M5 协同正确性地基: /api/collab/verify + /api/collab/deadlock-check ───
+
+def test_collab_verify_valid_state(tmp_path):
+    """有对齐的锁 + 事件 state → verify 判 valid (机制层完整性校验)。"""
+    from src.agents.src.tools.collab_protocol import JsonFileCollabStore, persistent_acquire
+    f = tmp_path / "state.json"
+    bridge._COLLAB_STATE_PATH = str(f)
+    persistent_acquire(JsonFileCollabStore(str(f)), "sheet-a", "alice", "write")
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/verify")
+    assert resp.status_code == 200, f"应 200, 实际 {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert body["valid"] is True and body["issues"] == []
+    assert body["replayed_write_holders"] == {"sheet-a": "alice"}
+    assert body["source"] == "file"
+    print("PASS test_collab_verify_valid_state")
+
+
+def test_collab_verify_empty_state_honest():
+    """无落盘 state → verify 仍诚实跑 (空事件/空锁 → valid=True), 标 source=empty。"""
+    bridge._COLLAB_STATE_PATH = os.path.join(project_root, "no-such-collab-<verify>.json")
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/verify")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is True, "空协同态 (零事件零锁) 是合法的, 应 valid"
+    assert body["replayed_write_holders"] == {}
+    assert body["source"] == "empty"
+    print("PASS test_collab_verify_empty_state_honest")
+
+
+def test_collab_verify_detects_tampered_state(tmp_path):
+    """人为篡改 state (锁态与事件不对齐) → verify 判 invalid + issues 非空。"""
+    import json as _json
+    from src.agents.src.tools.collab_protocol import JsonFileCollabStore, persistent_acquire
+    f = tmp_path / "state.json"
+    bridge._COLLAB_STATE_PATH = str(f)
+    persistent_acquire(JsonFileCollabStore(str(f)), "sheet-a", "alice", "write")
+    # 篡改: 往锁态加一条 sheet-b, 但事件里从没锁过 sheet-b → 不可回放对齐
+    state = _json.loads(f.read_text(encoding="utf-8"))
+    state["locks"].append({"resource_id": "sheet-b", "holder": "bob",
+                          "mode": "write", "acquired_at": 9.0})
+    f.write_text(_json.dumps(state), encoding="utf-8")
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/verify")
+    body = resp.json()
+    assert body["valid"] is False, "锁态与事件不对齐应检出"
+    assert any("回放" in it for it in body["issues"])
+    print("PASS test_collab_verify_detects_tampered_state")
+
+
+def test_collab_deadlock_check_detects_cycle():
+    """等待图 a→b→a → deadlocked=true + cycle 含两者 (机制层纯判定)。"""
+    with TestClient(app) as client:
+        resp = client.post("/api/collab/deadlock-check",
+                          json={"wait_edges": {"alice": "bob", "bob": "alice"}})
+    assert resp.status_code == 200, f"应 200, 实际 {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert body["deadlocked"] is True
+    assert set(body["cycle"]) == {"alice", "bob"}
+    print("PASS test_collab_deadlock_check_detects_cycle")
+
+
+def test_collab_deadlock_check_no_cycle():
+    """线性等待 a→b→c (无回边) → deadlocked=false, cycle=[]。"""
+    with TestClient(app) as client:
+        resp = client.post("/api/collab/deadlock-check",
+                          json={"wait_edges": {"a": "b", "b": "c"}})
+    assert resp.status_code == 200
+    assert resp.json()["deadlocked"] is False
+    print("PASS test_collab_deadlock_check_no_cycle")
+
+
+def test_collab_deadlock_check_rejects_non_string():
+    """输入边界: wait_edges 值非字符串 → 400 诚实, 不静默。"""
+    with TestClient(app) as client:
+        resp = client.post("/api/collab/deadlock-check",
+                          json={"wait_edges": {"alice": 42}})
+    assert resp.status_code == 400, f"非字符串等待对象应 400, 实际 {resp.status_code}"
+    print("PASS test_collab_deadlock_check_rejects_non_string")
+
+
 if __name__ == "__main__":
     test_collab_snapshot_empty_honest()
     test_no_cross_designer_sync_endpoint()
-    # 注: test_collab_snapshot_with_state 需 tmp_path fixture, 只 pytest 跑 (直跑护栏)
-    # 这里用一个临时目录手动补一个 (无 fixture, 直跑也能验有 state 态)
-    import tempfile
-    with tempfile.TemporaryDirectory() as td:
-        from src.agents.src.tools.collab_protocol import JsonFileCollabStore, persistent_acquire
-        import os as _os
-        f = _os.path.join(td, "state.json")
-        bridge._COLLAB_STATE_PATH = f
-        st = JsonFileCollabStore(f)
-        persistent_acquire(st, "s1", "carol", "write")
-        with TestClient(app) as client:
-            r = client.get("/api/collab/snapshot")
-            assert r.json()["write_holders"].get("s1") == "carol"
-        bridge._COLLAB_STATE_PATH = _os.path.join(project_root, "no-such-collab-<none>.json")
-    # 注: test_collab_elements_* 读真实 data/sample (residential), 直跑也能验
-    #   (不碰 tmp, 无 fixture 依赖), 在 pytest 全量里跑; 直跑只列上面 3 个核心
+    test_collab_verify_empty_state_honest()
+    test_collab_deadlock_check_detects_cycle()
+    test_collab_deadlock_check_no_cycle()
+    test_collab_deadlock_check_rejects_non_string()
+    # 注: test_collab_snapshot_with_state / test_collab_verify_valid|tampered 需 tmp_path fixture
+    #   仅 pytest 全量跑 (直跑护栏见 test_direct_run.py); 无 fixture 子集直跑验。
+    # 注: test_collab_elements_* 读真实 data/sample, 无 fixture, pytest 全量跑。
     print("OK: all collab snapshot endpoint tests passed")

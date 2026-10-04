@@ -1025,6 +1025,32 @@ def _collab_store() -> object:
     return JsonFileCollabStore(_COLLAB_STATE_PATH)
 
 
+@app.get("/api/collab/verify")
+def api_collab_verify() -> dict:
+    """M5 协同正确性地基: 校验当前协同 state 的事件日志 + 锁态是否自洽。
+
+    跑 collab_protocol.verify_event_log (纯函数, 机制层自主子集):
+    ① 事件 seq 连续 (无跳号/重复/空洞)
+    ② 事件字段完整 (type/actor/resource_id/seq)
+    ③ 锁态与事件可回放对齐 (回放写持有者 == 持久写锁投影)
+
+    返回 {valid, issues, replayed_write_holders, source}。缺文件 → 空 state,
+    verify 仍诚实跑 (空事件/空锁 → valid=True, 零协同态), 标注 source="empty"。
+    诚实边界: 这是**日志完整性校验机制**, 非「多机协同是否一致」— 真·在线协同
+    (跨机 CRDT/OT) 待业务定协议, 本端点只验「本地持久层自身是否自洽」。"""
+    from src.agents.src.tools.collab_protocol import (  # 懒
+        JsonFileCollabStore, verify_event_log)
+
+    store = JsonFileCollabStore(_COLLAB_STATE_PATH)
+    state = store.load()
+    res = verify_event_log(state)
+    res["source"] = "file" if state else "empty"
+    res["note"] = ("本地协同持久层完整性校验 (机制层); 真·多机协同待业务定协议"
+                   if res["valid"]
+                   else "本地协同持久层自检未通过, 见 issues (修复策略由上层定)")
+    return res
+
+
 class CollabLockReq(BaseModel):
     designer: str
     resource_id: str
@@ -1080,6 +1106,35 @@ def api_collab_release(req: CollabReleaseReq) -> dict:
         "note": "本地锁演示 (单进程, 无跨设计师同步; 真·在线协同待业务定协议)",
     })
     return snap
+
+
+class CollabDeadlockReq(BaseModel):
+    wait_edges: dict  # {持有者: 其正在等待的持有者}
+
+
+@app.post("/api/collab/deadlock-check")
+def api_collab_deadlock_check(req: CollabDeadlockReq) -> dict:
+    """M5 死锁环检测 (机制层): 提交等待图 {持有者: 其等待的持有者}, 检出等待环。
+
+    跑 permission_model.detect_deadlock (纯函数, 机制层自主子集):
+    返回 {wait_edges, deadlocked: bool, cycle}。无环 → deadlocked=false, cycle=[]。
+
+    诚实边界: 这是「给定等待图能否检出环」的纯判定, **不**记录/裁决真实协同的
+    等待意图 (那是上层在取锁被拒时记录 wait-edge 的事); 真·多机协同待业务定协议。
+    输入校验: wait_edges 须是 dict[str, str], 非 dict → 400 (系统边界, 不静默)。"""
+    from src.agents.src.tools.permission_model import detect_deadlock  # 懒
+    if not isinstance(req.wait_edges, dict):
+        raise HTTPException(400, "wait_edges 须为对象 {持有者: 等待对象}")
+    for holder, target in req.wait_edges.items():
+        if not isinstance(holder, str) or not isinstance(target, str):
+            raise HTTPException(400, "wait_edges 键值须为字符串 (持有者/等待对象)")
+    cycle = detect_deadlock(req.wait_edges)
+    return {
+        "wait_edges": req.wait_edges,
+        "deadlocked": bool(cycle),
+        "cycle": cycle,
+        "note": "死锁环检测 (机制层纯判定); 等待图由上层取锁被拒时构建",
+    }
 
 
 @app.get("/api/collab/elements")

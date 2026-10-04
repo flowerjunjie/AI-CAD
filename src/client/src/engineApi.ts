@@ -238,6 +238,29 @@ export async function fetchCollabElements(sample: string): Promise<import('./use
   return result;
 }
 
+// ─── M5 协同正确性地基 (bridge.py H 段, 机制层完整性校验 + 死锁环检测) ───
+// GET  /api/collab/verify → CollabVerify (事件日志 + 锁态自洽校验, 纯函数机制层)
+// POST /api/collab/deadlock-check {wait_edges} → CollabDeadlock (等待环检测)
+// 诚实边界: 机制层纯判定, 非「多机协同是否一致」— 真·在线协同待业务定协议。
+
+export async function fetchCollabVerify(): Promise<import('./useEngineStore').CollabVerify | null> {
+  const store = useEngineStore.getState();
+  const result = await getJson<import('./useEngineStore').CollabVerify>(
+    '/api/collab/verify',
+  );
+  if (result) store.setCollabVerify(result);
+  return result;
+}
+
+export async function collabDeadlockCheck(
+  waitEdges: Record<string, string>,
+): Promise<import('./useEngineStore').CollabDeadlock | null> {
+  return postJson<
+    import('./useEngineStore').CollabDeadlock,
+    { wait_edges: Record<string, string> }
+  >('/api/collab/deadlock-check', { wait_edges: waitEdges });
+}
+
 // ─── M2 制图约定对齐工具 (bridge.py I 段, 扫 DWG → 图层/块名频率报告) ───
 // GET /api/dwg-scan?sample=X.dxf → DwgScanResult (诚实两态: 有数据/缺图层空报告)。
 // 专家据此把 docs/element-upstream-contract.md §5 的 TBD 映射 dict 回填成选择题。

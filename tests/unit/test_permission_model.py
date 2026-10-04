@@ -15,6 +15,7 @@ sys.path.insert(0, project_root)
 from src.agents.src.tools.permission_model import (
     Role, ResourceLock, ChangeRequest, DEFAULT_PERMISSIONS,
     resolve_role, can, acquire_lock, release_lock, approve_change, merge_ready,
+    detect_deadlock,
 )
 
 
@@ -115,6 +116,41 @@ def test_merge_requires_permission():
     assert merge_ready(change, [], designer) is False
 
 
+# ─── 死锁环检测 (detect_deadlock, 机制层自主子集) ───
+
+def test_deadlock_two_node_cycle():
+    """持有 alice 等 bob、持有 bob 等 alice → 检出环 [alice, bob]。"""
+    res = detect_deadlock({"alice": "bob", "bob": "alice"})
+    assert set(res) == {"alice", "bob"}, f"两节点环应含 alice+bob, 得 {res}"
+
+
+def test_deadlock_three_node_cycle():
+    """a→b→c→a 三节点环 → 全部检出。"""
+    res = detect_deadlock({"a": "b", "b": "c", "c": "a"})
+    assert set(res) == {"a", "b", "c"}
+
+
+def test_no_deadlock_linear_wait():
+    """线性等待 a→b→c (无回边) → 无环。"""
+    assert detect_deadlock({"a": "b", "b": "c"}) == []
+
+
+def test_no_deadlock_empty():
+    """空等待图 → 无环。"""
+    assert detect_deadlock({}) == []
+
+
+def test_deadlock_ignores_unknown_target():
+    """等待对象不在图里 (悬空指向) → 优雅忽略, 不误判为环。"""
+    assert detect_deadlock({"alice": "ghost"}) == []
+
+
+def test_self_wait_is_cycle():
+    """自己等资源 (自环 a→a) → 检出。"""
+    res = detect_deadlock({"alice": "alice"})
+    assert res == ["alice"]
+
+
 if __name__ == "__main__":
     test_resolve_role_known_and_unknown()
     test_can_lookup()
@@ -127,5 +163,11 @@ if __name__ == "__main__":
     test_merge_ready_all_conditions()
     test_merge_rejected_if_still_locked_by_others()
     test_merge_requires_permission()
+    test_deadlock_two_node_cycle()
+    test_deadlock_three_node_cycle()
+    test_no_deadlock_linear_wait()
+    test_no_deadlock_empty()
+    test_deadlock_ignores_unknown_target()
+    test_self_wait_is_cycle()
     # ASCII print — Windows GBK 终端不能 print emoji (直跑护栏见 test_direct_run.py)
     print("OK: all permission model tests passed")

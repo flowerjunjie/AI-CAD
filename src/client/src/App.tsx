@@ -4,7 +4,7 @@ import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
         runClashCheck, runConflict, runAgentConfirm, runAgentStart,
         fetchCollabSnapshot, collabAcquire, collabRelease,
-        fetchCollabElements, runDwgScan } from './engineApi';
+        fetchCollabElements, fetchCollabVerify, runDwgScan } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -29,6 +29,7 @@ function App() {
     collabSnapshot, collabOps, collabLoading,
     dwgScan, dwgScanLoading,
     collabElements, collabElementsLoading,
+    collabVerify,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,6 +86,10 @@ function App() {
   const handleCollabRelease = useCallback(async () => {
     await collabRelease(collabDesigner, collabResource);
   }, [collabDesigner, collabResource]);
+  // 校验协同 state 的事件日志 + 锁态是否自洽 (机制层完整性校验, 非多机一致)
+  const handleCollabVerify = useCallback(() => {
+    void fetchCollabVerify();
+  }, []);
   // 加载当前 lastSample 的真实元素清单 (协同面板资源下拉数据源 + 取锁前 duplicate 提示)
   const handleCollabElements = useCallback(async () => {
     await fetchCollabElements(lastSample);
@@ -348,6 +353,14 @@ function App() {
               >
                 看快照
               </button>
+              <button
+                className="btn-sm"
+                onClick={handleCollabVerify}
+                disabled={!engineConnected}
+                title="校验协同 state 的事件日志 + 锁态是否自洽 (机制层完整性, 非多机一致)"
+              >
+                校验
+              </button>
             </div>
             <div className="collab-controls">
               <select
@@ -403,6 +416,27 @@ function App() {
                   {collabResource} 与 {collabDupWarn} 同坐标 (几何等价类)
                 </span>
                 <p className="clash-empty">取锁前建议先核对是否为误建 (业务上是否允许同坐标由专家定)</p>
+              </div>
+            )}
+            {/* M5 协同正确性地基: 事件日志 + 锁态自洽校验 (机制层完整性, 非多机一致) */}
+            {collabVerify && (
+              <div className={`clash-item ${collabVerify.valid ? 'clash-ok' : 'clash-hit'}`}>
+                <div className="clash-line">
+                  <span className="clash-kind">
+                    {collabVerify.valid ? '自洽' : '不自洽'}
+                  </span>
+                  <span className="clash-scope">
+                    回放写锁 {Object.keys(collabVerify.replayed_write_holders).length} ·
+                    问题 {collabVerify.issues.length}
+                    {collabVerify.source === 'empty' ? ' · 空态' : ''}
+                  </span>
+                </div>
+                {collabVerify.issues.map((it, i) => (
+                  <div key={i} className="clash-line">
+                    <span className="clash-ids">{it}</span>
+                  </div>
+                ))}
+                <p className="clash-empty">机制层完整性校验 (非多机协同一致; 真·在线协同待业务定协议)</p>
               </div>
             )}
             {collabSnapshot ? (

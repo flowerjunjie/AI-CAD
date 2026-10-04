@@ -135,3 +135,46 @@ def merge_ready(change: ChangeRequest, locks: list[ResourceLock], merger_role: R
         l.resource_id == change.resource_id and l.mode == "write"
         and l.holder != change.author for l in locks)
     return not held_by_others
+
+
+# ─── 死锁环检测 (机制层自主子集, 纯函数) ────────────────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 当前 acquire_lock 只做**单资源写互斥** —
+# 请求被拒即返回 False, 不记录「谁在等谁」。多资源协同下真正的死锁来自「持有 A
+# 者等 B、持有 B 者等 A」的**等待环**。这里提供独立纯函数检测等待图中的环:
+# 输入 wait_edges (持有者→其正在等待的持有者), 输出成环的持有者清单。
+# 不改变 acquire_lock 既有语义 (向后兼容), 是给上层「记录等待意图」后的环检测工具。
+
+
+def detect_deadlock(wait_edges: dict[str, str]) -> list[str]:
+    """检测等待图中的死锁环。wait_edges: {持有者: 其正在等待的持有者}。
+
+    返回成环持有者的有序清单 (如 ["alice", "bob"]), 无环 → []。
+    语义: 持有 alice 的人等 bob、持有 bob 的人等 alice → 环 [alice, bob]。
+    纯图遍历 (着色法找环), 不碰 I/O, 可单测。未知指向 (等待的对象不在图里) 优雅忽略。
+    """
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: dict[str, int] = {}
+    stack: list[str] = []
+    cycle: list[str] | None = None
+
+    def dfs(node: str) -> None:
+        nonlocal cycle
+        color[node] = GRAY
+        stack.append(node)
+        nxt = wait_edges.get(node)
+        if nxt is not None and nxt in wait_edges:
+            if color.get(nxt) == GRAY:
+                # 回溯栈定位环: 从 nxt 到当前 node
+                idx = stack.index(nxt)
+                cycle = list(stack[idx:])
+                return
+            if color.get(nxt, WHITE) == WHITE and cycle is None:
+                dfs(nxt)
+        stack.pop()
+        color[node] = BLACK
+
+    for start in list(wait_edges):
+        if color.get(start, WHITE) == WHITE:
+            if dfs(start):
+                break
+    return cycle or []

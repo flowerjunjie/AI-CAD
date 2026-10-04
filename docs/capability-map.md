@@ -62,6 +62,10 @@
                      10 测试, JSON 存储可注入); 本地锁演示通路已接桥+GUI: /api/collab/snapshot +
                      /api/collab/acquire|release (本地单进程演示, 非跨设计师同步; 真·多机在线协同
                      socket/消息总线/CRDT 仍占位, 需业务定协同协议)
+                     协同正确性地基 (机制层自主子集): verify_event_log 事件日志+锁态自洽校验
+                     (seq 连续/字段完整/可回放对齐, collab_protocol) + detect_deadlock 等待环检测
+                     (permission_model, 三色 DFS) → /api/collab/verify + /api/collab/deadlock-check;
+                     是「日志/锁态自身是否自洽」的机制校验, 非「多机是否一致」(那个仍需业务定协议)
                      collab-lock-integrity DSL 规则 confirmed=true 点亮 M5 协同占位卡 (机制已落地, 不虚标)
 ```
 

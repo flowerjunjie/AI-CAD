@@ -177,3 +177,82 @@ def snapshot_conflicts(snap_a: dict, snap_b: dict) -> list[str]:
         if a_holder != b_holder:
             out.append(res)
     return out
+
+
+# ─── 事件日志完整性校验 (协同正确性地基, 机制层自主子集) ─────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 这是 append-only 事件溯源的**消费契约
+# 校验** — 纯函数, 输入 state 输出「校验结论 + 问题清单」, 不修数据 (数据修复是
+# 上层决定)。缺了它, snapshot_conflicts / make_snapshot 的仲裁建立在未验证的日志
+# 上。机制通 (可写可测), 判定阈值本身是机制默认 (无业务值)。
+
+
+def verify_event_log(state: dict) -> dict:
+    """校验协同 state 的事件日志 + 锁态是否自洽。返回结构化结论 (纯函数, 不崩)。
+
+    校验三条 (缺哪条报哪条, 全过 → valid=True, issues=[]):
+      ① seq 连续: events[i].seq 必须 == i (append-only 追加序, 无跳号/无重复/无空洞)。
+      ② 事件字段完整: 每条事件须有 type/actor/resource_id/seq 四键。
+      ③ 锁态与事件可回放对齐: 按事件序回放 lock/unlock 还原「谁持哪些写锁」,
+         应与 state["locks"] 声称的写锁持有者集合一致 (回放结果 = 持久锁态)。
+
+    返回 {valid: bool, issues: [str...], replayed_write_holders: {res: holder}}。
+    畸形输入 (events 非 list / 缺键) → 计入 issues, 不崩 (优雅降级)。
+    """
+    issues: list[str] = []
+    events = state.get("events", [])
+    if not isinstance(events, list):
+        issues.append("events 非 list (畸形 state)")
+        events = []
+
+    # ② 字段完整性 (逐条)
+    for i, ev in enumerate(events):
+        if not isinstance(ev, dict):
+            issues.append(f"events[{i}] 非 dict")
+            continue
+        for field in ("type", "actor", "resource_id", "seq"):
+            if field not in ev:
+                issues.append(f"events[{i}] 缺字段 {field}")
+
+    # ① seq 连续 (0..n-1 严格单调无空洞)
+    for i, ev in enumerate(events):
+        if isinstance(ev, dict) and ev.get("seq") != i:
+            issues.append(f"events[{i}].seq={ev.get('seq')} 应=={i} (跳号/重复/空洞)")
+            break  # 首个 seq 断裂即足以判不连续, 不逐条堆噪音
+
+    # ③ 锁态可回放对齐: 按事件序重放, 还原当前写锁持有者
+    replayed = _replay_write_holders(events)
+    claimed = {l.get("resource_id"): l.get("holder")
+               for l in state.get("locks", [])
+               if isinstance(l, dict) and l.get("mode") == "write"}
+    # 只比「资源→写持有者」投影 (忽略 acquired_at/非写锁): 回放 vs 持久锁态
+    if replayed != claimed:
+        issues.append(
+            f"锁态与事件不可回放对齐: 回放写持有者={replayed} vs 持久={claimed}")
+
+    return {
+        "valid": not issues,
+        "issues": issues,
+        "replayed_write_holders": replayed,
+    }
+
+
+def _replay_write_holders(events: list) -> dict:
+    """按事件序回放 lock/unlock, 还原「资源 → 写持有者」投影 (纯函数)。
+
+    语义: lock(mode=write) 设该资源写持有者=actor; unlock 摘除 actor 的写锁
+    (若仍是其持有); 其余事件 (read/approve/reject/merge) 不影响写持有者投影。
+    同资源后事件覆盖前事件 (append-only 序即因果序)。
+    """
+    holders: dict[str, str] = {}
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        etype, actor, res = ev.get("type"), ev.get("actor"), ev.get("resource_id")
+        if etype == "lock" and (ev.get("payload") or {}).get("mode", "write") == "write":
+            if res is not None:
+                holders[res] = actor
+        elif etype == "unlock" and res is not None:
+            # 只有 actor 仍是该资源写持有者时, unlock 才摘除
+            if holders.get(res) == actor:
+                holders.pop(res, None)
+    return holders

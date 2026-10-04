@@ -16,6 +16,7 @@ from src.agents.src.tools.collab_protocol import (
     InMemoryCollabStore,
     persistent_acquire, persistent_release,
     append_event, make_snapshot, snapshot_conflicts,
+    verify_event_log,
 )
 
 
@@ -120,6 +121,73 @@ def test_json_file_store_missing_returns_empty():
         assert store.load() == {}
 
 
+# ─── 事件日志完整性校验 (verify_event_log, 协同正确性地基) ───
+
+def _state_with_lock_events():
+    """构造一份「合法」协同 state: alice 锁 sheet-a + carol 锁 sheet-b, 锁态与事件对齐。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write", now=1.0)
+    persistent_acquire(store, "sheet-b", "carol", "write", now=2.0)
+    return store.load()
+
+
+def test_verify_event_log_valid_state():
+    """合法 state: 锁态与事件回放对齐 → valid=True, issues=[]。"""
+    state = _state_with_lock_events()
+    res = verify_event_log(state)
+    assert res["valid"] is True
+    assert res["issues"] == []
+    assert res["replayed_write_holders"] == {"sheet-a": "alice", "sheet-b": "carol"}
+
+
+def test_verify_event_log_clean_log_seq():
+    """seq 断裂 (跳号) → 检出 (events[i].seq 必须 == i)。"""
+    state = _state_with_lock_events()
+    state["events"][1]["seq"] = 7  # 人为制造跳号
+    res = verify_event_log(state)
+    assert res["valid"] is False
+    assert any("seq" in it for it in res["issues"])
+
+
+def test_verify_event_log_lock_mismatch_detected():
+    """锁态与事件不可回放对齐: 改了持久锁但没对应事件 → 检出。"""
+    state = _state_with_lock_events()
+    # 持久锁态多写一条 alice→sheet-c, 但事件里从没锁过 sheet-c
+    state["locks"].append({"resource_id": "sheet-c", "holder": "alice",
+                            "mode": "write", "acquired_at": 9.0})
+    res = verify_event_log(state)
+    assert res["valid"] is False
+    assert any("回放" in it for it in res["issues"])
+
+
+def test_verify_event_log_unlock_release_reflects():
+    """释放锁后, 回放与持久锁态一致 → 仍 valid (lock+unlock 自洽)。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write", now=1.0)
+    persistent_release(store, "sheet-a", "alice")
+    res = verify_event_log(store.load())
+    assert res["valid"] is True
+    assert res["replayed_write_holders"] == {}
+
+
+def test_verify_event_log_malformed_events_no_crash():
+    """events 非 list / 事件缺字段 → 计入 issues, 不崩 (优雅降级)。"""
+    state = _state_with_lock_events()
+    state["events"] = "not-a-list"
+    res = verify_event_log(state)
+    assert res["valid"] is False
+    assert res["replayed_write_holders"] == {}
+
+
+def test_verify_event_log_missing_field_flagged():
+    """事件缺必填字段 → 检出 (type/actor/resource_id/seq)。"""
+    state = _state_with_lock_events()
+    del state["events"][0]["actor"]  # 摘掉一条事件的 actor
+    res = verify_event_log(state)
+    assert res["valid"] is False
+    assert any("缺字段" in it for it in res["issues"])
+
+
 if __name__ == "__main__":
     test_persistent_acquire_writes_lock_to_store()
     test_persistent_acquire_appends_lock_event()
@@ -131,5 +199,11 @@ if __name__ == "__main__":
     test_snapshot_conflicts_same_holder_no_conflict()
     test_json_file_store_roundtrip()
     test_json_file_store_missing_returns_empty()
+    test_verify_event_log_valid_state()
+    test_verify_event_log_clean_log_seq()
+    test_verify_event_log_lock_mismatch_detected()
+    test_verify_event_log_unlock_release_reflects()
+    test_verify_event_log_malformed_events_no_crash()
+    test_verify_event_log_missing_field_flagged()
     # ASCII print — Windows GBK 终端不能 print emoji (直跑护栏见 test_direct_run.py)
     print("OK: all collab protocol tests passed")

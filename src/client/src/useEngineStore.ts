@@ -165,6 +165,25 @@ export interface CollabElements {
   note?: string;
 }
 
+// ─── M5 协同正确性地基 (bridge.py H 段, 机制层完整性校验) ───
+
+/** GET /api/collab/verify 响应: 事件日志 + 锁态自洽校验 (机制层纯函数)。 */
+export interface CollabVerify {
+  valid: boolean;
+  issues: string[];
+  replayed_write_holders: Record<string, string>;
+  source?: 'file' | 'empty';
+  note?: string;
+}
+
+/** POST /api/collab/deadlock-check 响应: 等待环检测 (机制层纯判定)。 */
+export interface CollabDeadlock {
+  wait_edges: Record<string, string>;
+  deadlocked: boolean;
+  cycle: string[];
+  note?: string;
+}
+
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
 
 /** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
@@ -245,6 +264,8 @@ interface EngineState {
   // M5 协同 + duplicate 联动 (bridge H 段, 取锁前看元素是否疑似重复)
   collabElements: import('./useEngineStore').CollabElements | null;
   collabElementsLoading: boolean;
+  // M5 协同正确性地基 (bridge H 段, 机制层完整性校验 + 死锁环检测)
+  collabVerify: import('./useEngineStore').CollabVerify | null;
   // 人在回路确认闸 (bridge G 段, 演示通路)
   confirmResults: import('./engineApi').AgentConfirmResult[];
   confirmLoading: boolean;
@@ -268,6 +289,7 @@ interface EngineState {
   setDwgScanLoading: (l: boolean) => void;
   setCollabElements: (r: import('./useEngineStore').CollabElements | null) => void;
   setCollabElementsLoading: (l: boolean) => void;
+  setCollabVerify: (v: import('./useEngineStore').CollabVerify | null) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
   setAgentRun: (r: import('./engineApi').AgentRunResult | null) => void;
@@ -294,6 +316,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   collabElements: null,
   dwgScanLoading: false,
   collabElementsLoading: false,
+  collabVerify: null,
   confirmResults: [],
   confirmLoading: false,
   agentRun: null,
@@ -315,6 +338,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   setDwgScanLoading: (dwgScanLoading) => set({ dwgScanLoading }),
   setCollabElements: (collabElements) => set({ collabElements }),
   setCollabElementsLoading: (collabElementsLoading) => set({ collabElementsLoading }),
+  setCollabVerify: (collabVerify) => set({ collabVerify }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
   setAgentRun: (agentRun) => set({ agentRun }),
