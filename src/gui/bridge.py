@@ -715,12 +715,15 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
     summary 含 value_conflicts/added/removed/duplicates 四维度计数。
     同稿自比 → count=0 空列表 (诚实, 不造假)。"""
     from src.agents.src.tools.conflict_detection import (  # 懒
-        detect_conflicts, summarize_conflicts)
+        detect_conflicts, summarize_conflicts, verify_summary)
 
     raw_a = _load_sample_raw(sample_a)
     raw_b = _load_sample_raw(sample_b)
     conflicts = detect_conflicts(raw_a, raw_b, check_duplicates=True)
     summary = summarize_conflicts(conflicts)
+    # 机制层对账: 汇总计数 vs 冲突列表是否自洽 (summarize 自产必一致;
+    # 透出为诊断, 一旦未来上游改动导致失步, 端点如实标 out_of_sync, 不静默穿透 UI)
+    check = verify_summary(summary, conflicts)
     return {
         "sample_a": sample_a,
         "sample_b": sample_b,
@@ -728,6 +731,8 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
         "by_category": summary["by_category"],
         "conflicts": conflicts,
         "summary": summary,
+        "summary_consistent": check["consistent"],
+        "summary_issues": check["issues"],
     }
 
 

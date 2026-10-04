@@ -53,6 +53,8 @@
                      + 容差取值通道 param>default, confirmed=true 点亮 M4 占位卡)
   ✅ 改动冲突检测     两稿 raw JSON 按元素 id 比对 (M5 自主子集, conflict_detection 纯函数库)
                      + 几何等价类维度 (同坐标不同 id = 疑似重复, 出图 DUP 琥珀圈)
+                     + 输出自洽校验 (validate_conflicts 结构对称性 + verify_summary 汇总对账,
+                     机制层纯函数; /api/conflict 透出 summary_consistent 诊断, 失步不静默穿透 UI)
   ✅ 人在回路       session 级真人在回路: 起真实图挂起 (/agent/run) → 逐 task 确认 → 同 thread 真续跑
                      (graph interrupt+checkpointer + start_agent_run_suspended/resume_agent_run, 前端确认闸区块)
                      已透真实 CAD 数据源: /agent/run 把每个待确认 task 的类型/描述/出图结果 + 图面预览透出

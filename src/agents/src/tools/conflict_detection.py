@@ -204,3 +204,86 @@ def summarize_conflicts(conflicts: list[dict]) -> dict:
         "removed": n_removed,
         "duplicates": n_duplicate,
     }
+
+
+# ─── 输出自洽校验 (机制层自主子集, 纯函数) ──────────────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 这是「conflict_detection 自身输出是否
+# 自洽」的校验 — summarize 的计数 / 结构对称性, 供 bridge /api/conflict 和出图侧
+# 消费前对账。缺了它, 汇总计数与冲突列表失步、结构对称性破坏都会静默穿透到
+# UI (测试曾在手动补位对账, 现收进库)。纯函数不修数据, 畸形输入优雅降级不崩。
+
+
+def validate_conflicts(conflicts: list[dict]) -> list[str]:
+    """校验冲突列表的结构自洽。返回问题清单 (空 = 全自洽, 纯函数不崩)。
+
+    校验对称性契约 (缺哪条报哪条):
+      - 每条须有 kind 字段。
+      - kind='value'   须有非 None 的 field (字段级冲突必指到字段)。
+      - kind='added'   须有 category + a_value is None (B 新增, A 侧无)。
+      - kind='removed' 须有 category + b_value is None (B 删除, B 侧无)。
+      - kind='duplicate' 须有 category + id_a/id_b/coord (几何等价类完整三元)。
+      - 未知 kind 记入 (不断言「该定成什么」, 只标「非已知 4 类」)。
+    """
+    issues: list[str] = []
+    _KNOWN = ("value", "added", "removed", "duplicate")
+    for i, c in enumerate(conflicts or []):
+        if not isinstance(c, dict):
+            issues.append(f"conflicts[{i}] 非 dict")
+            continue
+        kind = c.get("kind")
+        if kind not in _KNOWN:
+            issues.append(f"conflicts[{i}].kind={kind!r} 非已知 4 类 {list(_KNOWN)}")
+            continue
+        if kind == "value" and c.get("field") is None:
+            issues.append(f"conflicts[{i}] value 冲突缺 field")
+        if kind == "added":
+            if not c.get("category"):
+                issues.append(f"conflicts[{i}] added 冲突缺 category")
+            if c.get("a_value") is not None:
+                issues.append(f"conflicts[{i}] added 冲突 a_value 应 None (B 新增, A 侧无)")
+        if kind == "removed":
+            if not c.get("category"):
+                issues.append(f"conflicts[{i}] removed 冲突缺 category")
+            if c.get("b_value") is not None:
+                issues.append(f"conflicts[{i}] removed 冲突 b_value 应 None (B 删除, B 侧无)")
+        if kind == "duplicate":
+            if not c.get("category"):
+                issues.append(f"conflicts[{i}] duplicate 冲突缺 category")
+            if not c.get("id_a") or not c.get("id_b"):
+                issues.append(f"conflicts[{i}] duplicate 冲突缺 id_a/id_b")
+            if not c.get("coord"):
+                issues.append(f"conflicts[{i}] duplicate 冲突缺 coord")
+    return issues
+
+
+def verify_summary(summary: dict, conflicts: list[dict]) -> dict:
+    """对账 summarize_conflicts 的汇总与冲突列表是否一致。返回结构化结论 (纯函数)。
+
+    校验三条 (缺哪条报哪条, 全对 → consistent=True, issues=[]):
+      ① total == len(conflicts) (总计数与列表长度对齐)。
+      ② 分桶 and: value+added+removed+duplicates 之和 == total
+         (kind 计数不重叠不漏, 与 _KNOWN 四类对齐)。
+      ③ by_category 各桶之和 == total (按 category 分桶不丢失不重复)。
+    畸形输入 (summary/conflicts 非预期类型) → 计入 issues, 不崩。
+    """
+    issues: list[str] = []
+    conflicts = conflicts or []
+    total = len(conflicts)
+    if not isinstance(summary, dict):
+        issues.append("summary 非 dict (畸形)")
+        return {"consistent": False, "issues": issues, "recounted_total": total}
+
+    # ① 总数对账
+    if summary.get("total") != total:
+        issues.append(f"summary.total={summary.get('total')} != len(conflicts)={total}")
+    # ② kind 分桶之和 (value + added + removed + duplicates) 须 == total
+    kind_sum = (summary.get("value_conflicts", 0) + summary.get("added", 0)
+                + summary.get("removed", 0) + summary.get("duplicates", 0))
+    if kind_sum != total:
+        issues.append(f"kind 计数之和={kind_sum} != total={total} (kind 漏计/重计)")
+    # ③ by_category 各桶之和须 == total
+    cat_sum = sum((v for v in summary.get("by_category", {}).values()
+                   if isinstance(v, int)), 0)
+    if cat_sum != total:
+        issues.append(f"by_category 之和={cat_sum} != total={total}")
+    return {"consistent": not issues, "issues": issues, "recounted_total": total}

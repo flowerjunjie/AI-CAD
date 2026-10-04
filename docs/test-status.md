@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   504 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   513 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：53（49 unit + 4 integration；含 2026-10-03 新增的文档水位护栏 test_doc_test_waterlevel，5 测试）
@@ -44,8 +44,9 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-03 | 451 | + 文档水位单一源护栏（test_doc_test_waterlevel 4 测试） | `1a38ba9` | 单一事实源 + 回归护栏 |
 | 2026-10-03 | 452 | + 水位趋势表护栏（test_doc_test_waterlevel 5 测试） | `40b5911` | 趋势表带 commit 锚, 护栏认历史快照 |
 | 2026-10-04 | 504 | M5 协同正确性地基: verify_event_log 事件日志/锁态自洽校验 + detect_deadlock 等待环检测 (机制层纯函数 + /api/collab/verify + /api/collab/deadlock-check + 端点测试) | `4612205` | 机制层自主子集 (不需外部专家), 非多机一致 |
+| 2026-10-04 | 513 | M5 冲突输出自洽校验: conflict_detection.validate_conflicts (结构对称性) + verify_summary (汇总对账) 纯函数 + /api/conflict 透出 summary_consistent 诊断 | `HEAD` | 机制层自主子集, 汇总/列表失步不静默穿透 UI |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
 
-*最后刷新：2026-10-04 · 504 passed / 5 skipped / 0 failed（M5 协同正确性地基: 事件日志/锁态自洽校验 + 等待环检测）*
+*最后刷新：2026-10-04 · 513 passed / 5 skipped / 0 failed（M5 冲突输出自洽校验: validate_conflicts + verify_summary）*

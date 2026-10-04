@@ -188,6 +188,9 @@ def test_conflict_hit_path(monkeypatch):
         assert body["summary"]["removed"] >= 1
         assert body["count"] == body["summary"]["total"]
         assert body["by_category"].get("doors", 0) >= 2
+        # 机制层对账透出: summarize 自产必一致 → summary_consistent=true, issues 空
+        assert body["summary_consistent"] is True
+        assert body["summary_issues"] == []
 
 
 if __name__ == "__main__":

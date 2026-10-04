@@ -165,6 +165,98 @@ def test_summarize_empty():
     assert cf.summarize_conflicts(None) == s
 
 
+# ─── 输出自洽校验 (validate_conflicts / verify_summary, 机制层自主子集) ───
+
+def _valid_conflicts():
+    """一份合法冲突列表 (value 带 field / added a=None / removed b=None / duplicate 三元)。"""
+    return [
+        {"id": "d1", "field": "width_m", "a_value": 0.9, "b_value": 1.0,
+         "kind": "value", "category": "doors"},
+        {"id": "p2", "field": None, "a_value": None, "b_value": {},
+         "kind": "added", "category": "pipes"},
+        {"id": "o1", "field": None, "a_value": {}, "b_value": None,
+         "kind": "removed", "category": "outlets"},
+        {"id": "o3", "field": None, "a_value": None, "b_value": None,
+         "kind": "duplicate", "category": "outlets",
+         "id_a": "o3", "id_b": "o4", "coord": [1.0, 1.0]},
+    ]
+
+
+def test_validate_conflicts_clean_returns_empty():
+    """合法列表 → 问题清单空 (结构自洽)。"""
+    cf = _import()
+    assert cf.validate_conflicts(_valid_conflicts()) == []
+
+
+def test_validate_conflicts_value_missing_field_flagged():
+    """value 冲突缺 field → 检出 (字段级冲突必指到字段)。"""
+    cf = _import()
+    bad = [{"id": "d1", "field": None, "a_value": 1, "b_value": 2,
+            "kind": "value", "category": "doors"}]
+    assert any("缺 field" in it for it in cf.validate_conflicts(bad))
+
+
+def test_validate_conflicts_duplicate_missing_coord_flagged():
+    """duplicate 冲突缺 coord → 检出 (几何等价类三元完整)。"""
+    cf = _import()
+    bad = [{"id": "o3", "kind": "duplicate", "category": "outlets",
+            "id_a": "o3", "id_b": "o4"}]  # 无 coord
+    assert any("coord" in it for it in cf.validate_conflicts(bad))
+
+
+def test_validate_conflicts_added_a_value_not_none_flagged():
+    """added 冲突 a_value 非 None → 检出 (B 新增, A 侧应无)。"""
+    cf = _import()
+    bad = [{"id": "p2", "field": None, "a_value": {"x": 1}, "b_value": {},
+            "kind": "added", "category": "pipes"}]
+    assert any("a_value 应 None" in it for it in cf.validate_conflicts(bad))
+
+
+def test_validate_conflicts_unknown_kind_flagged():
+    """未知 kind → 检出 (非已知 4 类; 不断言「该定成什么」)。"""
+    cf = _import()
+    bad = [{"id": "x", "kind": "weird", "category": "doors"}]
+    assert any("非已知 4 类" in it for it in cf.validate_conflicts(bad))
+
+
+def test_validate_conflicts_malformed_no_crash():
+    """畸形输入 (非 dict 元素 / None) → 计入 issues 不崩 (优雅降级)。"""
+    cf = _import()
+    issues = cf.validate_conflicts(["not-a-dict", None])
+    assert any("非 dict" in it for it in issues)
+    assert cf.validate_conflicts(None) == []  # None 视同 []
+
+
+def test_verify_summary_consistent():
+    """合法列表 + 正确汇总 → consistent=True, 三条对账全过。"""
+    cf = _import()
+    conflicts = _valid_conflicts()
+    summary = cf.summarize_conflicts(conflicts)
+    res = cf.verify_summary(summary, conflicts)
+    assert res["consistent"] is True and res["issues"] == []
+    assert res["recounted_total"] == len(conflicts)
+
+
+def test_verify_summary_total_mismatch_detected():
+    """汇总 total 与列表长度失步 → 检出。"""
+    cf = _import()
+    conflicts = _valid_conflicts()
+    summary = dict(cf.summarize_conflicts(conflicts), total=99)  # 人为改坏 total
+    res = cf.verify_summary(summary, conflicts)
+    assert res["consistent"] is False
+    assert any("total" in it for it in res["issues"])
+
+
+def test_verify_summary_kind_sum_mismatch_detected():
+    """kind 分桶之和 != total (未知 kind 漏计) → 检出。"""
+    cf = _import()
+    conflicts = _valid_conflicts() + [{"id": "x", "kind": "weird", "category": "doors"}]
+    summary = cf.summarize_conflicts(conflicts)
+    res = cf.verify_summary(summary, conflicts)
+    assert res["consistent"] is False
+    assert any("kind 计数之和" in it for it in res["issues"])
+
+
 # ── 主链路接入 (M5): 默认无第二稿 → 0 冲突 no-op, 不破既有出图 ──
 def test_cad_execute_conflict_task_noop_without_second_draft():
     """cad_execute_node task_type=conflict 无 conflict_raw_b → 0 冲突, 不画实体。"""
