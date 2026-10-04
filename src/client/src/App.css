@@ -591,6 +591,18 @@ body {
 /* 取锁前「疑似重复」警示: 琥珀色 (区别于品红 hit / 绿 ok), 呼应 duplicate 冲突色 */
 .clash-item.clash-warn { border-left-color: #f5a623; background: #1a1508; }
 
+/* M5 协同诊断工具区 (低频, 机制层自检): 默认折叠, 降低认知负荷 */
+.collab-diag { margin-top: 10px; border-top: 1px dashed #333; padding-top: 8px; }
+.collab-diag-toggle {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  background: #16213e; border: 1px solid #334; color: #9aa5c0;
+  font-size: 11px; padding: 4px 10px; border-radius: 6px; width: 100%;
+}
+.collab-diag-toggle:hover { border-color: #e91e8f; color: #fff; }
+.collab-diag-hint { color: #667; font-size: 10px; margin-left: auto; }
+.collab-diag-body { margin-top: 8px; }
+.collab-diag-controls { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+
 /* M2 制图约定对齐区块: 蓝紫色系 = 出图规范/图层 (区别于碰撞品红、协同琥珀) */
 .dwgscan-section { margin-top: 16px; }
 .dwgscan-section h3 {

@@ -10,14 +10,18 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   546 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   505 passed / 5 skipped / 0 failed
 ```
 
-- **测试文件**：53（49 unit + 4 integration；含 2026-10-03 新增的文档水位护栏 test_doc_test_waterlevel，5 测试）
+- **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
 - **5 skipped**：外部依赖用例（4 条 langgraph 框架需 `AI_CAD_RUN_FRAMEWORK=1`；
   1 条 LLM 需 `AGNES_API_KEY`），非缺陷。
-- **冒烟**：`python scripts/smoke_test.py` 秒级验 5 大核心不变量（0.4s）。
-- **覆盖率**：`.coveragerc` `fail_under=90`（纯可测代码实测 95%）。
+- **冒烟**：`python scripts/smoke_test.py` 秒级验 5 大核心不变量。
+- **覆盖率**：`.coveragerc` `fail_under=90`。
+- **数字纠偏 (2026-10-04)**：趋势表 504/513/520/536/546 一段为历轮「上轮+增量」
+  推得的水位, 其中 546 那轮全量后台实测输出被 Git-Bash fork 报错吞掉未拿到真数字即回填。
+  本轮实跑全量 = **505 passed / 5 skipped / 0 failed** (510 collected − 5 skipped) 为权威;
+  自 504 起的历史行保留为演进审计, 但**当前水位以本轮实跑 505 为准, 不再向上推**。
 
 ## 刷新方法（推水位后跑这条）
 
@@ -48,8 +52,9 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-04 | 520 | M4 碰撞结果自洽校验: clash_detection.verify_clashes (a_id≠b_id / kind 合法 8 类 / id 在 raw) + CLASH_KINDS 常量与出图侧 label 同源对账 + /api/clash 透出 clashes_consistent 诊断 | `e84f6f9` | 机制层自主子集, 脏碰撞不静默进 DWG 出假圈 |
 | 2026-10-04 | 536 | M5 死锁端到端接线: collab_protocol wait-edge 采集层 (record_wait/clear_waits_for, 取锁被拒记 wait / 成功·放锁清) + check_deadlock_from_state 读真实 state.waits 喂 detect_deadlock + /api/collab/deadlock 端点 | `eb7dcd4` | 机制层自主子集, 死锁检测落到真实锁流程 (非仅提交版) |
 | 2026-10-04 | 546 | M5 权限矩阵结构自洽校验: permission_model.validate_permissions_matrix + check_action_format (动作命名 <资源>.<动作> / 值类型 / 无重复 / 角色命名) + /api/permission/matrix 端点 (业务回填畸形矩阵前置报异味) | `f9acfcd` | 机制层自主子集, 只校验结构不判业务值 |
+| 2026-10-04 | 505 | UI 体验优化 (纯前端, 无 Python 测试增减): App.tsx 协同区块抽 CollabPanel 子组件 (主操作/诊断分层) + 占位卡 m5-collab/m5-team 去重。数字纠偏: 实跑全量权威值, 回退 546 虚高 (上轮后台实测被吞) | `HEAD` | 当前权威水位以本轮实跑 505 为准 |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
 
-*最后刷新：2026-10-04 · 546 passed / 5 skipped / 0 failed（M5 权限矩阵结构自洽校验: validate_permissions_matrix + check_action_format）*
+*最后刷新：2026-10-04 · 505 passed / 5 skipped / 0 failed（UI 体验优化轮, 数字纠偏至实跑权威值）*
