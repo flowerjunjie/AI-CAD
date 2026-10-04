@@ -53,7 +53,7 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-04 | 536 | M5 死锁端到端接线: collab_protocol wait-edge 采集层 (record_wait/clear_waits_for, 取锁被拒记 wait / 成功·放锁清) + check_deadlock_from_state 读真实 state.waits 喂 detect_deadlock + /api/collab/deadlock 端点 | `eb7dcd4` | 机制层自主子集, 死锁检测落到真实锁流程 (非仅提交版) |
 | 2026-10-04 | 546 | M5 权限矩阵结构自洽校验: permission_model.validate_permissions_matrix + check_action_format (动作命名 <资源>.<动作> / 值类型 / 无重复 / 角色命名) + /api/permission/matrix 端点 (业务回填畸形矩阵前置报异味) | `f9acfcd` | 机制层自主子集, 只校验结构不判业务值 |
 | 2026-10-04 | 505 | UI 体验优化 (纯前端, 无 Python 测试增减): App.tsx 协同区块抽 CollabPanel 子组件 (主操作/诊断分层) + 占位卡 m5-collab/m5-team 去重。数字纠偏: 实跑全量权威值, 回退 546 虚高 (上轮后台实测被吞) | `4ecf5b2` | 当前权威水位以本轮实跑 505 为准 |
-| 2026-10-05 | 505 | UI 体验优化第二批 (纯前端, 测试数字稳定): P2 出图双通路文案区分 + P4 结果可回溯(清空/最新标注/删 collabOps 死代码) + P10 刷新预览改名 + P5 断连显式错误态。前端 tsc/build 过, 引擎全量实测仍 505 (无回归) | `HEAD` | 纯前端轮, Python 测试水位不变 |
+| 2026-10-05 | 505 | UI 体验优化第二批 (纯前端, 测试数字稳定): P2 出图双通路文案区分 + P4 结果可回溯(清空/最新标注/删 collabOps 死代码) + P10 刷新预览改名 + P5 断连显式错误态。前端 tsc/build 过, 引擎全量实测仍 505 (无回归) | `4d99761` | 纯前端轮, Python 测试水位不变 |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
