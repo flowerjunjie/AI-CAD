@@ -12,7 +12,7 @@ from src.agents.src.tools.cad_tools import (
 )
 from src.agents.src.tools.rag_tools import RAGKnowledgeBase
 from src.agents.src.layout import layout_rooms, place_doors_on_walls, place_windows_on_walls, detect_opening_collisions
-from src.agents.src.tools.clash_detection import detect_clashes
+from src.agents.src.tools.clash_detection import detect_clashes, CLASH_KINDS
 from src.agents.src.numbering import assign_door_numbers, assign_window_numbers
 from src.agents.src.tools.wall_topology import partition_rooms
 from src.rules.src.engine import get_engine
@@ -278,13 +278,19 @@ def _collision_violation(c: dict):
     )
 
 
-# 跨专业碰撞 kind → 中文 (供 _clash_violation 描述可读)
+# 跨专业碰撞 kind → 中文 (供 _clash_violation 描述可读)。
+# 键集合必须与 clash_detection.CLASH_KINDS 同源 (模块加载即对账, 防两处漂移):
+# 出图侧忘同步新增 kind 时, 该 kind 的中文 label 静默缺失 (兜底回英文 kind 不崩,
+# 但描述会退化成裸 kind), 加载期对账把它变成可见断言而非线上静默。
 _CLASH_KIND_CN = {
     "pipe-beam": "排水管穿梁", "pipe-column": "排水管撞柱",
     "duct-beam": "风管穿梁", "duct-column": "风管撞柱",
     "outlet-beam": "插座撞梁", "outlet-column": "插座撞柱",
     "grille-beam": "风口撞梁", "grille-column": "风口撞柱",
 }
+assert set(_CLASH_KIND_CN) == set(CLASH_KINDS), \
+    f"出图侧 _CLASH_KIND_CN 与 clash_detection.CLASH_KINDS 漂移: 差集 " \
+    f"{set(_CLASH_KIND_CN) ^ set(CLASH_KINDS)} (两侧碰撞 kind 须同源)"
 
 
 def _clash_violation(c: dict):

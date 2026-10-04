@@ -51,6 +51,9 @@
                      + 梁/柱截面实填充(HATCH) 已落地 (M3 图层着色/线宽/梁填充 + 本轮补柱填充)
   ✅ 多专业碰撞检测    管线穿梁/插座撞梁/风管撞梁 自动检测 (M4, clash_detection 几何库 + 主链路 + 出图红圈
                      + 容差取值通道 param>default, confirmed=true 点亮 M4 占位卡)
+                     + 碰撞结果自洽校验 (verify_clashes: a_id!=b_id / kind 合法 8 类 / id 在 raw,
+                     出图侧反查不兜底原点假圈; CLASH_KINDS 常量与出图侧中文 label 同源对账,
+                     /api/clash 透出 clashes_consistent 诊断, 失步不静默进 DWG)
   ✅ 改动冲突检测     两稿 raw JSON 按元素 id 比对 (M5 自主子集, conflict_detection 纯函数库)
                      + 几何等价类维度 (同坐标不同 id = 疑似重复, 出图 DUP 琥珀圈)
                      + 输出自洽校验 (validate_conflicts 结构对称性 + verify_summary 汇总对账,

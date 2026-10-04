@@ -680,7 +680,7 @@ def api_clash(sample: str = "residential_100sqm.json",
     返回 {sample, tolerance_m, tolerance_source, clashes: [...], count}。
     无碰撞 → count=0 空列表 (诚实, 不造假)。"""
     from src.agents.src.tools.clash_detection import (  # 懒
-        detect_clashes, resolve_clash_tolerance)
+        detect_clashes, resolve_clash_tolerance, verify_clashes)
 
     dsl_rule = None
     try:
@@ -698,8 +698,13 @@ def api_clash(sample: str = "residential_100sqm.json",
     )
     raw = _load_sample_raw(sample)
     clashes = detect_clashes(raw, tolerance_m=tol)
+    # 机制层对账: 碰撞结果与 raw 源是否自洽 (a_id!=b_id / kind 合法 / id 在 raw,
+    # 出图侧反查才不兜底原点假圈)。自产必一致; 透出为诊断, 失步不静默穿透出图。
+    check = verify_clashes(raw, clashes)
     return {"sample": sample, "tolerance_m": tol, "tolerance_source": tol_src,
-            "clashes": clashes, "count": len(clashes)}
+            "clashes": clashes, "count": len(clashes),
+            "clashes_consistent": check["valid"],
+            "clashes_issues": check["issues"]}
 
 
 @app.get("/api/conflict")

@@ -31,7 +31,7 @@
 | `GET /api/rule-violations` | – | 全量规则实测违规演示 `[{...}]` | engine.check([bad elements]) 演示 |
 | `POST /api/rag/search` | `{"query":"疏散走道最小宽度"}` | `{"query","results":[{text,score,category}]}` | RAGKnowledgeBase.search (本地 chroma_db) |
 | `POST /api/rules/backfill` | `{rule_id, confirmed?, confidence?, confirm_note?, params?}` | `{status:'applied', backup, confirmed, confidence, param_defaults}` (M1 数值回填 GUI 入口, 单规则写盘+备份+fail-fast; confidence 白名单 low/medium/high 不虚标; 未知规则 404) | default.json 单规则写回 (比 DSL apply 全量重写轻) |
-| `GET /api/clash?sample=&tolerance_m=` | – | `{sample, tolerance_m, tolerance_source, clashes:[{a_id,b_id,kind,detail}], count}` | clash_detection.detect_clashes (M4, 容差取值通道 param>default, 来源透出 dsl/param/default) |
+| `GET /api/clash?sample=&tolerance_m=` | – | `{sample, tolerance_m, tolerance_source, clashes:[{a_id,b_id,kind,detail}], count, clashes_consistent, clashes_issues}` | clash_detection.detect_clashes (M4, 容差取值通道 param>default); clashes_consistent/clashes_issues = verify_clashes 机制层对账诊断 (a_id≠b_id + kind 合法 8 类 + id 在 raw, 失步不静默进 DWG 出图) |
 | `GET /api/conflict?sample_a=&sample_b=` | – | `{sample_a, sample_b, count, by_category, conflicts:[...], summary{value_conflicts,added,removed,duplicates}, summary_consistent, summary_issues}` | conflict_detection.detect_conflicts (M5 两稿比对 + 几何等价类 duplicate 维度); summary_consistent/summary_issues = verify_summary 机制层对账诊断 (summarize 计数 vs 列表是否自洽, 失步不静默穿透 UI) |
 | `GET /api/collab/elements?sample=` | – | `{sample, resources:[{id,category,duplicate_of,coord}], duplicate_count}` | 真实 CAD 元素 id 清单 + 重复标记 (M5 协同+冲突联动, 取锁前看疑似重复) |
 | `GET /api/collab/snapshot?designer=` | – | `{designer, write_holders, recent_events, event_count, source}` | collab_protocol.make_snapshot (M5 持久层, 只读) |

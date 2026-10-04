@@ -177,6 +177,84 @@ def test_detect_clashes_skip_missing_keys():
     assert res == []
 
 
+# ─── 碰撞结果自洽校验 (verify_clashes, 机制层自主子集) ───
+
+def _clash_raw():
+    """一份含各元素类真实 id 的 raw (供 verify_clashes 反查 ③④)。"""
+    return {
+        "pipes": [{"id": "p1", "start": [0, 0], "end": [10, 0]}],
+        "structural_beams": [{"id": "b1", "start": [5, -1], "end": [5, 1]}],
+        "structural_columns": [{"id": "c1", "x": 5, "y": 0}],
+        "outlets": [{"id": "o1", "x": 5, "y": 0.05}],
+    }
+
+
+def test_verify_clashes_real_output_valid():
+    """detect_clashes 真产出 (p1 穿 b1) → verify_clashes 判 valid。"""
+    cd = _import()
+    raw = _clash_raw()
+    clashes = cd.detect_clashes(raw)
+    assert clashes, "前置: 该 raw 应至少 1 条碰撞 (管穿梁)"
+    res = cd.verify_clashes(raw, clashes)
+    assert res["valid"] is True and res["issues"] == [], f"真产出应自洽, 得 {res}"
+
+
+def test_verify_clashes_self_collision_detected():
+    """a_id == b_id (自碰撞) → 检出。"""
+    cd = _import()
+    bad = [{"a_id": "b1", "b_id": "b1", "kind": "pipe-beam"}]
+    res = cd.verify_clashes(_clash_raw(), bad)
+    assert res["valid"] is False
+    assert any("自碰撞" in it for it in res["issues"])
+
+
+def test_verify_clashes_invalid_kind_detected():
+    """kind 非合法 8 类 (如 kind='wall-beam') → 检出。"""
+    cd = _import()
+    bad = [{"a_id": "p1", "b_id": "b1", "kind": "wall-beam"}]
+    res = cd.verify_clashes(_clash_raw(), bad)
+    assert res["valid"] is False
+    assert any("非合法 8 类" in it for it in res["issues"])
+
+
+def test_verify_clashes_unknown_id_in_raw_detected():
+    """a_id/b_id 不在 raw → 检出 (出图会静默兜底原点假圈, 最该抓)。"""
+    cd = _import()
+    raw = _clash_raw()
+    bad = [{"a_id": "ghost", "b_id": "b1", "kind": "pipe-beam"}]
+    res = cd.verify_clashes(raw, bad)
+    assert res["valid"] is False
+    assert any("ghost" in it and "不在 raw" in it for it in res["issues"])
+
+
+def test_verify_clashes_missing_fields_flagged():
+    """缺 a_id/b_id → 检出 (不计自碰撞, 字段缺失优先)。"""
+    cd = _import()
+    bad = [{"b_id": "b1", "kind": "pipe-beam"}]  # 缺 a_id
+    res = cd.verify_clashes(_clash_raw(), bad)
+    assert res["valid"] is False
+    assert any("缺 a_id/b_id" in it for it in res["issues"])
+
+
+def test_verify_clashes_malformed_no_crash():
+    """畸形输入 (非 dict 元素 / clashes=None / raw=None) → 不崩, 优雅降级。"""
+    cd = _import()
+    assert cd.verify_clashes(None, None)["valid"] is True  # 全空 = 合法
+    res = cd.verify_clashes(_clash_raw(), ["not-a-dict"])
+    assert res["valid"] is False and any("非 dict" in it for it in res["issues"])
+
+
+def test_clash_kinds_constant_matches_detect_output():
+    """CLASH_KINDS 常量与 detect_clashes 真产出 kind 同源 (消白名单漂移)。"""
+    cd = _import()
+    kinds = {k for k in cd.CLASH_KINDS}
+    assert len(kinds) == 8, "合法碰撞 kind 应为 8 类 (4 seg/pt × beam/column)"
+    # 每种 kind 由 seg_key/pt_key × beam/column 组合, 前缀必在合法集内
+    for kind in kinds:
+        prefix = kind.split("-")[0]
+        assert prefix in ("pipe", "duct", "outlet", "grille"), f"非法前缀 {prefix}"
+
+
 # ── M4 容差取值通道 (resolve_clash_tolerance, default.json 回填范式) ──
 
 class _FakeDslRule:
@@ -238,6 +316,13 @@ if __name__ == "__main__":
     test_detect_clashes_no_collision_returns_empty()
     test_detect_clashes_empty_input()
     test_detect_clashes_skip_missing_keys()
+    test_verify_clashes_real_output_valid()
+    test_verify_clashes_self_collision_detected()
+    test_verify_clashes_invalid_kind_detected()
+    test_verify_clashes_unknown_id_in_raw_detected()
+    test_verify_clashes_missing_fields_flagged()
+    test_verify_clashes_malformed_no_crash()
+    test_clash_kinds_constant_matches_detect_output()
     test_resolve_clash_tolerance_priority()
     print("OK: all clash detection tests passed")
 

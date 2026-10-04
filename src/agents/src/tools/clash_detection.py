@@ -19,6 +19,17 @@ import math
 _EPS = 1e-9
 
 
+# 合法碰撞 kind 白名单 (8 类: 管线/暖通 seg_key × 结构 pt/seg_key)。
+# 抽成可导出常量, 消除「cad_rule_export._CLASH_KIND_CN 键集合」与本库隐式白名单
+# 两处漂移 (verify_clashes 据此校验, 消费侧可 import 同源)。
+CLASH_KINDS: frozenset = frozenset({
+    "pipe-beam", "pipe-column",
+    "duct-beam", "duct-column",
+    "outlet-beam", "outlet-column",
+    "grille-beam", "grille-column",
+})
+
+
 def seg_intersect(p1, p2, p3, p4, eps=1e-3) -> bool:
     """两条线段 p1-p2 / p3-p4 是否严格相交 (存在共同内部点)。
 
@@ -214,3 +225,49 @@ def _pt_vs_structure(pts: list, pt_key: str, beams: list, columns: list,
                 hits.append({"a_id": pid, "b_id": cid, "kind": f"{pt_key}-column",
                              "detail": "点位距柱 < 容差带"})
     return hits
+
+
+# ─── 碰撞结果自洽校验 (机制层自主子集, 纯函数) ─────────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 这是「detect_clashes 输出自身是否自洽」
+# 的校验 — 供出图侧 (_clash_point 遍历 raw 反查, 查不到静默兜底 (0,0) 画假圈) 在
+# 消费前对账。缺了它, 脏 a_id/b_id / 非法 kind 会静默穿透进 DWG 出假碰撞标记。
+# 纯函数不修数据, 畸形输入优雅降级不崩。
+
+
+def verify_clashes(raw: dict, clashes: list[dict]) -> dict:
+    """校验碰撞结果与 raw 源数据是否自洽。返回结构化结论 (纯函数, 不崩)。
+
+    校验四条 (缺哪条报哪条, 全过 → valid=True, issues=[]):
+      ① 无自碰撞: 每条 a_id != b_id (跨专业碰撞必是两个不同元素)。
+      ② kind 合法: kind ∈ CLASH_KINDS (8 类, 与本库产出同源, 消隐式白名单漂移)。
+      ③ a_id 在 raw: a_id 真存在于 raw 某元素类 (出图反查才不会兜底 (0,0))。
+      ④ b_id 在 raw: b_id 真存在于 raw 某元素类。
+    畸形输入 (clashes 非 list / 条非 dict / 缺 a_id/b_id) → 计入 issues, 不崩。
+    """
+    raw = raw or {}
+    clashes = clashes or []
+    issues: list[str] = []
+    # 预建 raw 全量 id 集合 (元素类列表里带 id 的元素), 供 ③④ 反查
+    known_ids: set = set()
+    for items in raw.values():
+        for it in (items or []):
+            if isinstance(it, dict) and it.get("id") is not None:
+                known_ids.add(it.get("id"))
+
+    for i, c in enumerate(clashes):
+        if not isinstance(c, dict):
+            issues.append(f"clashes[{i}] 非 dict")
+            continue
+        a, b, kind = c.get("a_id"), c.get("b_id"), c.get("kind")
+        if a is None or b is None:
+            issues.append(f"clashes[{i}] 缺 a_id/b_id (a={a!r}, b={b!r})")
+            continue
+        if a == b:
+            issues.append(f"clashes[{i}] 自碰撞 (a_id==b_id=={a!r})")
+        if kind not in CLASH_KINDS:
+            issues.append(f"clashes[{i}].kind={kind!r} 非合法 8 类 {sorted(CLASH_KINDS)}")
+        if a not in known_ids:
+            issues.append(f"clashes[{i}].a_id={a!r} 不在 raw (出图会兜底原点假圈)")
+        if b not in known_ids:
+            issues.append(f"clashes[{i}].b_id={b!r} 不在 raw (出图会兜底原点假圈)")
+    return {"valid": not issues, "issues": issues, "count": len(clashes)}
