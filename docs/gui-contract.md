@@ -39,6 +39,7 @@
 | `POST /api/collab/release` | `{designer, resource_id}` | 快照 + `{released}` (幂等, 无锁释放→false) | collab_protocol.persistent_release |
 | `GET /api/collab/verify` | – | `{valid, issues, replayed_write_holders, source}` | collab_protocol.verify_event_log (M5 协同正确性地基: 事件日志 seq 连续 + 字段完整 + 锁态可回放对齐, 机制层纯判定, 非多机一致) |
 | `POST /api/collab/deadlock-check` | `{wait_edges:{holder:target}}` | `{deadlocked, cycle}` | permission_model.detect_deadlock (等待环检测, 三色 DFS; 键值须字符串否则 400; 机制层纯判定) |
+| `GET /api/collab/deadlock` | – | `{source, deadlocked, cycle, wait_edges}` | collab_protocol.check_deadlock_from_state (真实锁流程版: 读 state.waits 由 persistent_acquire/release 采集的 wait-edges 投影喂 detect_deadlock, 交叉取锁被拒→环; 缺 state → 空态 deadlocked=false source=empty) |
 | `GET /api/dwg-scan?sample=X.dxf` | – | `{sample, layers, entity_type_totals, attrib_tags, layer_count, insert_total}` | dwg_layer_scan (M2 制图约定对齐工具, 图层/块名/ATTRIB 频率报告, 不判定 kind 归属) |
 
 **M2 制图约定对齐工具 (离线 CLI + GUI 双通路)**：

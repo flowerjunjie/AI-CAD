@@ -4,7 +4,7 @@ import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
         runClashCheck, runConflict, runAgentConfirm, runAgentStart,
         fetchCollabSnapshot, collabAcquire, collabRelease,
-        fetchCollabElements, fetchCollabVerify, runDwgScan } from './engineApi';
+        fetchCollabElements, fetchCollabVerify, fetchCollabDeadlockLive, runDwgScan } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -30,6 +30,7 @@ function App() {
     dwgScan, dwgScanLoading,
     collabElements, collabElementsLoading,
     collabVerify,
+    collabDeadlock,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,6 +90,10 @@ function App() {
   // 校验协同 state 的事件日志 + 锁态是否自洽 (机制层完整性校验, 非多机一致)
   const handleCollabVerify = useCallback(() => {
     void fetchCollabVerify();
+  }, []);
+  // 按本地锁流程真实 wait-edges 检死锁环 (取锁被拒记 wait, 交叉被拒→环)
+  const handleCollabDeadlock = useCallback(() => {
+    void fetchCollabDeadlockLive();
   }, []);
   // 加载当前 lastSample 的真实元素清单 (协同面板资源下拉数据源 + 取锁前 duplicate 提示)
   const handleCollabElements = useCallback(async () => {
@@ -361,6 +366,14 @@ function App() {
               >
                 校验
               </button>
+              <button
+                className="btn-sm"
+                onClick={handleCollabDeadlock}
+                disabled={!engineConnected}
+                title="按本地锁流程真实 wait-edges 检死锁环 (取锁被拒记 wait, 交叉被拒→环)"
+              >
+                查死锁
+              </button>
             </div>
             <div className="collab-controls">
               <select
@@ -437,6 +450,24 @@ function App() {
                   </div>
                 ))}
                 <p className="clash-empty">机制层完整性校验 (非多机协同一致; 真·在线协同待业务定协议)</p>
+              </div>
+            )}
+            {/* M5 死锁检测 (真实锁流程版): 按本地 wait-edges 检等待环 */}
+            {collabDeadlock && (
+              <div className={`clash-item ${collabDeadlock.deadlocked ? 'clash-hit' : 'clash-ok'}`}>
+                <div className="clash-line">
+                  <span className="clash-kind">{collabDeadlock.deadlocked ? '死锁环' : '无等待环'}</span>
+                  <span className="clash-scope">
+                    等待边 {Object.keys(collabDeadlock.wait_edges).length}
+                    {collabDeadlock.source === 'empty' ? ' · 空态' : ''}
+                  </span>
+                </div>
+                {collabDeadlock.cycle.length > 0 && (
+                  <div className="clash-line">
+                    <span className="clash-ids">环: {collabDeadlock.cycle.join(' → ')}</span>
+                  </div>
+                )}
+                <p className="clash-empty">本地锁流程 wait-edges 死锁检测 (机制层; 取锁被拒记 wait, 交叉被拒成环)</p>
               </div>
             )}
             {collabSnapshot ? (

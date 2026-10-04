@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   520 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   536 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：53（49 unit + 4 integration；含 2026-10-03 新增的文档水位护栏 test_doc_test_waterlevel，5 测试）
@@ -46,8 +46,9 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-04 | 504 | M5 协同正确性地基: verify_event_log 事件日志/锁态自洽校验 + detect_deadlock 等待环检测 (机制层纯函数 + /api/collab/verify + /api/collab/deadlock-check + 端点测试) | `4612205` | 机制层自主子集 (不需外部专家), 非多机一致 |
 | 2026-10-04 | 513 | M5 冲突输出自洽校验: conflict_detection.validate_conflicts (结构对称性) + verify_summary (汇总对账) 纯函数 + /api/conflict 透出 summary_consistent 诊断 | `4cb41d3` | 机制层自主子集, 汇总/列表失步不静默穿透 UI |
 | 2026-10-04 | 520 | M4 碰撞结果自洽校验: clash_detection.verify_clashes (a_id≠b_id / kind 合法 8 类 / id 在 raw) + CLASH_KINDS 常量与出图侧 label 同源对账 + /api/clash 透出 clashes_consistent 诊断 | `e84f6f9` | 机制层自主子集, 脏碰撞不静默进 DWG 出假圈 |
+| 2026-10-04 | 536 | M5 死锁端到端接线: collab_protocol wait-edge 采集层 (record_wait/clear_waits_for, 取锁被拒记 wait / 成功·放锁清) + check_deadlock_from_state 读真实 state.waits 喂 detect_deadlock + /api/collab/deadlock 端点 | `HEAD` | 机制层自主子集, 死锁检测落到真实锁流程 (非仅提交版) |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
 
-*最后刷新：2026-10-04 · 520 passed / 5 skipped / 0 failed（M4 碰撞结果自洽校验: verify_clashes + CLASH_KINDS 同源对账）*
+*最后刷新：2026-10-04 · 536 passed / 5 skipped / 0 failed（M5 死锁端到端接线: wait-edge 采集层 + check_deadlock_from_state）*

@@ -1147,6 +1147,29 @@ def api_collab_deadlock_check(req: CollabDeadlockReq) -> dict:
     }
 
 
+@app.get("/api/collab/deadlock")
+def api_collab_deadlock() -> dict:
+    """M5 死锁检测 (真实锁流程版): 读本地协同 state 的 wait-edges 判环。
+
+    与 /api/collab/deadlock-check (提交任意等待图) 不同, 本端点跑的是
+    persistent_acquire/release **真实采集**的等待意图 — 取锁被拒记 wait-edge、
+    成功/放锁清 wait-edge, 落 state.json 的 waits 字段。端到端闭环:
+    设计师交叉取锁 → 记真实等待 → 本端点检出环。
+
+    返回 {source, deadlocked, cycle, wait_edges}。缺 state → 空态, deadlocked=false,
+    诚实标 source="empty"。"""
+    from src.agents.src.tools.collab_protocol import (  # 懒
+        JsonFileCollabStore, check_deadlock_from_state)
+    store = JsonFileCollabStore(_COLLAB_STATE_PATH)
+    state = store.load()
+    res = check_deadlock_from_state(state)
+    res["source"] = "file" if state else "empty"
+    res["note"] = ("本地锁流程真实 wait-edges 死锁检测 (机制层); 真·多机协同待业务定协议"
+                   if res["deadlocked"]
+                   else "本地锁流程无等待环 (waits 空或无回边)")
+    return res
+
+
 @app.get("/api/collab/elements")
 def api_collab_elements(sample: str = "residential_100sqm.json") -> dict:
     """M5 协同 + duplicate 联动: 列出 sample 的「可锁资源」元素清单 + 重复标记。

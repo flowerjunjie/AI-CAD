@@ -17,6 +17,8 @@ from src.agents.src.tools.collab_protocol import (
     persistent_acquire, persistent_release,
     append_event, make_snapshot, snapshot_conflicts,
     verify_event_log,
+    record_wait, clear_waits_for, wait_edges_of,
+    check_deadlock_from_state,
 )
 
 
@@ -188,6 +190,86 @@ def test_verify_event_log_missing_field_flagged():
     assert any("缺字段" in it for it in res["issues"])
 
 
+# ─── wait-edge 采集 + 死锁检测端到端 (机制层自主子集) ───
+
+def test_persistent_acquire_rejected_records_wait():
+    """取锁被拒 (他人持写锁) → 记一条 wait-edge (requester 等 holder)。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write")
+    ok, state, _ = persistent_acquire(store, "sheet-a", "bob", "write")  # 被拒
+    assert ok is False
+    waits = state.get("waits", [])
+    assert any(w["requester"] == "bob" and w["holder"] == "alice" for w in waits), \
+        f"被拒应记 bob 等 alice, 得 {waits}"
+
+
+def test_persistent_acquire_success_no_wait():
+    """取锁成功 (锁空) → 不记 wait-edge (无需等待)。"""
+    store = InMemoryCollabStore()
+    ok, state, _ = persistent_acquire(store, "sheet-a", "alice", "write")
+    assert ok is True
+    assert state.get("waits", []) == []
+
+
+def test_wait_cleared_on_acquire_success():
+    """bob 先被拒记 wait; alice 放锁后 bob 再取成功 → wait-edge 消散。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write")
+    persistent_acquire(store, "sheet-a", "bob", "write")  # 被拒, 记 bob 等 alice
+    persistent_release(store, "sheet-a", "alice")         # 放锁
+    ok, state, _ = persistent_acquire(store, "sheet-a", "bob", "write")  # 成功
+    assert ok is True
+    assert state.get("waits", []) == [], "拿到锁后等待意图应消散"
+
+
+def test_wait_cleared_on_release():
+    """放锁 (owner) → 清掉 owner 相关 wait-edge (等它的人不再等)。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write")
+    persistent_acquire(store, "sheet-a", "bob", "write")  # 记 bob 等 alice
+    state = persistent_release(store, "sheet-a", "alice")
+    # alice 放锁后, bob 等 alice 的 edge 应清掉 (alice 不再持锁)
+    assert wait_edges_of(state) == {}, f"放锁后应清 wait-edge, 得 {wait_edges_of(state)}"
+
+
+def test_wait_edges_of_projects_to_deadlock_input():
+    """wait_edges_of: state['waits'] → {requester: holder} (同请求多 holder 取首个)。"""
+    state = {
+        "waits": [
+            {"requester": "bob", "holder": "alice"},
+            {"requester": "bob", "holder": "carol"},  # 同请求第 2 条, 投影取首个
+        ]
+    }
+    assert wait_edges_of(state) == {"bob": "alice"}
+
+
+def test_check_deadlock_cross_two_designers():
+    """端到端: alice 锁 A + bob 锁 B, 交叉要对方的锁 → 真实 state 检出等待环。
+
+    构造: alice 持 sheet-a, bob 持 sheet-b;
+      alice 想锁 sheet-b → 被拒, 记 alice 等 bob;
+      bob 想锁 sheet-a   → 被拒, 记 bob 等 alice;
+    → wait_edges = {alice: bob, bob: alice} → detect_deadlock 检出环。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write")
+    persistent_acquire(store, "sheet-b", "bob", "write")
+    persistent_acquire(store, "sheet-b", "alice", "write")  # alice 等 bob
+    persistent_acquire(store, "sheet-a", "bob", "write")    # bob 等 alice
+    res = check_deadlock_from_state(store.load())
+    assert res["deadlocked"] is True
+    assert set(res["cycle"]) == {"alice", "bob"}, f"应检出 alice↔bob 环, 得 {res}"
+
+
+def test_check_deadlock_no_cycle_when_linear():
+    """线性等待 (alice 等 bob, 无回边) → 无环。"""
+    store = InMemoryCollabStore()
+    persistent_acquire(store, "sheet-a", "alice", "write")
+    persistent_acquire(store, "sheet-b", "bob", "write")
+    persistent_acquire(store, "sheet-b", "alice", "write")  # 仅 alice 等 bob, 单向
+    res = check_deadlock_from_state(store.load())
+    assert res["deadlocked"] is False and res["cycle"] == []
+
+
 if __name__ == "__main__":
     test_persistent_acquire_writes_lock_to_store()
     test_persistent_acquire_appends_lock_event()
@@ -205,5 +287,12 @@ if __name__ == "__main__":
     test_verify_event_log_unlock_release_reflects()
     test_verify_event_log_malformed_events_no_crash()
     test_verify_event_log_missing_field_flagged()
+    test_persistent_acquire_rejected_records_wait()
+    test_persistent_acquire_success_no_wait()
+    test_wait_cleared_on_acquire_success()
+    test_wait_cleared_on_release()
+    test_wait_edges_of_projects_to_deadlock_input()
+    test_check_deadlock_cross_two_designers()
+    test_check_deadlock_no_cycle_when_linear()
     # ASCII print — Windows GBK 终端不能 print emoji (直跑护栏见 test_direct_run.py)
     print("OK: all collab protocol tests passed")

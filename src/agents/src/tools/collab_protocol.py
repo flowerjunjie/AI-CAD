@@ -108,17 +108,76 @@ def _locks_of(state: dict) -> list[ResourceLock]:
     """从持久化 state 还原锁列表 (存的是 asdict 形式)。"""
     return [ResourceLock(**d) for d in state.get("locks", [])]
 
-
 def _persist_locks(state: dict, locks: list[ResourceLock]) -> dict:
     new_state = dict(state)
     new_state["locks"] = [asdict(l) for l in locks]
     return new_state
 
 
+# ─── wait-edge 采集 (取锁被拒时记录「谁在等谁」, 供死锁环检测落真实流程) ──
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 这是把 detect_deadlock 的输入 (等待图)
+# 落到**真实锁流程**的采集层 — 取锁被拒时记一条 wait-edge (requester 等 holder),
+# 释放/取锁成功时清掉对应 edge。纯函数, 不改既有锁互斥语义 (向后兼容, 只新增
+# state["waits"] 字段 + 事件类型 wait / wait-clear)。waits 是「当前等待意图」的
+# 幂等集合 (非 append-only), 与 events (溯源日志) 分两层。
+
+def _holder_from_reason(reason: str) -> str | None:
+    """从 acquire_lock 的拒绝 reason 提取 holder。
+
+    reason 形态: f"资源 {resource_id} 正被 {holder} 写锁占用" (见 permission_model)。
+    非拒绝 reason (成功类) → None。提取失败 (格式漂移) 也返回 None, 不崩。"""
+    import re
+    m = re.search(r"正被\s+(\S+)\s+写锁占用", reason or "")
+    return m.group(1) if m else None
+
+
+def record_wait(state: dict, requester: str, holder: str) -> dict:
+    """记录一条 wait-edge (requester 等待 holder)。幂等: 已有 (requester,holder) 不重复。
+
+    同时追加一条 wait 事件 (溯源)。不改入参, 返回新 state。"""
+    waits = [dict(w) for w in state.get("waits", [])]
+    if not any(w.get("requester") == requester and w.get("holder") == holder for w in waits):
+        waits.append({"requester": requester, "holder": holder})
+        state = append_event(state, "wait", requester, holder,
+                             {"wait_edges": [[requester, holder]]})
+    new_state = dict(state)
+    new_state["waits"] = waits
+    return new_state
+
+
+def clear_waits_for(state: dict, actor: str) -> dict:
+    """清除 actor 相关的所有 wait-edge (actor 作为 requester 等的 + 作为 holder 被等的)。
+
+    取锁成功 / 放锁时调用 (等待意图消散)。追加 wait-clear 事件溯源。不改入参。"""
+    remaining = [dict(w) for w in state.get("waits", [])
+                 if w.get("requester") != actor and w.get("holder") != actor]
+    cleared = len(state.get("waits", [])) - len(remaining)
+    if cleared:
+        state = append_event(state, "wait-clear", actor, actor,
+                             {"cleared": cleared})
+    new_state = dict(state)
+    new_state["waits"] = remaining
+    return new_state
+
+
+def wait_edges_of(state: dict) -> dict:
+    """把 state["waits"] 投影成 detect_deadlock 的输入 {requester: holder}。
+
+    多个 wait-edge 指向同一 holder 时取首个 (环检测只需一条回边即可成环)。纯函数。"""
+    out: dict[str, str] = {}
+    for w in state.get("waits", []):
+        r, h = w.get("requester"), w.get("holder")
+        if r is not None and h is not None and r not in out:
+            out[r] = h
+    return out
+
+
 def persistent_acquire(store: CollabStore, resource_id: str, requester: str,
                        mode: str = "write", now: float = 0.0) -> tuple[bool, dict, str]:
     """持久化取锁: load state → acquire_lock → 追加 lock 事件 → save。
 
+    被拒 (ok=False, 他人持写锁) → 记一条 wait-edge (requester 等 holder), 供死锁检测;
+    成功 (ok=True) → 清掉 requester 的等待意图 (拿到锁就不等了)。
     返回 (能否锁, 更新后持久化 state, 原因)。全程走注入 store, 可单测 (内存)。
     """
     state = store.load()
@@ -127,17 +186,25 @@ def persistent_acquire(store: CollabStore, resource_id: str, requester: str,
     state = _persist_locks(state, new_locks)
     if ok:
         state = append_event(state, "lock", requester, resource_id, {"mode": mode})
+        state = clear_waits_for(state, requester)  # 拿到锁, 等待意图消散
+    else:
+        holder = _holder_from_reason(reason)
+        if holder and holder != requester:
+            state = record_wait(state, requester, holder)  # 被占 → 记等待
     store.save(state)
     return ok, state, reason
 
 
 def persistent_release(store: CollabStore, resource_id: str, owner: str,
                        ) -> dict:
-    """持久化释放: load → release_lock → 追加 unlock 事件 → save。"""
+    """持久化释放: load → release_lock → 追加 unlock 事件 → save。
+
+    放锁后清掉 owner 相关的 wait-edge (owner 不再持锁, 等它的人可推进 / 它等的也消散)。"""
     state = store.load()
     locks = release_lock(_locks_of(state), resource_id, owner)
     state = _persist_locks(state, locks)
     state = append_event(state, "unlock", owner, resource_id)
+    state = clear_waits_for(state, owner)
     store.save(state)
     return state
 
@@ -256,3 +323,22 @@ def _replay_write_holders(events: list) -> dict:
             if holders.get(res) == actor:
                 holders.pop(res, None)
     return holders
+
+
+# ─── 死锁检测 (把真实锁流程的 wait-edges 喂给 detect_deadlock) ────────
+# 边界 (诚实): 机制层自主子集 — 采集层 (record_wait/clear_waits_for) 从真实取锁
+# 被拒/成功/放锁流程维护 state["waits"], 本函数把 waits 投影成等待图, 交
+# permission_model.detect_deadlock 判环。纯函数, 不碰网络/多机。
+
+
+def check_deadlock_from_state(state: dict) -> dict:
+    """基于真实协同 state 的 wait-edges 做死锁环检测。
+
+    state["waits"] 由 persistent_acquire (被拒记 wait / 成功清) 和
+    persistent_release (放锁清) 维护。投影成 {requester: holder} 等待图后
+    交 detect_deadlock。返回 {deadlocked, cycle, wait_edges}。
+    """
+    from src.agents.src.tools.permission_model import detect_deadlock  # 懒, 避免循环 import
+    edges = wait_edges_of(state)
+    cycle = detect_deadlock(edges)
+    return {"deadlocked": bool(cycle), "cycle": cycle, "wait_edges": edges}

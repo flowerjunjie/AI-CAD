@@ -251,6 +251,45 @@ def test_collab_deadlock_check_rejects_non_string():
     print("PASS test_collab_deadlock_check_rejects_non_string")
 
 
+# ─── /api/collab/deadlock (真实锁流程版, 读 state 的 wait-edges) ───
+
+def test_collab_deadlock_empty_state_honest():
+    """无落盘 state → 空态, deadlocked=false + source=empty (诚实不造假)。"""
+    bridge._COLLAB_STATE_PATH = os.path.join(project_root, "no-such-collab-<dl>.json")
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/deadlock")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["deadlocked"] is False
+    assert body["wait_edges"] == {}
+    assert body["source"] == "empty"
+    print("PASS test_collab_deadlock_empty_state_honest")
+
+
+def test_collab_deadlock_from_real_state(tmp_path):
+    """交叉取锁被拒 → 真实 state 记 wait-edges → /api/collab/deadlock 检出环。
+
+    端到端: alice 锁 sheet-a + bob 锁 sheet-b, 交叉要对方锁 → 双向被拒记 wait,
+    端点读 state.waits 投影成 {alice: bob, bob: alice} → deadlocked=true。"""
+    from src.agents.src.tools.collab_protocol import (
+        JsonFileCollabStore, persistent_acquire)
+    f = tmp_path / "state.json"
+    bridge._COLLAB_STATE_PATH = str(f)
+    st = JsonFileCollabStore(str(f))
+    persistent_acquire(st, "sheet-a", "alice", "write")
+    persistent_acquire(st, "sheet-b", "bob", "write")
+    persistent_acquire(st, "sheet-b", "alice", "write")  # alice 等 bob (被拒)
+    persistent_acquire(st, "sheet-a", "bob", "write")    # bob 等 alice (被拒)
+    with TestClient(app) as client:
+        resp = client.get("/api/collab/deadlock")
+    body = resp.json()
+    assert resp.status_code == 200, f"应 200, 实际 {resp.status_code}: {resp.text}"
+    assert body["deadlocked"] is True, f"交叉被拒应检出环, 得 {body}"
+    assert set(body["cycle"]) == {"alice", "bob"}
+    assert body["source"] == "file"
+    print("PASS test_collab_deadlock_from_real_state")
+
+
 if __name__ == "__main__":
     test_collab_snapshot_empty_honest()
     test_no_cross_designer_sync_endpoint()
@@ -258,6 +297,8 @@ if __name__ == "__main__":
     test_collab_deadlock_check_detects_cycle()
     test_collab_deadlock_check_no_cycle()
     test_collab_deadlock_check_rejects_non_string()
+    test_collab_deadlock_empty_state_honest()
+    # 注: test_collab_deadlock_from_real_state 需 tmp_path fixture, 仅 pytest 全量跑。
     # 注: test_collab_snapshot_with_state / test_collab_verify_valid|tampered 需 tmp_path fixture
     #   仅 pytest 全量跑 (直跑护栏见 test_direct_run.py); 无 fixture 子集直跑验。
     # 注: test_collab_elements_* 读真实 data/sample, 无 fixture, pytest 全量跑。

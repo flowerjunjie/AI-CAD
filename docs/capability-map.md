@@ -71,6 +71,10 @@
                      (seq 连续/字段完整/可回放对齐, collab_protocol) + detect_deadlock 等待环检测
                      (permission_model, 三色 DFS) → /api/collab/verify + /api/collab/deadlock-check;
                      是「日志/锁态自身是否自洽」的机制校验, 非「多机是否一致」(那个仍需业务定协议)
+                     死锁端到端接线 (机制层自主子集): 取锁被拒记 wait-edge / 成功·放锁清 wait-edge
+                     (record_wait/clear_waits_for, collab_protocol 采集层) → check_deadlock_from_state
+                     读真实 state.waits 投影成等待图喂 detect_deadlock → /api/collab/deadlock (真实锁流程版);
+                     设计师交叉取锁被拒 → 记真实等待 → 端点检出环 (与 /api/collab/deadlock-check 提交版互补)
                      collab-lock-integrity DSL 规则 confirmed=true 点亮 M5 协同占位卡 (机制已落地, 不虚标)
 ```
 

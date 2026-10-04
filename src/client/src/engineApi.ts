@@ -261,6 +261,16 @@ export async function collabDeadlockCheck(
   >('/api/collab/deadlock-check', { wait_edges: waitEdges });
 }
 
+/** GET /api/collab/deadlock: 读本地协同 state 的真实 wait-edges 判环 (机制层端到端)。 */
+export async function fetchCollabDeadlockLive(): Promise<import('./useEngineStore').CollabDeadlockLive | null> {
+  const store = useEngineStore.getState();
+  const result = await getJson<import('./useEngineStore').CollabDeadlockLive>(
+    '/api/collab/deadlock',
+  );
+  if (result) store.setCollabDeadlock(result);
+  return result;
+}
+
 // ─── M2 制图约定对齐工具 (bridge.py I 段, 扫 DWG → 图层/块名频率报告) ───
 // GET /api/dwg-scan?sample=X.dxf → DwgScanResult (诚实两态: 有数据/缺图层空报告)。
 // 专家据此把 docs/element-upstream-contract.md §5 的 TBD 映射 dict 回填成选择题。
