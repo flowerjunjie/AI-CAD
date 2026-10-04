@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   536 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   546 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：53（49 unit + 4 integration；含 2026-10-03 新增的文档水位护栏 test_doc_test_waterlevel，5 测试）
@@ -47,8 +47,9 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-04 | 513 | M5 冲突输出自洽校验: conflict_detection.validate_conflicts (结构对称性) + verify_summary (汇总对账) 纯函数 + /api/conflict 透出 summary_consistent 诊断 | `4cb41d3` | 机制层自主子集, 汇总/列表失步不静默穿透 UI |
 | 2026-10-04 | 520 | M4 碰撞结果自洽校验: clash_detection.verify_clashes (a_id≠b_id / kind 合法 8 类 / id 在 raw) + CLASH_KINDS 常量与出图侧 label 同源对账 + /api/clash 透出 clashes_consistent 诊断 | `e84f6f9` | 机制层自主子集, 脏碰撞不静默进 DWG 出假圈 |
 | 2026-10-04 | 536 | M5 死锁端到端接线: collab_protocol wait-edge 采集层 (record_wait/clear_waits_for, 取锁被拒记 wait / 成功·放锁清) + check_deadlock_from_state 读真实 state.waits 喂 detect_deadlock + /api/collab/deadlock 端点 | `eb7dcd4` | 机制层自主子集, 死锁检测落到真实锁流程 (非仅提交版) |
+| 2026-10-04 | 546 | M5 权限矩阵结构自洽校验: permission_model.validate_permissions_matrix + check_action_format (动作命名 <资源>.<动作> / 值类型 / 无重复 / 角色命名) + /api/permission/matrix 端点 (业务回填畸形矩阵前置报异味) | `HEAD` | 机制层自主子集, 只校验结构不判业务值 |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
 
-*最后刷新：2026-10-04 · 536 passed / 5 skipped / 0 failed（M5 死锁端到端接线: wait-edge 采集层 + check_deadlock_from_state）*
+*最后刷新：2026-10-04 · 546 passed / 5 skipped / 0 failed（M5 权限矩阵结构自洽校验: validate_permissions_matrix + check_action_format）*

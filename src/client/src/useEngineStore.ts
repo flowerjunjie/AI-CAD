@@ -189,6 +189,17 @@ export interface CollabDeadlockLive extends CollabDeadlock {
   source?: 'file' | 'empty';
 }
 
+// ─── M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验) ───
+
+/** GET /api/permission/matrix 响应: 角色→权限矩阵 + 结构自洽校验结论。 */
+export interface PermissionMatrix {
+  roles: Record<string, string[]>;
+  valid: boolean;
+  issues: string[];
+  malformed_actions: string[];
+  note?: string;
+}
+
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
 
 /** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
@@ -272,6 +283,8 @@ interface EngineState {
   // M5 协同正确性地基 (bridge H 段, 机制层完整性校验 + 死锁环检测)
   collabVerify: import('./useEngineStore').CollabVerify | null;
   collabDeadlock: import('./useEngineStore').CollabDeadlockLive | null;
+  // M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验)
+  permissionMatrix: import('./useEngineStore').PermissionMatrix | null;
   // 人在回路确认闸 (bridge G 段, 演示通路)
   confirmResults: import('./engineApi').AgentConfirmResult[];
   confirmLoading: boolean;
@@ -297,6 +310,7 @@ interface EngineState {
   setCollabElementsLoading: (l: boolean) => void;
   setCollabVerify: (v: import('./useEngineStore').CollabVerify | null) => void;
   setCollabDeadlock: (d: import('./useEngineStore').CollabDeadlockLive | null) => void;
+  setPermissionMatrix: (m: import('./useEngineStore').PermissionMatrix | null) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
   setAgentRun: (r: import('./engineApi').AgentRunResult | null) => void;
@@ -325,6 +339,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   collabElementsLoading: false,
   collabVerify: null,
   collabDeadlock: null,
+  permissionMatrix: null,
   confirmResults: [],
   confirmLoading: false,
   agentRun: null,
@@ -348,6 +363,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   setCollabElementsLoading: (collabElementsLoading) => set({ collabElementsLoading }),
   setCollabVerify: (collabVerify) => set({ collabVerify }),
   setCollabDeadlock: (collabDeadlock) => set({ collabDeadlock }),
+  setPermissionMatrix: (permissionMatrix) => set({ permissionMatrix }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
   setAgentRun: (agentRun) => set({ agentRun }),

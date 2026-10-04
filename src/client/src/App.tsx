@@ -4,7 +4,8 @@ import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
         runClashCheck, runConflict, runAgentConfirm, runAgentStart,
         fetchCollabSnapshot, collabAcquire, collabRelease,
-        fetchCollabElements, fetchCollabVerify, fetchCollabDeadlockLive, runDwgScan } from './engineApi';
+        fetchCollabElements, fetchCollabVerify, fetchCollabDeadlockLive,
+        fetchPermissionMatrix, runDwgScan } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 
@@ -31,6 +32,7 @@ function App() {
     collabElements, collabElementsLoading,
     collabVerify,
     collabDeadlock,
+    permissionMatrix,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +96,10 @@ function App() {
   // 按本地锁流程真实 wait-edges 检死锁环 (取锁被拒记 wait, 交叉被拒→环)
   const handleCollabDeadlock = useCallback(() => {
     void fetchCollabDeadlockLive();
+  }, []);
+  // 看权限矩阵 + 结构自洽校验 (机制层, 不判「谁到底能干什么」的业务值)
+  const handlePermissionMatrix = useCallback(() => {
+    void fetchPermissionMatrix();
   }, []);
   // 加载当前 lastSample 的真实元素清单 (协同面板资源下拉数据源 + 取锁前 duplicate 提示)
   const handleCollabElements = useCallback(async () => {
@@ -374,6 +380,14 @@ function App() {
               >
                 查死锁
               </button>
+              <button
+                className="btn-sm"
+                onClick={handlePermissionMatrix}
+                disabled={!engineConnected}
+                title="看权限矩阵结构自洽校验 (命名/类型/重复; 不判业务权限值)"
+              >
+                看矩阵
+              </button>
             </div>
             <div className="collab-controls">
               <select
@@ -468,6 +482,31 @@ function App() {
                   </div>
                 )}
                 <p className="clash-empty">本地锁流程 wait-edges 死锁检测 (机制层; 取锁被拒记 wait, 交叉被拒成环)</p>
+              </div>
+            )}
+            {/* M5 权限矩阵 + 结构自洽校验 (机制层; 不判「谁到底能干什么」的业务值) */}
+            {permissionMatrix && (
+              <div className={`clash-item ${permissionMatrix.valid ? 'clash-ok' : 'clash-hit'}`}>
+                <div className="clash-line">
+                  <span className="clash-kind">
+                    {permissionMatrix.valid ? '矩阵自洽' : '矩阵异味'}
+                  </span>
+                  <span className="clash-scope">
+                    角色 {Object.keys(permissionMatrix.roles).length} · 问题 {permissionMatrix.issues.length}
+                  </span>
+                </div>
+                {Object.entries(permissionMatrix.roles).map(([role, actions]) => (
+                  <div key={role} className="clash-line">
+                    <span className="clash-kind">{role}</span>
+                    <span className="clash-ids">{actions.join(', ')}</span>
+                  </div>
+                ))}
+                {permissionMatrix.issues.map((it, i) => (
+                  <div key={i} className="clash-line">
+                    <span className="clash-ids">{it}</span>
+                  </div>
+                ))}
+                <p className="clash-empty">权限矩阵结构校验 (命名/类型/重复); 具体角色/权限值仍占位, 需业务定夺</p>
               </div>
             )}
             {collabSnapshot ? (

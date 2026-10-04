@@ -40,6 +40,7 @@
 | `GET /api/collab/verify` | – | `{valid, issues, replayed_write_holders, source}` | collab_protocol.verify_event_log (M5 协同正确性地基: 事件日志 seq 连续 + 字段完整 + 锁态可回放对齐, 机制层纯判定, 非多机一致) |
 | `POST /api/collab/deadlock-check` | `{wait_edges:{holder:target}}` | `{deadlocked, cycle}` | permission_model.detect_deadlock (等待环检测, 三色 DFS; 键值须字符串否则 400; 机制层纯判定) |
 | `GET /api/collab/deadlock` | – | `{source, deadlocked, cycle, wait_edges}` | collab_protocol.check_deadlock_from_state (真实锁流程版: 读 state.waits 由 persistent_acquire/release 采集的 wait-edges 投影喂 detect_deadlock, 交叉取锁被拒→环; 缺 state → 空态 deadlocked=false source=empty) |
+| `GET /api/permission/matrix` | – | `{roles, valid, issues, malformed_actions}` | permission_model.validate_permissions_matrix (M5 权限矩阵结构自洽校验: 动作命名 <资源>.<动作> / 值类型 / 无重复 / 角色命名; 只查结构不判业务值, 业务回填畸形矩阵前置报异味) |
 | `GET /api/dwg-scan?sample=X.dxf` | – | `{sample, layers, entity_type_totals, attrib_tags, layer_count, insert_total}` | dwg_layer_scan (M2 制图约定对齐工具, 图层/块名/ATTRIB 频率报告, 不判定 kind 归属) |
 
 **M2 制图约定对齐工具 (离线 CLI + GUI 双通路)**：

@@ -15,7 +15,7 @@ sys.path.insert(0, project_root)
 from src.agents.src.tools.permission_model import (
     Role, ResourceLock, ChangeRequest, DEFAULT_PERMISSIONS,
     resolve_role, can, acquire_lock, release_lock, approve_change, merge_ready,
-    detect_deadlock,
+    detect_deadlock, check_action_format, validate_permissions_matrix,
 )
 
 
@@ -151,6 +151,77 @@ def test_self_wait_is_cycle():
     assert res == ["alice"]
 
 
+# ─── 权限矩阵结构自洽校验 (validate_permissions_matrix / check_action_format,
+#     机制层自主子集: 查结构不查业务值) ───
+
+def test_check_action_format_valid():
+    """合法动作串 <资源>.<动作> → True。"""
+    pm = _pm()
+    for a in ("design.read", "review.approve", "merge.lock", "role.manage"):
+        assert pm.check_action_format(a), f"{a!r} 应合法"
+
+
+def test_check_action_format_malformed():
+    """畸形动作串 (无点/空半/双点/多级/非字符串) → False。"""
+    pm = _pm()
+    for a in ("design", "design.", ".write", "design..write", "a.b.c", "", 42, None):
+        assert not pm.check_action_format(a), f"{a!r} 应不合法"
+
+
+def test_validate_matrix_default_valid():
+    """DEFAULT_PERMISSIONS 自身结构自洽 → valid=True (占位值命名都合规)。"""
+    pm = _pm()
+    res = pm.validate_permissions_matrix(pm.DEFAULT_PERMISSIONS)
+    assert res["valid"] is True and res["issues"] == [] and res["malformed_actions"] == []
+
+
+def test_validate_matrix_flags_malformed_action():
+    """角色含畸形动作 (design..write) → 检出 + 入 malformed_actions。"""
+    pm = _pm()
+    res = pm.validate_permissions_matrix({"designer": ("design.read", "design..write")})
+    assert res["valid"] is False
+    assert "design..write" in res["malformed_actions"]
+    assert any("命名不合规" in it for it in res["issues"])
+
+
+def test_validate_matrix_flags_bad_role_name():
+    """角色名含 '.' (与动作串歧义) → 检出。"""
+    pm = _pm()
+    res = pm.validate_permissions_matrix({"bad.role": ("design.read",)})
+    assert res["valid"] is False
+    assert any("命名不合规" in it for it in res["issues"])
+
+
+def test_validate_matrix_flags_duplicate_action():
+    """单角色内动作重复声明 → 检出 (结构异味)。"""
+    pm = _pm()
+    res = pm.validate_permissions_matrix({"designer": ("design.read", "design.read")})
+    assert res["valid"] is False
+    assert any("重复" in it for it in res["issues"])
+
+
+def test_validate_matrix_flags_non_string_action():
+    """角色值含非字符串动作 (42) → 检出。"""
+    pm = _pm()
+    res = pm.validate_permissions_matrix({"designer": ("design.read", 42)})
+    assert res["valid"] is False
+    assert any("非字符串" in it for it in res["issues"])
+
+
+def test_validate_matrix_malformed_input_no_crash():
+    """matrix 非 dict / 值非序列 → 计入 issues 不崩 (优雅降级)。"""
+    pm = _pm()
+    assert pm.validate_permissions_matrix("not-a-dict")["valid"] is False
+    res = pm.validate_permissions_matrix({"designer": 42})  # 值非 list/tuple
+    assert res["valid"] is False
+    assert any("非动作串序列" in it for it in res["issues"])
+
+
+def _pm():
+    from src.agents.src.tools import permission_model
+    return permission_model
+
+
 if __name__ == "__main__":
     test_resolve_role_known_and_unknown()
     test_can_lookup()
@@ -169,5 +240,13 @@ if __name__ == "__main__":
     test_no_deadlock_empty()
     test_deadlock_ignores_unknown_target()
     test_self_wait_is_cycle()
+    test_check_action_format_valid()
+    test_check_action_format_malformed()
+    test_validate_matrix_default_valid()
+    test_validate_matrix_flags_malformed_action()
+    test_validate_matrix_flags_bad_role_name()
+    test_validate_matrix_flags_duplicate_action()
+    test_validate_matrix_flags_non_string_action()
+    test_validate_matrix_malformed_input_no_crash()
     # ASCII print — Windows GBK 终端不能 print emoji (直跑护栏见 test_direct_run.py)
     print("OK: all permission model tests passed")

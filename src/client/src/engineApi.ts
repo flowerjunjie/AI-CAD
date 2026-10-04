@@ -271,6 +271,17 @@ export async function fetchCollabDeadlockLive(): Promise<import('./useEngineStor
   return result;
 }
 
+// ─── M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验) ───
+/** GET /api/permission/matrix: 角色→权限矩阵 + 结构自洽校验 (机制层, 不判业务值)。 */
+export async function fetchPermissionMatrix(): Promise<import('./useEngineStore').PermissionMatrix | null> {
+  const store = useEngineStore.getState();
+  const result = await getJson<import('./useEngineStore').PermissionMatrix>(
+    '/api/permission/matrix',
+  );
+  if (result) store.setPermissionMatrix(result);
+  return result;
+}
+
 // ─── M2 制图约定对齐工具 (bridge.py I 段, 扫 DWG → 图层/块名频率报告) ───
 // GET /api/dwg-scan?sample=X.dxf → DwgScanResult (诚实两态: 有数据/缺图层空报告)。
 // 专家据此把 docs/element-upstream-contract.md §5 的 TBD 映射 dict 回填成选择题。

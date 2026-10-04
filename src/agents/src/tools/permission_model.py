@@ -13,6 +13,7 @@ M5 权限模型机制骨架 (多设计师协作 — 可自主子集)
 
 红线: 纯函数库, 不碰 ezdxf/langgraph/DB; 未知角色/动作优雅拒绝 (不崩, 返回可判定结果)。
 """
+import re
 from dataclasses import dataclass, field
 
 
@@ -67,6 +68,63 @@ def resolve_role(role_name: str, permissions: dict[str, tuple[str, ...]] | None 
 def can(role: Role, action: str) -> bool:
     """角色能否做某动作 (纯查表)。"""
     return action in role.permissions
+
+
+# ─── 权限矩阵结构自洽校验 (机制层自主子集, 纯函数) ──────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 校验「矩阵结构是否自洽」(角色/动作命名
+# 规范、值类型、无畸形条目) — **不**判定「谁到底能干什么」(那是业务回填值的红线,
+# 本层只查结构, 不虚标终值)。纯函数, 畸形输入优雅降级不崩。消费侧 (can/resolve_role)
+# 之前可挂此校验, 把「手滑写错动作串 → 静默全拒绝」从线上静默提前到可见告警。
+
+# 动作命名规范: <资源>.<动作> — 恰好一个 ".", 两侧非空 (见 L51 约定)。
+# 合法示例 design.read / review.approve / merge.lock; 畸形: "" / "design" (无点) /
+# "design." (后半空) / "design..write" (双点) / "a.b.c" (多级点分, 非本层约定)。
+_ACTION_FMT = re.compile(r"^[^.]+\.[^.]+$")
+
+
+def check_action_format(action: str) -> bool:
+    """动作命名是否符 `<资源>.<动作>` 规范 (纯判定, 不崩)。
+
+    非字符串 / 空 / 缺点 / 空半 / 双点 / 多级点分 → False。合法 → True。"""
+    if not isinstance(action, str):
+        return False
+    return bool(_ACTION_FMT.match(action))
+
+
+def validate_permissions_matrix(matrix: dict) -> dict:
+    """校验权限矩阵结构自洽。返回 {valid: bool, issues: [str], malformed_actions: [str]}。
+
+    校验四条 (缺哪条报哪条, 全过 → valid=True):
+      ① 值类型: 每个角色值须是 (str, ...) 可迭代动作串 (非 dict/标量)。
+      ② 动作命名规范: 每个动作须符 <资源>.<动作> (check_action_format)。
+      ③ 角色命名: 非空 + 非含 "." (角色名与动作串区分, 防歧义)。
+      ④ 无重复动作: 单角色内动作不重复 (重复声明结构异味, 不判业务)。
+    畸形输入 (matrix 非 dict) → 计入 issues, 不崩。malformed_actions 汇总所有命名
+    不合规的动作串 (供消费侧告警, 不静默)。
+    """
+    issues: list[str] = []
+    malformed: list[str] = []
+    if not isinstance(matrix, dict):
+        return {"valid": False, "issues": ["matrix 非 dict (畸形)"],
+                "malformed_actions": malformed}
+    for role_name, perms in matrix.items():
+        if not isinstance(role_name, str) or not role_name or "." in role_name:
+            issues.append(f"角色 {role_name!r} 命名不合规 (须非空且不含 '.')")
+        if not isinstance(perms, (list, tuple)):
+            issues.append(f"角色 {role_name!r} 权限非动作串序列 (须 list/tuple[str])")
+            continue
+        seen: set = set()
+        for a in perms:
+            if not isinstance(a, str):
+                issues.append(f"角色 {role_name!r} 含非字符串动作 {a!r}")
+                continue
+            if not check_action_format(a):
+                issues.append(f"角色 {role_name!r} 动作 {a!r} 命名不合规 (<资源>.<动作>)")
+                malformed.append(a)
+            if a in seen:
+                issues.append(f"角色 {role_name!r} 动作 {a!r} 重复声明")
+            seen.add(a)
+    return {"valid": not issues, "issues": issues, "malformed_actions": malformed}
 
 
 def acquire_lock(

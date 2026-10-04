@@ -1028,6 +1028,26 @@ def api_collab_snapshot(designer: str = "designer") -> dict:
     return snap
 
 
+@app.get("/api/permission/matrix")
+def api_permission_matrix() -> dict:
+    """M5 权限矩阵 (机制层): 透出默认角色→权限矩阵 + 结构自洽校验结论。
+
+    业务专家回填 DEFAULT_PERMISSIONS 时, 本端点把「矩阵结构是否自洽」(角色/动作
+    命名规范 <资源>.<动作>、值类型、无重复/畸形条目) 提前透出, 而非线上静默全拒绝。
+    返回 {roles, valid, issues, malformed_actions, note}。
+
+    诚实边界 (不虚标): 校验的是**矩阵结构** (命名/类型/重复), **不**判定「谁到底能
+    干什么」的业务值 — 具体角色/权限条目仍需业务定夺 (占位配置), 本端点只报结构异味。"""
+    from src.agents.src.tools.permission_model import (  # 懒
+        DEFAULT_PERMISSIONS, validate_permissions_matrix)
+    res = validate_permissions_matrix(DEFAULT_PERMISSIONS)
+    res["roles"] = {k: list(v) for k, v in DEFAULT_PERMISSIONS.items()}
+    res["note"] = ("权限矩阵结构自洽 (命名/类型/无重复); 具体角色/权限值仍为占位, "
+                   "需业务定夺" if res["valid"]
+                   else "权限矩阵存在结构异味, 见 issues/malformed_actions (业务回填前修复)")
+    return res
+
+
 def _collab_store() -> object:
     """懒建默认协同 store (data/collab/state.json, 缺目录自动建)。"""
     from src.agents.src.tools.collab_protocol import JsonFileCollabStore

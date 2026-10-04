@@ -75,6 +75,10 @@
                      (record_wait/clear_waits_for, collab_protocol 采集层) → check_deadlock_from_state
                      读真实 state.waits 投影成等待图喂 detect_deadlock → /api/collab/deadlock (真实锁流程版);
                      设计师交叉取锁被拒 → 记真实等待 → 端点检出环 (与 /api/collab/deadlock-check 提交版互补)
+                     权限矩阵结构自洽校验 (机制层自主子集): validate_permissions_matrix + check_action_format
+                     (动作命名 <资源>.<动作> / 值类型 / 无重复 / 角色命名, permission_model) →
+                     /api/permission/matrix 透出默认矩阵 + 结构校验诊断 (业务回填畸形矩阵前置报异味,
+                     不再线上静默全拒绝); 只校验「矩阵结构」, 不判「谁到底能干什么」的业务值 (仍占位)
                      collab-lock-integrity DSL 规则 confirmed=true 点亮 M5 协同占位卡 (机制已落地, 不虚标)
 ```
 
