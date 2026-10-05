@@ -75,13 +75,13 @@ export default function CollabPanel() {
           disabled={!engineConnected || collabElementsLoading}
           title="拉当前 lastSample 的真实 CAD 元素清单 (取锁前看是否疑似重复)"
         >
-          {collabElementsLoading ? '…' : '拉元素'}
+          {collabElementsLoading ? '拉取中…' : '拉元素'}
         </button>
         <button className="btn-primary btn-sm" onClick={handleAcquire} disabled={!engineConnected || collabLoading}>
-          {collabLoading ? '…' : '取锁'}
+          {collabLoading ? '取锁中…' : '取锁'}
         </button>
         <button className="btn-sm collab-release-btn" onClick={handleRelease} disabled={!engineConnected || collabLoading}>
-          放锁
+          {collabLoading ? '放锁中…' : '放锁'}
         </button>
       </div>
 

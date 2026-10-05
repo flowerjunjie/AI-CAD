@@ -7,6 +7,9 @@ import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 import CollabPanel from './CollabPanel';
+import { useRuleEditorStore } from './useRuleEditorStore';
+import { loadDslRules } from './engineApi';
+import type { DslRuleItem } from './useEngineStore';
 
 declare global {
   interface Window {
@@ -38,6 +41,24 @@ function App() {
   const [rulesPane, setRulesPane] = useState<'list' | 'editor'>('list');
   // 列表态源过滤 tab (原 rulesTab, 挪进列表子面板)
   const [shownTab, setShownTab] = useState<'hardcoded' | 'dsl' | 'all'>('all');
+
+  // P11 占位卡 → 回填入口导航: 点「可推动」占位卡的「去回填」→ 切到右栏 DSL 编辑器
+  // + 定位到该规则前缀首条规则 + 确保 DSL 规则已加载 (消除「看到占位不知去哪回填」断点)。
+  const goToBackfill = useCallback((prefixes: string[] | undefined, ownerId: string) => {
+    const s = useRuleEditorStore.getState();
+    const prefixesToMatch = prefixes && prefixes.length > 0 ? prefixes : [ownerId.replace(/-values$/, '') + '-'];
+    if (!s.loaded || s.rules.length === 0) {
+      loadDslRules().then((rs) => {
+        if (!rs || rs.length === 0) return;
+        const target = rs.find((r) => prefixesToMatch.some((p) => r.rule_id.startsWith(p)));
+        useRuleEditorStore.getState().selectRule(target ? target.rule_id : null);
+      });
+    } else {
+      const target = s.rules.find((r) => prefixesToMatch.some((p) => r.rule_id.startsWith(p)));
+      s.selectRule(target ? target.rule_id : null);
+    }
+    setRulesPane('editor');
+  }, []);
 
   // 启动 + 周期性探测引擎可达性
   useEffect(() => {
@@ -651,6 +672,23 @@ function App() {
                   <span className="ph-title">{p.title}</span>
                 </div>
                 <p className="ph-desc">{p.desc}</p>
+                {/* P9 行动指引: 告诉设计师「这张卡我下一步能干嘛」(可推动去哪 / 纯占位等谁),
+                    消除「看到占位却不知该做啥」的认知断点 */}
+                {p.actionHint && (
+                  <p className={`ph-action ${p.disciplinePrefixes ? 'ph-action-doable' : 'ph-action-external'}`}>
+                    <span className="ph-action-tag">{p.disciplinePrefixes ? '可推动' : '待外部'}</span>
+                    {p.actionHint}
+                  </p>
+                )}
+                {/* P11 回填入口导航: 可推动占位卡 → 一键跳右栏 DSL 编辑器并定位到对应规则 */}
+                {p.disciplinePrefixes && (
+                  <button
+                    className="ph-go-backfill"
+                    onClick={() => goToBackfill(p.disciplinePrefixes, p.id)}
+                  >
+                    去回填 →
+                  </button>
+                )}
                 {p.disciplinePrefixes && (
                   <div className="ph-disciplines">
                     {p.disciplinePrefixes.map((pref, i) => {

@@ -413,6 +413,27 @@ body {
 .ph-desc { font-size: 11px; color: #888; margin-bottom: 4px; }
 .ph-domain { font-size: 10px; color: #555; }
 
+/* P9 占位卡行动指引: 区分「可推动」(绿, 我能操作去哪) vs「待外部」(灰, 等谁) */
+.ph-action {
+  font-size: 10px; line-height: 1.4; margin: 0 0 4px;
+  padding: 4px 6px; border-radius: 4px;
+}
+.ph-action-doable { color: #2ecc71; background: #0d1a12; }
+.ph-action-external { color: #889; background: #14141f; }
+.ph-action-tag {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 0 5px; border-radius: 3px; margin-right: 5px;
+}
+.ph-action-doable .ph-action-tag { color: #0d1a12; background: #2ecc71; }
+.ph-action-external .ph-action-tag { color: #ccc; background: #555; }
+/* P11 回填入口导航: 可推动占位卡 → 一键跳右栏 DSL 编辑器 */
+.ph-go-backfill {
+  display: inline-block; margin-top: 4px;
+  background: transparent; border: 1px solid #2ecc71; color: #2ecc71;
+  font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+}
+.ph-go-backfill:hover { background: #2ecc71; color: #0d1a12; }
+
 /* ============================================================
    规则 DSL 编辑器面板 (Phase 2) — 设计器不写代码改 default.json
    ============================================================ */
