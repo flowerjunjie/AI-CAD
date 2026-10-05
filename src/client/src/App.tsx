@@ -23,6 +23,7 @@ const STEPS = ['意图理解', '方案结构化', 'CAD执行', '规则校验', '
 function App() {
   const {
     engineConnected, phase, rules, violations,
+    fetchError,
     running, lastSample, pipelineResult, ragResults, ragQuery,
     clashResults, clashLoading, clashError,
     conflictResults, conflictLoading, conflictError,
@@ -115,6 +116,22 @@ function App() {
           <span className="phase-tag">{phase}</span>
         </div>
       </header>
+
+      {/* P5 静默失败显式化 (通用): 最近一次因断连/异常未生效的操作, 统一横幅告知。
+          区别于各区块分散置灰 — 设计师点任何端点没反应时, 这里显式说明哪个操作没生效。 */}
+      {fetchError && (
+        <div className="fetch-error-banner" role="alert">
+          <span className="fetch-error-icon">⚠</span>
+          <span>{fetchError} — 请确认右上角引擎连接状态后重试</span>
+          <button
+            className="fetch-error-dismiss"
+            onClick={() => useEngineStore.getState().setFetchError(null)}
+            aria-label="关闭提示"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Main */}
       <main className="main">

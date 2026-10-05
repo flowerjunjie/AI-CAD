@@ -559,10 +559,16 @@ body {
 .clash-detail { color: #666; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clash-empty { font-size: 12px; color: #555; }
 
-/* P5 静默失败显式化: 引擎断连/异常时检测结果区显式错误提示 (区别于空态 clash-empty) */
-.clash-err {
-  font-size: 11px; color: #ff8a80; margin: 4px 0;
-  border-left: 3px solid #e74c3c; background: #1a0f0f; padding: 4px 8px;
+/* P5 静默失败显式化 (通用): 断连/异常未生效操作的统一横幅 (header 下方, 全端点共享) */
+.fetch-error-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: #1a0f0f; border: 1px solid #e74c3c; border-radius: 6px;
+  color: #ff8a80; font-size: 12px; padding: 6px 10px; margin: 0 16px 8px;
+}
+.fetch-error-icon { font-weight: 700; }
+.fetch-error-dismiss {
+  margin-left: auto; background: transparent; border: 1px solid #e74c3c; color: #ff8a80;
+  border-radius: 4px; font-size: 11px; padding: 1px 6px; cursor: pointer;
 }
 /* P4 结果可回溯: 「已 N 份」计数 + 「最新」标注 + 清除按钮 */
 .clash-count-note { font-size: 10px; color: #667; font-weight: 400; margin-left: 6px; }

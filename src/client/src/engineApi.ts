@@ -60,6 +60,9 @@ export async function runPipeline(sample: string, useLlm: boolean) {
   if (result) {
     store.setPipelineResult(result);
     store.setViolations(result.violations || []);
+    store.setFetchError(null);
+  } else {
+    store.setFetchError(`「自动出图」未生效 (引擎断连或异常) — ${sample}`);
   }
   store.setRunning(false);
 }
@@ -69,6 +72,8 @@ export async function runRagSearch(query: string) {
   type RAGResp = { query: string; results: RAGResult[] };
   const resp = await postJson<RAGResp, { query: string; top_k: number }>('/api/rag/search', { query, top_k: 5 });
   store.setRagResults(query, resp?.results || []);
+  if (resp) store.setFetchError(null);
+  else store.setFetchError(`「知识检索」未生效 (引擎断连或异常) — ${query}`);
 }
 
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 调用桥端点 (src/gui/bridge.py B2 段) ───
@@ -193,7 +198,8 @@ export async function fetchCollabSnapshot(designer: string): Promise<CollabSnaps
   const snap = await getJson<CollabSnapshot>(
     `/api/collab/snapshot?designer=${encodeURIComponent(designer)}`,
   );
-  if (snap) store.setCollabSnapshot(snap);
+  if (snap) { store.setCollabSnapshot(snap); store.setFetchError(null); }
+  else store.setFetchError(`「看快照」未生效 (引擎断连或异常)`);
   return snap;
 }
 
@@ -208,6 +214,9 @@ export async function collabAcquire(
   store.setCollabLoading(false);
   if (result) {
     store.setCollabSnapshot(result);  // 操作响应即新快照
+    store.setFetchError(null);
+  } else {
+    store.setFetchError(`「取锁」未生效 (引擎断连或异常)`);
   }
   return result;
 }
@@ -223,6 +232,9 @@ export async function collabRelease(
   store.setCollabLoading(false);
   if (result) {
     store.setCollabSnapshot(result);
+    store.setFetchError(null);
+  } else {
+    store.setFetchError(`「放锁」未生效 (引擎断连或异常)`);
   }
   return result;
 }
@@ -239,7 +251,8 @@ export async function fetchCollabElements(sample: string): Promise<import('./use
     `/api/collab/elements?sample=${encodeURIComponent(sample)}`,
   );
   store.setCollabElementsLoading(false);
-  if (result) store.setCollabElements(result);
+  if (result) { store.setCollabElements(result); store.setFetchError(null); }
+  else store.setFetchError(`「拉元素」未生效 (引擎断连或异常)`);
   return result;
 }
 
@@ -253,7 +266,8 @@ export async function fetchCollabVerify(): Promise<import('./useEngineStore').Co
   const result = await getJson<import('./useEngineStore').CollabVerify>(
     '/api/collab/verify',
   );
-  if (result) store.setCollabVerify(result);
+  if (result) { store.setCollabVerify(result); store.setFetchError(null); }
+  else store.setFetchError(`「校验日志」未生效 (引擎断连或异常)`);
   return result;
 }
 
@@ -272,7 +286,8 @@ export async function fetchCollabDeadlockLive(): Promise<import('./useEngineStor
   const result = await getJson<import('./useEngineStore').CollabDeadlockLive>(
     '/api/collab/deadlock',
   );
-  if (result) store.setCollabDeadlock(result);
+  if (result) { store.setCollabDeadlock(result); store.setFetchError(null); }
+  else store.setFetchError(`「查死锁」未生效 (引擎断连或异常)`);
   return result;
 }
 
@@ -283,7 +298,8 @@ export async function fetchPermissionMatrix(): Promise<import('./useEngineStore'
   const result = await getJson<import('./useEngineStore').PermissionMatrix>(
     '/api/permission/matrix',
   );
-  if (result) store.setPermissionMatrix(result);
+  if (result) { store.setPermissionMatrix(result); store.setFetchError(null); }
+  else store.setFetchError(`「看矩阵」未生效 (引擎断连或异常)`);
   return result;
 }
 
@@ -298,7 +314,8 @@ export async function runDwgScan(sample: string): Promise<DwgScanResult | null> 
     `/api/dwg-scan?sample=${encodeURIComponent(sample)}`,
   );
   store.setDwgScanLoading(false);
-  if (result) store.setDwgScan(result);
+  if (result) { store.setDwgScan(result); store.setFetchError(null); }
+  else store.setFetchError(`「扫图层」未生效 (引擎断连或异常) — ${sample}`);
   return result;
 }
 

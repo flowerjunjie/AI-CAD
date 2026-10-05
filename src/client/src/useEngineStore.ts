@@ -258,6 +258,9 @@ export interface DslApplyResp {
 interface EngineState {
   engineConnected: boolean;
   phase: string;
+  // P5 静默失败显式化 (通用): 最近一次「因断连/异常未生效」的操作 (null = 无),
+  // 由 8 个 getJson/postJson 类 API 函数在返回 null 时统一置, header 出横幅。
+  fetchError: string | null;
   rules: RuleItem[];
   violations: Violation[];
   running: boolean;
@@ -292,6 +295,7 @@ interface EngineState {
   // session 级人在回路: /agent/run 起的真实挂起 run (thread + pending tasks)
   agentRun: import('./engineApi').AgentRunResult | null;
   setConnected: (c: boolean, phase?: string) => void;
+  setFetchError: (e: string | null) => void;
   setRules: (r: RuleItem[]) => void;
   setViolations: (v: Violation[]) => void;
   setRunning: (r: boolean) => void;
@@ -321,6 +325,7 @@ interface EngineState {
 export const useEngineStore = create<EngineState>((set) => ({
   engineConnected: false,
   phase: '—',
+  fetchError: null,
   rules: [],
   violations: [],
   running: false,
@@ -347,6 +352,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   confirmLoading: false,
   agentRun: null,
   setConnected: (c, phase) => set({ engineConnected: c, ...(phase !== undefined ? { phase } : {}) }),
+  setFetchError: (e) => set({ fetchError: e }),
   setRules: (rules) => set({ rules }),
   setViolations: (violations) => set({ violations }),
   setRunning: (running) => set({ running }),
