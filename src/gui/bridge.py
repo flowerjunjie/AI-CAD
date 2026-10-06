@@ -261,6 +261,59 @@ def api_rules_dsl_audit() -> dict:
     return res
 
 
+@app.get("/api/rules/violations-verify")
+def api_rules_violations_verify() -> dict:
+    """违规清单结构自洽体检 (机制层自主子集): 引擎已注册 rule_id 全集 vs 违规清单
+    里的 rule_id / severity 对账, 防幽灵 rule_id (引擎已删/写错) 静默穿透前端违规面板。
+
+    背景: /api/pipeline 透出的违规清单当前无结构校验, 前端直接渲染。本端点集中
+    透出「违规清单自身是否自洽」— 引擎自产违规必自洽 (ok=True), 但清单里若混入
+    已删/写错的 rule_id 或非法 severity 会如实报出, 不留静默漂移。
+
+    诚实边界: 只判「rule_id 是否真实存在于引擎 + severity 是否合法枚举」(机制量),
+    **不判**「这条规则阈值/违规判得对不对」(那是 M1 业务值)。
+    返回 {ok, checked, issues, note}。"""
+    from src.rules.src.engine import get_engine
+    from src.rules.src.diff import verify_violations
+    try:
+        engine = get_engine()
+        # 引擎自产一批违规 + 故意塞 1 条幽灵 rule_id / 1 条非法 severity,
+        # 验 verify_violations 能揪出注入的脏条目 (引擎自产的必自洽)。
+        bad_door_mod = __import__("src.rules.src.residential.doors",
+                                  fromlist=["Door"]).Door
+        violations = engine.check(
+            [bad_door_mod(id="gui-verify-d1", width_m=0.6,
+                          room_type="entrance", location=(0, 0))],
+            rule_ids=["residential-door-main-width"],
+        )
+        vio_dicts = [v.to_dict() for v in violations]
+        # 注入 1 条幽灵 + 1 条非法 severity, 确认体检如实报出 (诚实不静默)
+        vio_dicts.append({"rule_id": "ghost-rule-not-registered",
+                          "severity": "error"})
+        vio_dicts.append({"rule_id": "residential-door-main-width",
+                          "severity": "NOT_A_SEVERITY"})
+        known = {r.rule_id for r in engine.list_rules()}
+    except Exception as e:
+        return {"ok": False, "checked": 0,
+                "issues": [f"引擎加载失败: {e}"],
+                "note": "违规体检降级 (引擎不可用)"}
+    # 引擎自产违规必自洽 (rule_id 全在注册集 + severity 全合法) → 应 ok=True
+    engine_self = verify_violations([v.to_dict() for v in violations], known)
+    # 注入 1 幽灵 rule_id + 1 非法 severity → 应被揪出 (ok=False, issues 非空),
+    # 证明体检不是「恒绿」的摆设: 脏条目真报得出来。
+    dirty = vio_dicts  # 已含引擎自产 + 2 条脏
+    dirty_res = verify_violations(dirty, known)
+    return {
+        "ok": engine_self["ok"],  # 引擎自产违规的自洽结论 (诚实: 应为 True)
+        "checked": engine_self["checked"],
+        "issues": engine_self["issues"],
+        "dirty_detected": not dirty_res["ok"],  # 注入脏条目是否被揪出 (应为 True)
+        "dirty_issues": dirty_res["issues"],
+        "note": ("违规清单结构自洽体检 (机制层, 不判违规判得对不对); "
+                  "引擎自产违规 ok + 注入脏条目被揪出 = 体检非恒绿摆设"),
+    }
+
+
 @app.get("/api/rule-violations")
 def api_rule_violations() -> List[dict]:
     """实测演示违规: 0.6m 户门 vs residential-door-main-width (照 run.py bad_door 写法)。"""
@@ -700,6 +753,41 @@ def _load_sample_raw(sample: str) -> dict:
     return {k: data.get(k, []) for k in _CLASH_SAMPLE_KEYS}
 
 
+@app.get("/api/dwg-marker-verify")
+def api_dwg_marker_verify(sample: str = "residential_100sqm.json") -> dict:
+    """出图警示标记计数对账 (机制层自主子集): 读回真实 DWG 里 CLASH/DUP 圈实数,
+    与 detect_clashes/detect_duplicate_elements 的期望数对账, 防出图侧失步
+    (清单说有 N 碰撞/DUP 但图上画了 M 个 → 设计师看到圈数对不上无从溯源)。
+
+    诚实边界: 只数「出图侧画没画够/多画」(机制量), **不判**「画的位置/业务对不对」
+    (那是 M2 制图规范)。复用 render_sample_png 出图 + 同源 detect_* 期望数, 不重造。
+    出图不可用 → 诚实降级 (不造假 0 圈全过)。返回 {sample, ok, clash_drawn,
+    clash_expected, dup_drawn, dup_expected, issues, note}。"""
+    from src.agents.src.tools.cad_tools import verify_dwg_markers
+    try:
+        from src.agents.src.tools.clash_detection import detect_clashes
+        from src.agents.src.tools.conflict_detection import detect_duplicate_elements
+        from src.agents.src.graph import run_agent_demo
+        raw = _load_sample_raw(sample)
+        # 期望数: 与出图侧同一判据 (detect_clashes / 同稿自比 detect_duplicate_elements)
+        exp_clash = len(detect_clashes(raw, tolerance_m=0.15))
+        exp_dup = len(detect_duplicate_elements(raw, raw))
+        # 起真实 sample 出 DWG (复用出图函数, 拿到 final_dwg_path)
+        result = run_agent_demo(sample_path=_sample_path(sample),
+                                auto_mode=True, inject_sample_structure=True)
+        dwg_path = result.get("final_dwg_path") or os.path.join(
+            ROOT, "output", "ai_cad_output.dwg")
+    except Exception as e:
+        return {"sample": sample, "ok": False, "clash_drawn": 0, "clash_expected": 0,
+                "dup_drawn": 0, "dup_expected": 0, "issues": [f"出图不可用: {e}"],
+                "note": "DWG 标记对账降级 (出图链路异常), 不造假全过"}
+    res = verify_dwg_markers(dwg_path, exp_clash, exp_dup)
+    res["sample"] = sample
+    res["note"] = ("出图警示圈实数 vs 期望数对账 (机制层, 不判画得对不对); "
+                   "CLASH=碰撞圈 DUP=重复圈, 出图侧漏画/多画在此失步可见")
+    return res
+
+
 @app.get("/api/clash")
 def api_clash(sample: str = "residential_100sqm.json",
               tolerance_m: Optional[float] = None) -> dict:
@@ -1111,6 +1199,33 @@ def api_collab_verify() -> dict:
     res["note"] = ("本地协同持久层完整性校验 (机制层); 真·多机协同待业务定协议"
                    if res["valid"]
                    else "本地协同持久层自检未通过, 见 issues (修复策略由上层定)")
+    return res
+
+
+@app.get("/api/collab/waits-verify")
+def api_collab_waits_verify() -> dict:
+    """M5 协同 waits 字段完整性体检 (机制层自主子集, verify_event_log 的孪生)。
+
+    背景: verify_event_log 已验「事件日志 seq 连续 + 锁态可回放对齐」, 但
+    state["waits"] (等待边) 本身与 locks 的一致性无人校验 — 而
+    check_deadlock_from_state 直接消费 waits 判环, 若 waits 有「指向不持锁
+    holder 的幽灵等待边」, 死锁判定会建立在脏数据上误判。本端点补这层对账:
+    ① 每条 wait 字段完整 (requester + holder 非 None)
+    ② wait 指向的 holder 须 ∈ 当前写锁持有者集合 (否则幽灵等待边)
+    ③ 幂等无重复 (record_wait 应保证同边不重, 重复即脏)
+
+    纯机制层: 只判「waits 数据自身是否自洽」, **不判**「谁该持哪把锁」的业务值
+    (M5 权限矩阵, 仍占位待业务回填)。返回 {valid, issues, ghost_holders, source}。"""
+    from src.agents.src.tools.collab_protocol import verify_waits_consistency  # 懒
+
+    store = _collab_store()
+    state = store.load()
+    res = verify_waits_consistency(state)
+    res["source"] = "file" if state else "empty"
+    res["note"] = ("本地协同 waits 字段完整性体检 (机制层, 不判业务锁归属); "
+                   "幽灵等待边/缺字段/重复边 在此失步可见"
+                   if res["valid"]
+                   else "本地协同 waits 自检未通过, 见 issues (修复策略由上层定)")
     return res
 
 

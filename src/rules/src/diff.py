@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from .engine import BaseRule, RuleViolation
+from .engine import ViolationSeverity
 
 
 def _key(v: RuleViolation) -> tuple[str, str]:
@@ -100,3 +101,51 @@ def diff_rule_lists(
         if old_map[rid] != new_map[rid]
     ]
     return {"added": added, "removed": removed, "changed": changed}
+
+
+# ─── 违规清单结构自洽校验 (机制层, 不判业务值) ─────────────────
+# 边界 (呼应 CLAUDE.md 不虚标): 这是「引擎产出→前端 的违规清单自身是否自洽」
+# 的校验 — 防幽灵 rule_id (引擎已删/写错) 静默穿透进 /api/pipeline 违规面板且无法
+# 溯源, 以及非法 severity 枚举值。只判「清单结构 + rule_id 是否真实存在于引擎」,
+# **不判**「这条规则阈值对不对」(那是 M1 业务值)。仿 verify_clashes/verify_summary 范式。
+
+
+def verify_violations(
+    violations: list[dict],
+    known_rule_ids: set[str],
+) -> dict:
+    """校验违规清单 (to_dict 序列化后的 list) 结构自洽。纯函数, 畸形不崩。
+
+    校验三条 (缺哪条报哪条, 全过 → ok=True, issues=[]):
+      ① rule_id 非空: 每条必有非空字符串 rule_id (前端据此分组展示)。
+      ② severity 合法: severity ∈ ViolationSeverity 合法值 (error/warning/info),
+         防序列化后写入非法枚举值导致前端渲染歧义。
+      ③ rule_id 已注册: rule_id ∈ known_rule_ids (引擎当前已注册全集) — 防幽灵
+         rule_id (引擎删了/写错) 静默穿透进违规清单无从溯源。
+
+    参数:
+      violations: list[dict] (RuleViolation.to_dict 产物, 缺字段优雅降级不崩)
+      known_rule_ids: 引擎已注册 rule_id 全集 (从 engine.list_rules() 派生, 非本函数取)
+    返回 {ok, issues: [str...], checked: int}。
+    """
+    valid_sev = {s.value for s in ViolationSeverity}
+    violations = violations or []
+    if not isinstance(violations, list):
+        return {"ok": False, "issues": [f"violations 非 list (畸形 {type(violations).__name__})"],
+                "checked": 0}
+    known = known_rule_ids or set()
+    issues: list[str] = []
+    for i, v in enumerate(violations):
+        tag = f"violations[{i}]"
+        if not isinstance(v, dict):
+            issues.append(f"{tag} 非 dict")
+            continue
+        rid = v.get("rule_id")
+        sev = v.get("severity")
+        if not isinstance(rid, str) or not rid:
+            issues.append(f"{tag} 缺 rule_id (={rid!r})")
+        elif rid not in known:
+            issues.append(f"{tag}.rule_id={rid!r} 不在引擎已注册集合 (幽灵 rule_id, 无从溯源)")
+        if sev not in valid_sev:
+            issues.append(f"{tag}.severity={sev!r} 非合法枚举 {sorted(valid_sev)}")
+    return {"ok": not issues, "issues": issues, "checked": len(violations)}

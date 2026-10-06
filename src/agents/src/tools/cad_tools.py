@@ -967,6 +967,62 @@ class DXFWriter:
             return False
 
 
+# ─── 出图警示标记计数对账 (机制层自主子集, 纯函数, 只读 DWG 不画) ───
+# 出图侧画碰撞 (CLASH 品红圈) / 重复 (DUP 琥珀圈) 时, 设计师看到「清单有 N 条
+# 碰撞 / 图上却 M 个圈」的失步无人拦。本函数读回 DWG 里 CLASH/DUP 图层 CIRCLE
+# 实体数, 与调用方喂的期望数对账。纯机制层: 只数「画没画够/多画」, 不判
+# 「画得对不对/位置准不准」(那是 M2 制图规范)。畸形 DWG (打不开/无该图层) 不崩。
+
+
+def count_dwg_markers(dxf_path: str) -> dict:
+    """读回 DWG 中 CLASH / DUP 图层 CIRCLE 实体数。纯只读, 缺文件/打不开降级 0。
+
+    返回 {clash: int, dup: int, opened: bool} — opened=False 时计数为 0 (不崩)。
+    每个 add_clash_marker/add_duplicate_marker 各画 1 个 CIRCLE (半径 0.2), 故
+    CLASH/DUP 图层的 CIRCLE 数 = 出图侧实际画的警示圈数。
+    """
+    out = {"clash": 0, "dup": 0, "opened": False}
+    try:
+        import ezdxf
+        doc = ezdxf.readfile(dxf_path)
+    except Exception:
+        return out
+    out["opened"] = True
+    msp = doc.modelspace()
+    try:
+        out["clash"] = len(msp.query('CIRCLE[layer=="CLASH"]'))
+        out["dup"] = len(msp.query('CIRCLE[layer=="DUP"]'))
+    except Exception:
+        pass
+    return out
+
+
+def verify_dwg_markers(dxf_path: str, expected_clash: int, expected_dup: int) -> dict:
+    """对账 DWG 警示圈实数 vs 期望数 (纯函数, 不崩)。
+
+    校验 (缺哪条报哪条, 全过 → ok=True, issues=[]):
+      ① 打不开 DWG → 无法对账, 记 issue (不静默当 0 圈全过)。
+      ② clash 实数 == expected_clash (漏画/多画都报, 防出图侧失步)。
+      ③ dup 实数 == expected_dup (同上)。
+    空画不判漏 (expected=0 且实数=0 合法, 无碰撞就该 0 圈)。
+    返回 {ok, clash_drawn, clash_expected, dup_drawn, dup_expected, issues}。
+    """
+    expected_clash = max(0, int(expected_clash or 0))
+    expected_dup = max(0, int(expected_dup or 0))
+    counts = count_dwg_markers(dxf_path)
+    issues: list[str] = []
+    if not counts["opened"]:
+        issues.append("DWG 打不开 (缺文件/非 ezdxf 可读), 无法对账 (不静默当 0 圈)")
+    drawn_clash, drawn_dup = counts["clash"], counts["dup"]
+    if counts["opened"]:
+        if drawn_clash != expected_clash:
+            issues.append(f"CLASH 圈数失步: 实画 {drawn_clash} ≠ 期望 {expected_clash}")
+        if drawn_dup != expected_dup:
+            issues.append(f"DUP 圈数失步: 实画 {drawn_dup} ≠ 期望 {expected_dup}")
+    return {"ok": not issues, "clash_drawn": drawn_clash, "clash_expected": expected_clash,
+            "dup_drawn": drawn_dup, "dup_expected": expected_dup, "issues": issues}
+
+
 # ─── Demo ───────────────────────────────────────────────────────
 
 if __name__ == "__main__":

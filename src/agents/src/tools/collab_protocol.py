@@ -342,3 +342,78 @@ def check_deadlock_from_state(state: dict) -> dict:
     edges = wait_edges_of(state)
     cycle = detect_deadlock(edges)
     return {"deadlocked": bool(cycle), "cycle": cycle, "wait_edges": edges}
+
+
+# ─── waits 字段完整性校验 (机制层自主子集, 纯函数) ─────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): verify_event_log 已验「事件日志 seq 连续
+# + 锁态可回放对齐」, 但 **state["waits"] (等待边) 本身与 locks/events 的一致性没有任何
+# 校验**。而 check_deadlock_from_state 直接消费 waits 判环 — 若 waits 里有「指向不
+# 持锁 holder 的幽灵等待边」, 死锁判定会建立在脏数据上误判。本函数补这层结构对账:
+# 纯函数, 输入 state 输出「waits 是否自洽 + 问题清单」, 不修数据、不重定义死锁语义
+# (requester/holder 与持有者的错位是 check_deadlock_from_state 既有边界, 本层不改)。
+# 只判「waits 作为数据自身是否自洽」: 字段完整 / holder 真持写锁 / 幂等无重复。
+
+
+def _write_holder_set(state: dict) -> set:
+    """state["locks"] 里 mode=write 的 holder 集合 (waits 的 holder 应属此)。"""
+    holders: set = set()
+    for l in state.get("locks", []):
+        if isinstance(l, dict) and l.get("mode") == "write":
+            h = l.get("holder")
+            if h is not None:
+                holders.add(h)
+    return holders
+
+
+def verify_waits_consistency(state: dict) -> dict:
+    """校验协同 state 的 waits (等待边) 是否结构自洽。纯函数, 畸形不崩。
+
+    校验三条 (缺哪条报哪条, 全过 → valid=True, issues=[]):
+      ① 字段完整: 每条 wait 须有 requester + holder 两字段 (非 None)。
+      ② holder 真持写锁: wait 指向的 holder 须 ∈ state["locks"] 写持有者集合
+         (等一个不持锁的人 = 幽灵等待边, 死锁判定会误判)。
+      ③ 幂等无重复: 同 (requester, holder) 不得出现两次 (record_wait 保证幂等,
+         重复即上游写脏)。
+    畸形输入 (state 非 dict / waits 非 list / 条非 dict) → 计入 issues, 不崩。
+    返回 {valid, issues, ghost_holders, orphan_dupes}。
+    """
+    if not isinstance(state, dict):
+        return {"valid": False,
+                "issues": [f"state 非 dict (畸形 {type(state).__name__})"],
+                "ghost_holders": [], "orphan_dupes": []}
+    waits = state.get("waits", [])
+    if not isinstance(waits, list):
+        return {"valid": False, "issues": [f"waits 非 list (畸形 {type(waits).__name__})"],
+                "ghost_holders": [], "orphan_dupes": []}
+
+    issues: list[str] = []
+    seen: set = set()
+    ghost: list = []
+    holders_now = _write_holder_set(state)
+
+    for i, w in enumerate(waits):
+        tag = f"waits[{i}]"
+        if not isinstance(w, dict):
+            issues.append(f"{tag} 非 dict")
+            continue
+        req, hold = w.get("requester"), w.get("holder")
+        # ① 字段完整
+        if req is None or hold is None:
+            issues.append(f"{tag} 缺 requester/holder (req={req!r}, holder={hold!r})")
+            continue
+        # ③ 幂等无重复
+        key = (req, hold)
+        if key in seen:
+            issues.append(f"{tag} 重复等待边 ({req}→{hold}) — record_wait 应幂等")
+            seen.add(key)
+            continue
+        seen.add(key)
+        # ② holder 真持写锁 (等待边指向不持锁者 = 幽灵, 死锁误判源头)
+        if hold not in holders_now:
+            ghost.append(f"{req}→{hold}")
+            issues.append(
+                f"{tag} 幽灵等待边: holder {hold!r} 不在当前写锁持有者集合 "
+                f"{sorted(holders_now)} (死锁判定会建立在脏 waits 上)")
+
+    return {"valid": not issues, "issues": issues,
+            "ghost_holders": ghost, "orphan_dupes": []}
