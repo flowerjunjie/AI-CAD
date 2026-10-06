@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   517 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   536 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
@@ -57,9 +57,10 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-05 | 505 | UI 体验优化第三批 (纯前端, 测试数字稳定): P5 静默失败泛化 — 提炼通用 fetchError 态 + header 统一错误横幅, 8 个 getJson/postJson 端点 (出图/检索/扫图层/协同/校验/死锁/矩阵) 断连→null 全接入, 不逐区块铺。tsc/build 过, 引擎全量实测仍 505 (无回归) | `03b8d28` | 纯前端轮, Python 测试水位不变 |
 | 2026-10-05 | 505 | UI 体验优化第四批 (纯前端, 测试数字稳定): P8 loading 文案统一 (拉元素/取锁/放锁 …→取锁中…) + P9 占位卡行动指引 (可推动/待外部 + 去哪操作) + P11 占位卡「去回填→」跳 DSL 编辑器定位前缀。起桥验 3 前缀命中真实 DSL 规则, 全量实测仍 505 (无回归) | `87e06f6` | 纯前端轮, Python 测试水位不变 |
 | 2026-10-06 | 516 | 机制层自主子集 (无需外部专家): DSL 信任边界集中体检 dsl.audit_rule_elements (element_types vs 主链路可喂类 + predicate 引用面) + /api/rules/dsl-audit 端点; 白名单改由 cad_rule_export.constructible_element_types() 从 _ELEMENT_CHECKS 各 build 返回注解派生 (门/窗 lambda→具名壳, 防白名单漂移) | `HEAD` | 机制层护栏, 渠道规则/楼梯走道类型落空如实标出, 不虚标全绿 |
-| 2026-10-06 | 517 | 判据同源纠正 (无需外部专家): audit_rule_elements 类型匹配判据与 ParametricRule._matches_type 严格同源 (小写并入、不去下划线), 撤掉误加的去下划线归一化 (比主链路更宽=漏报); 补 snake_case 声明主链路命中不了的正例测试钉死同源边界 | `HEAD` | 诚实纠错: snake_case 声明主链路真命中不了, 如实入 dangling, 不放宽 |
+| 2026-10-06 | 517 | 判据同源纠正 (无需外部专家): audit_rule_elements 类型匹配判据与 ParametricRule._matches_type 严格同源 (小写并入、不去下划线), 撤掉误加的去下划线归一化 (比主链路更宽=漏报); 补 snake_case 声明主链路命中不了的正例测试钉死同源边界 | `9e8c0e0` | 诚实纠错: snake_case 声明主链路真命中不了, 如实入 dangling, 不放宽 |
+| 2026-10-06 | 536 | 三条机制层自主子集护栏 (无需外部专家): ①diff.verify_violations 违规清单结构自洽 (rule_id 非空/severity 合法/属引擎已注册, 防幽灵穿透前端) + /api/rules/violations-verify; ②cad_tools.verify_dwg_markers 出图 CLASH/DUP 圈实数 vs 期望对账 + /api/dwg-marker-verify; ③collab_protocol.verify_waits_consistency waits 字段完整性 (holder 真持写锁/幂等无重复, 防幽灵等待边脏死锁判定) + /api/collab/waits-verify | `7ce268c` | 纯函数+主链路 0 改动+畸形不崩, 三条数据通路补全自洽对账; +前端 DSL 体检接线 (e82b70c, 纯前端不影响数字) |
 
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
 
-*最后刷新：2026-10-05 · 505 passed / 5 skipped / 0 failed（UI 体验优化第五批: P1 中列主从分层 + ConfirmGatePanel 组件抽取, 纯前端, 引擎全量实测稳定 505 无回归）*
+*最后刷新：2026-10-06 · 536 passed / 5 skipped / 0 failed（三条机制层自主子集护栏: 违规清单/出图圈数/协同waits 自洽校验 + DSL 判据同源纠正, 纯前端 DSL 体检接线, 全量无回归）*
