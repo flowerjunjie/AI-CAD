@@ -603,6 +603,12 @@ body {
   display: inline-block; font-size: 9px; font-weight: 700; color: #2ecc71;
   background: #0d1a12; border-radius: 4px; padding: 0 5px; margin-right: 6px;
 }
+/* M4/M5 区块内本地 error 提示 (引擎断连或异常, 本次操作未生效) */
+.clash-err {
+  font-size: 11px; color: #ff8a80; background: #1a0f0f;
+  border: 1px solid #e74c3c; border-radius: 4px;
+  padding: 4px 8px; margin-bottom: 6px;
+}
 .clash-head-actions { display: flex; align-items: center; gap: 6px; }
 .clash-clear-btn {
   background: transparent; border: 1px solid #555; color: #889;
@@ -627,6 +633,11 @@ body {
   font-size: 13px; color: #e91e8f; font-weight: 700; margin-bottom: 8px;
 }
 .collab-tag {
+  font-size: 9px; font-weight: 600; color: #9e9e9e;
+  border: 1px solid #555; border-radius: 8px; padding: 1px 5px; margin-left: 6px;
+}
+/* 检查/协同工具区块标题旁 M 编号徽章 (M4 品红 / M5 琥珀 / M2 蓝紫, 与标题主色对齐) */
+.tool-tag {
   font-size: 9px; font-weight: 600; color: #9e9e9e;
   border: 1px solid #555; border-radius: 8px; padding: 1px 5px; margin-left: 6px;
 }
@@ -703,3 +714,9 @@ body {
 .ph-disciplines { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .ph-disc { font-size: 10px; color: #666; }
 .ph-disc-lit { color: #4caf50; font-weight: 700; }
+/* M4 容差来源透出 (占位卡联动): 点亮态才显示, 没跑过检测不虚标 */
+.ph-tol-source {
+  font-size: 10px; color: #889; margin-bottom: 4px;
+  background: #14141f; border-radius: 4px; padding: 3px 6px;
+}
+.ph-tol-source b { color: #ccc; font-weight: 600; }

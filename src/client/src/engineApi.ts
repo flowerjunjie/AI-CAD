@@ -83,7 +83,10 @@ export async function runRagSearch(query: string) {
 
 export async function loadDslRules(): Promise<DslRuleItem[]> {
   type DslJson = { rules: DslRuleItem[] };
+  const store = useEngineStore.getState();
   const data = await getJson<DslJson>('/api/rules/dsl');
+  if (data) store.setFetchError(null);
+  else store.setFetchError('「拉 DSL 规则」未生效 (引擎断连或异常)');
   return data?.rules || [];
 }
 
@@ -94,6 +97,9 @@ export async function validateDslRules(rules: DslRuleItem[]): Promise<DslValidat
     '/api/rules/validate',
     { rules },
   );
+  const store = useEngineStore.getState();
+  if (resp) store.setFetchError(null);
+  else store.setFetchError('「校验」未生效 (引擎断连或异常)');
   return resp;
 }
 
@@ -102,10 +108,14 @@ export async function validateDslRules(rules: DslRuleItem[]): Promise<DslValidat
 // confirm=true  → 备份 + 写盘 + fail-fast 重载兜底 (status=applied)。
 // 服务端对非法 rules 直接 422 拒写, 前端拿到 null (postJson 断连/非 2xx 降级)。
 export async function applyDslRules(rules: DslRuleItem[], confirm: boolean): Promise<DslApplyResp | null> {
-  return postJson<DslApplyResp, { rules: DslRuleItem[]; confirm: boolean }>(
+  const resp = await postJson<DslApplyResp, { rules: DslRuleItem[]; confirm: boolean }>(
     '/api/rules/dsl/apply',
     { rules, confirm },
   );
+  const store = useEngineStore.getState();
+  if (resp) store.setFetchError(null);
+  else store.setFetchError(`「应用」未生效 (引擎断连或异常)${confirm ? ' · 确认落盘' : ' · 预览'}`);
+  return resp;
 }
 
 // ─── M1 数值回填 (bridge B 段, 单规则轻量回填 — 专家在面板点「回填」即点亮占位卡) ───
@@ -132,10 +142,14 @@ export async function backfillRule(
     params?: Record<string, unknown>;
   },
 ): Promise<RuleBackfillResp | null> {
-  return postJson<RuleBackfillResp, typeof payload & { rule_id: string }>(
+  const resp = await postJson<RuleBackfillResp, typeof payload & { rule_id: string }>(
     '/api/rules/backfill',
     { rule_id: ruleId, ...payload },
   );
+  const store = useEngineStore.getState();
+  if (resp) store.setFetchError(null);
+  else store.setFetchError(`「回填」未生效 (引擎断连或异常) — ${ruleId}`);
+  return resp;
 }
 
 // ─── M4 碰撞 / M5 冲突 (bridge.py F 段) ───
@@ -154,9 +168,11 @@ export async function runClashCheck(sample: string): Promise<ClashResult | null>
     // 追加而非覆盖: 多次检测不同 sample 可并存, 面板肉眼可区分
     store.setClashResults([...store.clashResults, result]);
     store.setClashError(false);
+    store.setFetchError(null);
   } else {
     // 断连/非 2xx → 显式 error 态 (P5 静默失败显式化, 不静默无反馈)
     store.setClashError(true);
+    store.setFetchError(`「检测碰撞」未生效 (引擎断连或异常) — ${sample}`);
   }
   return result;
 }
@@ -171,8 +187,10 @@ export async function runConflict(sampleA: string, sampleB: string): Promise<Con
   if (result) {
     store.setConflictResults([...store.conflictResults, result]);
     store.setConflictError(false);
+    store.setFetchError(null);
   } else {
     store.setConflictError(true);
+    store.setFetchError(`「比冲突」未生效 (引擎断连或异常) — ${sampleA} vs ${sampleB}`);
   }
   return result;
 }
@@ -382,6 +400,9 @@ export async function runAgentConfirm(
   if (result) {
     // 追加而非覆盖: 多次确认(同/不同 task)可并存, 面板肉眼可区分
     store.setConfirmResults([...store.confirmResults, result]);
+    store.setFetchError(null);
+  } else {
+    store.setFetchError(`「提交确认」未生效 (引擎断连或异常) — ${taskId}`);
   }
   return result;
 }
@@ -397,6 +418,9 @@ export async function runAgentStart(sample: string): Promise<AgentRunResult | nu
   if (result) {
     // 起图挂起成功 → 记录 thread, 供确认闸操作真实 run (非演示 task)
     store.setAgentRun(result);
+    store.setFetchError(null);
+  } else {
+    store.setFetchError(`「起图挂起」未生效 (引擎断连或异常) — ${sample}`);
   }
   return result;
 }

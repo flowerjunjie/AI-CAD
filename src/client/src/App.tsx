@@ -1,16 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
-import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
-        runClashCheck, runConflict,
-        runDwgScan } from './engineApi';
-import { PLACEHOLDERS } from './placeholders';
+import { syncEngine, runPipeline, runRagSearch, previewUrl, API } from './engineApi';
 import RuleEditorPanel from './RuleEditorPanel';
 import CollabPanel from './CollabPanel';
 import ConfirmGatePanel from './ConfirmGatePanel';
-import { useRuleEditorStore } from './useRuleEditorStore';
-import { loadDslRules } from './engineApi';
-import type { DslRuleItem } from './useEngineStore';
+import ClashSection from './ClashSection';
+import ConflictSection from './ConflictSection';
+import DwgScanSection from './DwgScanSection';
+import PlaceholderFooter from './PlaceholderFooter';
 
 declare global {
   interface Window {
@@ -29,9 +27,6 @@ function App() {
     engineConnected, phase, rules, violations,
     fetchError,
     running, lastSample, pipelineResult, ragResults, ragQuery,
-    clashResults, clashLoading, clashError,
-    conflictResults, conflictLoading, conflictError,
-    dwgScan, dwgScanLoading,
   } = useEngineStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,19 +39,8 @@ function App() {
 
   // P11 占位卡 → 回填入口导航: 点「可推动」占位卡的「去回填」→ 切到右栏 DSL 编辑器
   // + 定位到该规则前缀首条规则 + 确保 DSL 规则已加载 (消除「看到占位不知去哪回填」断点)。
-  const goToBackfill = useCallback((prefixes: string[] | undefined, ownerId: string) => {
-    const s = useRuleEditorStore.getState();
-    const prefixesToMatch = prefixes && prefixes.length > 0 ? prefixes : [ownerId.replace(/-values$/, '') + '-'];
-    if (!s.loaded || s.rules.length === 0) {
-      loadDslRules().then((rs) => {
-        if (!rs || rs.length === 0) return;
-        const target = rs.find((r) => prefixesToMatch.some((p) => r.rule_id.startsWith(p)));
-        useRuleEditorStore.getState().selectRule(target ? target.rule_id : null);
-      });
-    } else {
-      const target = s.rules.find((r) => prefixesToMatch.some((p) => r.rule_id.startsWith(p)));
-      s.selectRule(target ? target.rule_id : null);
-    }
+  // 具体定位逻辑收口在 PlaceholderFooter, 这里只负责切 tab (rulesPane 是 App 本地 state)。
+  const handleGoBackfill = useCallback((_prefixes: string[] | undefined, _ownerId: string) => {
     setRulesPane('editor');
   }, []);
 
@@ -80,29 +64,8 @@ function App() {
     await runRagSearch(searchQuery);
   }, [searchQuery]);
 
-  // M4 碰撞检测 (bridge /api/clash): 默认用当前 lastSample 检测
-  const handleClash = useCallback(async () => {
-    await runClashCheck(lastSample);
-  }, [lastSample]);
-
-  // M5 改动冲突检测 (bridge /api/conflict): 两稿默认同 sample (自比 → 0 冲突)
-  const [conflictSampleB, setConflictSampleB] = useState('residential_100sqm.json');
-  const handleConflict = useCallback(async () => {
-    await runConflict(lastSample, conflictSampleB);
-  }, [lastSample, conflictSampleB]);
-
-  // M5 在线协同持久层 (bridge H 段) 已抽成独立子组件 <CollabPanel />
-  // (主操作/诊断工具分层, 缓解巨型组件), 其 handler/state 一并搬入该组件。
-
-  // M2 制图约定对齐 (bridge /api/dwg-scan): 扫 DWG → 图层/块名/ATTRIB 频率报告,
-  // 专家据此把映射 dict 从填空题变选择题。默认扫电气样例 (电气是唯一有真实 DWG 上游的专业)。
-  const [dwgScanSample, setDwgScanSample] = useState('electrical_sample.dxf');
-  const handleDwgScan = useCallback(async () => {
-    await runDwgScan(dwgScanSample);
-  }, [dwgScanSample]);
-
-  // 人在回路确认闸 (bridge /agent/confirm) 已抽成独立子组件 <ConfirmGatePanel />,
-  // 其 handler/state (起图挂起/逐 task 确认/同 thread 续跑) 一并搬入该组件。
+  // M4 碰撞 / M5 冲突 / M2 扫图层 / M5 协同 各自的状态与 handler
+  // 已分别收口到 ClashSection / ConflictSection / DwgScanSection / CollabPanel。
 
   return (
     <div className="app">
@@ -247,191 +210,17 @@ function App() {
               轻量分组标题帮设计师分清「先跑主线还是按需查工具」, 不重排 DOM 层级 */}
           <div className="agent-group-title">检查与协同工具 · 按需运行</div>
 
-          {/* M4 碰撞检测 — 真数据 (bridge /api/clash, 品红色呼应出图 CLASH 层) */}
-          <div className="clash-section">
-            <div className="clash-head-row">
-              <h3>碰撞检测{clashResults.length > 1 ? <span className="clash-count-note">已 {clashResults.length} 份</span> : null}</h3>
-              <div className="clash-head-actions">
-                {clashResults.length > 0 && (
-                  <button
-                    className="btn-sm clash-clear-btn"
-                    onClick={() => { useEngineStore.getState().setClashResults([]); useEngineStore.getState().setClashError(false); }}
-                    title="清除全部碰撞检测结果"
-                  >
-                    清空
-                  </button>
-                )}
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={handleClash}
-                  disabled={!engineConnected || clashLoading}
-                >
-                  {clashLoading ? '检测中…' : '检测碰撞'}
-                </button>
-              </div>
-            </div>
-            {clashError && (
-              <p className="clash-err">引擎断连或返回异常 · 本次检测未生效, 请检查右上角连接状态后重试</p>
-            )}
-            {clashResults.length === 0 && !clashError && (
-              <p className="clash-empty">尚未检测 — 点「检测碰撞」跑 {lastSample} 的跨专业碰撞 (管线/暖通 vs 结构梁柱)</p>
-            )}
-            {clashResults.map((r, i) => (
-              <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
-                {i === clashResults.length - 1 && <span className="clash-latest">最新</span>}
-                {r.count > 0 ? (
-                  <>
-                    <span className="clash-badge">{r.count}</span>
-                    <span className="clash-scope">{r.sample}</span>
-                    {r.tolerance_source && (
-                      <span className="clash-detail">
-                        容差 {r.tolerance_m}m ({r.tolerance_source})
-                      </span>
-                    )}
-                    {r.clashes.map((c, j) => (
-                      <div key={j} className="clash-line">
-                        <span className="clash-kind">{c.kind}</span>
-                        <span className="clash-ids">{c.a_id} × {c.b_id}</span>
-                        <span className="clash-detail">{c.detail}</span>
-                      </div>
-                    ))}
-                  </>
-                ) : (
-                  <span className="clash-clean">✓ 无跨专业碰撞 · {r.sample}</span>
-                )}
-              </div>
-            ))}
-          </div>
+          {/* M4 碰撞检测 — 独立子组件 <ClashSection /> (bridge /api/clash, 品红色呼应出图 CLASH 层) */}
+          <ClashSection />
 
-          {/* M5 改动冲突检测 — 真数据 (bridge /api/conflict, 两稿按元素 id 比对) */}
-          <div className="conflict-section">
-            <div className="clash-head-row">
-              <h3>改动冲突 (两稿比对){conflictResults.length > 1 ? <span className="clash-count-note">已 {conflictResults.length} 份</span> : null}</h3>
-              <div className="conflict-controls">
-                <select
-                  value={conflictSampleB}
-                  onChange={(e) => setConflictSampleB(e.target.value)}
-                  className="conflict-select"
-                >
-                  <option value="residential_100sqm.json">residential_100sqm.json</option>
-                </select>
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={handleConflict}
-                  disabled={!engineConnected || conflictLoading}
-                >
-                  {conflictLoading ? '比对中…' : '比冲突'}
-                </button>
-                {conflictResults.length > 0 && (
-                  <button
-                    className="btn-sm clash-clear-btn"
-                    onClick={() => { useEngineStore.getState().setConflictResults([]); useEngineStore.getState().setConflictError(false); }}
-                    title="清除全部冲突比对结果"
-                  >
-                    清空
-                  </button>
-                )}
-              </div>
-            </div>
-            {conflictError && (
-              <p className="clash-err">引擎断连或返回异常 · 本次比对未生效, 请检查右上角连接状态后重试</p>
-            )}
-            {conflictResults.length === 0 && !conflictError && (
-              <p className="clash-empty">尚未比对 — 点「比冲突」比对稿A与稿B 的元素改动 (改值/新增/删除)</p>
-            )}
-            {conflictResults.map((r, i) => (
-              <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
-                {i === conflictResults.length - 1 && <span className="clash-latest">最新</span>}
-                {r.count > 0 ? (
-                  <>
-                    <span className="clash-badge">{r.count}</span>
-                    <span className="clash-scope">{r.sample_a} vs {r.sample_b}</span>
-                    {r.conflicts.slice(0, 8).map((c, j) => (
-                      <div key={j} className="clash-line">
-                        <span className={`clash-kind ${c.kind === 'duplicate' ? 'clash-kind-dup' : ''}`}>
-                          {c.kind === 'duplicate' ? '重复' : c.kind}
-                        </span>
-                        <span className="clash-ids">
-                          {c.kind === 'duplicate'
-                            ? `${c.category}/${c.id_a} ≡ ${c.id_b}${c.extra_ids?.length ? ` +${c.extra_ids.length} 个` : ''} @ (${c.coord?.join(', ')})`
-                            : `${c.category}/${c.id}${c.field ? `.${c.field}` : ''}`}
-                        </span>
-                        {c.kind === 'duplicate'
-                          ? <span className="clash-detail">同坐标不同 id (容差 {c.tolerance_m}m)</span>
-                          : c.field && <span className="clash-detail">{String(c.a_value)} → {String(c.b_value)}</span>}
-                      </div>
-                    ))}
-                    {r.conflicts.length > 8 && <div className="clash-detail">… 共 {r.conflicts.length} 条</div>}
-                  </>
-                ) : (
-                  <span className="clash-clean">✓ 两稿无改动冲突 · {r.sample_a} vs {r.sample_b}</span>
-                )}
-              </div>
-            ))}
-          </div>
+          {/* M5 改动冲突检测 — 独立子组件 <ConflictSection /> (bridge /api/conflict, 两稿按元素 id 比对) */}
+          <ConflictSection />
 
           {/* M5 协同持久层 — 独立子组件 CollabPanel (主操作/诊断工具分层, 缓解巨型组件) */}
           <CollabPanel />
 
-          {/* M2 制图约定对齐 — 扫 DWG 看图层/块名频率 (bridge I 段, 蓝紫色呼应出图规范) */}
-          <div className="dwgscan-section">
-            <div className="clash-head-row">
-              <h3>DWG 制图约定 <span className="collab-tag">M2</span></h3>
-              <div className="dwgscan-controls">
-                <select
-                  value={dwgScanSample}
-                  onChange={(e) => setDwgScanSample(e.target.value)}
-                  className="conflict-select"
-                >
-                  {['electrical_sample.dxf', 'hvac_sample.dxf',
-                    'plumbing_sample.dxf', 'structural_sample.dxf'].map((s) => (
-                    <option key={s} value={s}>{s.replace('_sample.dxf', '')}</option>
-                  ))}
-                </select>
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={handleDwgScan}
-                  disabled={!engineConnected || dwgScanLoading}
-                >
-                  {dwgScanLoading ? '扫描中…' : '扫图层'}
-                </button>
-              </div>
-            </div>
-            {dwgScan ? (
-              <div className={`clash-item ${dwgScan.layer_count > 0 ? 'clash-hit' : 'clash-ok'}`}>
-                <div className="clash-line">
-                  <span className="clash-kind">{dwgScan.sample}</span>
-                  <span className="clash-scope">
-                    图层 {dwgScan.layer_count} · INSERT {dwgScan.insert_total}
-                  </span>
-                </div>
-                {Object.entries(dwgScan.layers).slice(0, 6).map(([layer, info]) => (
-                  <div key={layer} className="clash-line">
-                    <span className="clash-kind dwgscan-layer">{layer}</span>
-                    <span className="clash-ids">
-                      {Object.entries(info.entity_counts).map(([t, n]) => `${t}×${n}`).join(' ')}
-                    </span>
-                    {info.block_names.length > 0 && (
-                      <span className="clash-detail">块: {info.block_names.slice(0, 4).join(', ')}</span>
-                    )}
-                  </div>
-                ))}
-                {Object.keys(dwgScan.attrib_tags).length > 0 && (
-                  <div className="clash-line">
-                    <span className="clash-kind dwgscan-attr">ATTRIB</span>
-                    <span className="clash-detail">
-                      {Object.entries(dwgScan.attrib_tags).map(([t, n]) => `${t}×${n}`).join(' ')}
-                    </span>
-                  </div>
-                )}
-                <p className="clash-empty">
-                  频率报告 · 专家据此回填映射 dict (docs/element-upstream-contract.md §5), 不判定 kind 归属
-                </p>
-              </div>
-            ) : (
-              <p className="clash-empty">点「扫图层」扫 {dwgScanSample} → 图层/块名/ATTRIB 频率报告</p>
-            )}
-          </div>
+          {/* M2 制图约定对齐 — 独立子组件 <DwgScanSection /> (bridge I 段, 扫 DWG → 图层/块名频率报告) */}
+          <DwgScanSection />
 
           {/* 人在回路确认闸 — 独立子组件 <ConfirmGatePanel /> (session 级, 起真实图挂起→逐 task 确认→同 thread 真续跑) */}
           <ConfirmGatePanel />
@@ -511,92 +300,9 @@ function App() {
         </section>
       </main>
 
-      {/* Footer: 占位符卡片（未实现能力，置灰；某专业规则 confirmed=true 即点亮该专业） */}
-      <footer className="footer footer-cards">
-        <div className="footer-title">发展占位 · 各专业专家补齐</div>
-        <div className="placeholder-row">
-          {PLACEHOLDERS.map((p) => {
-            // 专家填值即点亮: 该占位声明的专业前缀里, 有 confirmed 规则 → 该专业变实
-            const litPrefixes = p.disciplinePrefixes?.filter((pref) =>
-              rules.some((r) => r.confirmed && r.rule_id.startsWith(pref)),
-            ) || [];
-            // 全亮判定: 无前缀声明 → 恒不亮 (功能占位, 无回填通道);
-            // 有前缀 → 全部前缀 confirmed 才算 "已点亮" (M1 四专业 / M4 clash 容差)
-            const allLit = p.disciplinePrefixes?.length
-              ? litPrefixes.length === p.disciplinePrefixes.length
-              : false;
-            // M4 容差 + M1 卡联动: m4-collision 卡点亮时, 透出当前容差取值来源。
-            // 首选 /api/rules 的 clash-tolerance-range.tolerance_source (规则列表自带,
-            // 不依赖跑过碰撞检测); 兜底最近一次 M4 检测的 tolerance_source。
-            // 不虚标: 两个来源都没有 (规则未 confirmed + 没跑过检测) 则不显示。
-            let m4TolSource: string | undefined;
-            let m4TolVal: number | undefined;
-            if (p.id === 'm4-collision') {
-              const clashRule = rules.find((r) => r.rule_id === 'clash-tolerance-range');
-              if (clashRule?.tolerance_source) {
-                m4TolSource = clashRule.tolerance_source;
-                m4TolVal = clashRule.tolerance_m ?? undefined;
-              } else {
-                const lastClash = [...clashResults].reverse().find((r) => r.tolerance_source);
-                m4TolSource = lastClash?.tolerance_source;
-                m4TolVal = lastClash?.tolerance_m;
-              }
-            }
-            return (
-              <div
-                key={p.id}
-                className={`placeholder-card ${allLit ? 'placeholder-card-lit' : ''}`}
-                title={`负责方: ${p.owner}`}
-              >
-                <div className="ph-head">
-                  <span className={`ph-badge ${allLit ? 'ph-badge-lit' : ''}`}>
-                    {allLit ? '已点亮' : litPrefixes.length > 0 ? `点亮 ${litPrefixes.length} 专业` : '占位'}
-                  </span>
-                  <span className="ph-title">{p.title}</span>
-                </div>
-                <p className="ph-desc">{p.desc}</p>
-                {/* P9 行动指引: 告诉设计师「这张卡我下一步能干嘛」(可推动去哪 / 纯占位等谁),
-                    消除「看到占位却不知该做啥」的认知断点 */}
-                {p.actionHint && (
-                  <p className={`ph-action ${p.disciplinePrefixes ? 'ph-action-doable' : 'ph-action-external'}`}>
-                    <span className="ph-action-tag">{p.disciplinePrefixes ? '可推动' : '待外部'}</span>
-                    {p.actionHint}
-                  </p>
-                )}
-                {/* P11 回填入口导航: 可推动占位卡 → 一键跳右栏 DSL 编辑器并定位到对应规则 */}
-                {p.disciplinePrefixes && (
-                  <button
-                    className="ph-go-backfill"
-                    onClick={() => goToBackfill(p.disciplinePrefixes, p.id)}
-                  >
-                    去回填 →
-                  </button>
-                )}
-                {p.disciplinePrefixes && (
-                  <div className="ph-disciplines">
-                    {p.disciplinePrefixes.map((pref, i) => {
-                      const discLabel = p.domain.split('/')[i] || pref;
-                      const lit = litPrefixes.includes(pref);
-                      return (
-                        <span key={pref} className={`ph-disc ${lit ? 'ph-disc-lit' : ''}`}>
-                          {lit ? '●' : '○'} {discLabel}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* M4 容差来源透出 (卡联动): 点亮态才显示, 没跑过检测不虚标 */}
-                {allLit && m4TolSource && (
-                  <div className="ph-tol-source">
-                    容差 {m4TolVal ?? '?'} m · 来源 <b>{m4TolSource}</b>
-                  </div>
-                )}
-                <div className="ph-domain">{p.domain}</div>
-              </div>
-            );
-          })}
-        </div>
-      </footer>
+      {/* Footer: 占位符卡片（未实现能力，置灰；某专业规则 confirmed=true 即点亮该专业）
+          独立子组件 <PlaceholderFooter /> (P11 去回填导航 + M4 容差联动逻辑一并收口) */}
+      <PlaceholderFooter onGoBackfill={handleGoBackfill} />
     </div>
   );
 }
