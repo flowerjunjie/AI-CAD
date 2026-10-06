@@ -200,6 +200,23 @@ export interface PermissionMatrix {
   note?: string;
 }
 
+// ─── DSL 信任边界体检 (bridge.py B4 段 /api/rules/dsl-audit, 机制层自洽诊断) ───
+
+/** GET /api/rules/dsl-audit 单条 dangling 规则 (声明类型全落空, predicate 永不被主链路命中)。 */
+export interface DslAuditDangling {
+  rule_id: string;
+  element_types: string[];
+}
+
+/** GET /api/rules/dsl-audit 响应 (机制层体检, 不判业务类名对错)。 */
+export interface DslAuditResult {
+  ok: boolean;
+  checked: number;
+  issues: string[];
+  dangling_rules: DslAuditDangling[];
+  note?: string;
+}
+
 // ─── 规则 DSL 编辑器面板（Phase 2）—— 数据契约对齐 default.json / validate_dsl_json ───
 
 /** DSL 规则一条 (default.json 的 rules[i])。编辑面板的数据源。 */
@@ -281,6 +298,9 @@ interface EngineState {
   // M2 制图约定对齐工具 (bridge I 段, 扫 DWG → 图层/块名频率报告)
   dwgScan: import('./useEngineStore').DwgScanResult | null;
   dwgScanLoading: boolean;
+  // DSL 信任边界体检 (bridge B4 段, 机制层自洽诊断, 不写盘)
+  dslAudit: import('./useEngineStore').DslAuditResult | null;
+  dslAuditLoading: boolean;
   // M5 协同 + duplicate 联动 (bridge H 段, 取锁前看元素是否疑似重复)
   collabElements: import('./useEngineStore').CollabElements | null;
   collabElementsLoading: boolean;
@@ -312,6 +332,8 @@ interface EngineState {
   setCollabLoading: (l: boolean) => void;
   setDwgScan: (r: import('./useEngineStore').DwgScanResult | null) => void;
   setDwgScanLoading: (l: boolean) => void;
+  setDslAudit: (r: import('./useEngineStore').DslAuditResult | null) => void;
+  setDslAuditLoading: (l: boolean) => void;
   setCollabElements: (r: import('./useEngineStore').CollabElements | null) => void;
   setCollabElementsLoading: (l: boolean) => void;
   setCollabVerify: (v: import('./useEngineStore').CollabVerify | null) => void;
@@ -345,6 +367,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   collabElements: null,
   dwgScanLoading: false,
   collabElementsLoading: false,
+  dslAudit: null,
+  dslAuditLoading: false,
   collabVerify: null,
   collabDeadlock: null,
   permissionMatrix: null,
@@ -369,6 +393,8 @@ export const useEngineStore = create<EngineState>((set) => ({
   setCollabLoading: (collabLoading) => set({ collabLoading }),
   setDwgScan: (dwgScan) => set({ dwgScan }),
   setDwgScanLoading: (dwgScanLoading) => set({ dwgScanLoading }),
+  setDslAudit: (dslAudit) => set({ dslAudit }),
+  setDslAuditLoading: (dslAuditLoading) => set({ dslAuditLoading }),
   setCollabElements: (collabElements) => set({ collabElements }),
   setCollabElementsLoading: (collabElementsLoading) => set({ collabElementsLoading }),
   setCollabVerify: (collabVerify) => set({ collabVerify }),

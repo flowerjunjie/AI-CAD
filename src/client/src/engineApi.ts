@@ -1,7 +1,7 @@
 import { useEngineStore, type RuleItem, type Violation, type PipelineResult, type RAGResult,
         type DslRuleItem, type DslValidateResp, type DslApplyResp,
         type ClashResult, type ConflictResult,
-        type CollabSnapshot, type DwgScanResult } from './useEngineStore';
+        type CollabSnapshot, type DwgScanResult, type DslAuditResult } from './useEngineStore';
 
 // 默认走 vite 开发代理 /api (vite.config.ts 转发到 Python 桥), 端口随 start_gui.py
 // 动态探测的端口漂移也自动跟随, 不写死 8642。生产 Electron 才用 VITE_API 指绝对桥地址。
@@ -116,6 +116,19 @@ export async function applyDslRules(rules: DslRuleItem[], confirm: boolean): Pro
   if (resp) store.setFetchError(null);
   else store.setFetchError(`「应用」未生效 (引擎断连或异常)${confirm ? ' · 确认落盘' : ' · 预览'}`);
   return resp;
+}
+
+// DSL 信任边界体检 (bridge.py B4 段): 对账 default.json 各规则声明的 element_types
+// vs 主链路可喂元素类白名单 + predicate 引用未声明标识符漂移面。纯读端点, 不写盘。
+// 诚实边界: 机制层自洽体检, 不判定业务类名对错 (与端点 note 同源, 前端不虚标能力)。
+export async function runDslAudit(): Promise<DslAuditResult | null> {
+  const store = useEngineStore.getState();
+  store.setDslAuditLoading(true);
+  const result = await getJson<DslAuditResult>('/api/rules/dsl-audit');
+  store.setDslAuditLoading(false);
+  if (result) { store.setDslAudit(result); store.setFetchError(null); }
+  else store.setFetchError('「体检」未生效 (引擎断连或异常)');
+  return result;
 }
 
 // ─── M1 数值回填 (bridge B 段, 单规则轻量回填 — 专家在面板点「回填」即点亮占位卡) ───

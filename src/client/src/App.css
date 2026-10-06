@@ -458,6 +458,24 @@ body {
 .dsl-editor-reset:hover:not(:disabled) { color: #eee; border-color: #e94560; }
 .dsl-editor-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* DSL 信任边界体检按钮 + 结果区 (机制层自洽诊断, 不写盘) */
+.dsl-audit-btn {
+  background: #16213e; border: 1px solid #0f3460; color: #888;
+}
+.dsl-audit-btn:hover:not(:disabled) { color: #eee; border-color: #7c6ee5; }
+.dsl-audit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.dsl-audit {
+  background: #0f0f1a; border-left: 3px solid #7c6ee5; border-radius: 4px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 4px;
+}
+.dsl-audit-title { font-size: 11px; font-weight: 700; color: #7c6ee5; }
+.dsl-audit-note { font-weight: 400; color: #888; }
+.dsl-audit-clean { font-size: 11px; color: #2ecc71; font-weight: 600; }
+.dsl-audit-dangling {
+  font-size: 11px; padding: 6px 8px; border-radius: 4px;
+  border-left: 3px solid #e74c3c; background: #0f0f1a; color: #ff8a80;
+}
+
 /* 列表 + 详情两栏 */
 .dsl-editor-body {
   display: flex; flex: 1; min-height: 0; overflow: hidden;

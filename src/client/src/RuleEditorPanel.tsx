@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRuleEditorStore, isRuleModified } from './useRuleEditorStore';
 import { useEngineStore } from './useEngineStore';
-import { loadDslRules, validateDslRules, applyDslRules, backfillRule } from './engineApi';
+import { loadDslRules, validateDslRules, applyDslRules, backfillRule, runDslAudit } from './engineApi';
 import { localCheckAllRules } from './localPredicateCheck';
-import type { DslRuleItem, DslApplyDiff } from './useEngineStore';
+import type { DslRuleItem, DslApplyDiff, DslAuditResult } from './useEngineStore';
 
 /**
  * 规则 DSL 编辑器面板 (Phase 2) — 设计器不写代码改 default.json。
@@ -15,9 +15,13 @@ function RuleEditorPanel() {
   const { rules, originalRules, loaded, selectedRuleId, validateStatus, backendErrors, localIssueRuleIds } =
     useRuleEditorStore();
   const { engineConnected } = useEngineStore();
+  const { dslAudit, dslAuditLoading } = useEngineStore();
   const store = useRuleEditorStore;
   const [pendingDiff, setPendingDiff] = useState<DslApplyDiff | null>(null);
   const [applyMsg, setApplyMsg] = useState<string>('');
+
+  /** DSL 信任边界体检: 一键读端点, 看「哪些规则声明类型会落空 / predicate 引用未声明变量」。 */
+  const onAudit = () => { void runDslAudit(); };
 
   useEffect(() => {
     if (!loaded && engineConnected) {
@@ -84,7 +88,17 @@ function RuleEditorPanel() {
         >
           重置
         </button>
+        <button
+          className="btn-sm dsl-audit-btn"
+          onClick={onAudit}
+          disabled={!engineConnected || dslAuditLoading}
+          title="机制层自洽体检: 声明类型 vs 主链路可喂类对账 (不判业务类名对错)"
+        >
+          {dslAuditLoading ? '体检中…' : '体检'}
+        </button>
       </div>
+
+      {dslAudit !== null && <DslAuditBlock audit={dslAudit} />}
 
       {pendingDiff !== null && (
         <div className="dsl-apply-preview">
@@ -238,6 +252,38 @@ function M1BackfillBlock({ rule }: { rule: DslRuleItem }) {
         onChange={(e) => setNote(e.target.value)}
       />
       {msg && <div className="m1-backfill-msg">{msg}</div>}
+    </div>
+  );
+}
+
+/** DSL 信任边界体检结果区 (GET /api/rules/dsl-audit, 机制层自洽诊断, 不写盘):
+ *  逐条展示 issues + dangling_rules (rule_id + 声明类型); ok=true 且无缺口时显示「无缺口」。
+ *  诚实标注: 与端点 note 同源 — 只判声明与可喂类一致性, 不判业务类名该不该存在。 */
+function DslAuditBlock({ audit }: { audit: DslAuditResult }) {
+  const hasGaps = audit.issues.length > 0 || audit.dangling_rules.length > 0;
+  return (
+    <div className="dsl-audit">
+      <div className="dsl-audit-title">
+        DSL 体检 · 对账 {audit.checked} 条
+        {audit.note && <span className="dsl-audit-note"> — {audit.note}</span>}
+      </div>
+      {hasGaps ? (
+        <>
+          {audit.issues.map((msg, i) => (
+            <div key={`i-${i}`} className={`dsl-issue ${audit.dangling_rules.some((d) => msg.startsWith(`${d.rule_id}.`)) ? 'backend' : 'local'}`}>
+              {msg}
+            </div>
+          ))}
+          {audit.dangling_rules.map((d) => (
+            <div key={`d-${d.rule_id}`} className="dsl-audit-dangling">
+              <span className="dsl-issue-path">{d.rule_id}</span>
+              声明类型全落空: {d.element_types.join(', ')}
+            </div>
+          ))}
+        </>
+      ) : (
+        <div className="dsl-audit-clean">无缺口 (element_types 与主链路可喂类对齐, predicate 无未声明引用)</div>
+      )}
     </div>
   );
 }
