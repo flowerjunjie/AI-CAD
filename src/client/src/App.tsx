@@ -2,11 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API,
-        runClashCheck, runConflict, runAgentConfirm, runAgentStart,
+        runClashCheck, runConflict,
         runDwgScan } from './engineApi';
 import { PLACEHOLDERS } from './placeholders';
 import RuleEditorPanel from './RuleEditorPanel';
 import CollabPanel from './CollabPanel';
+import ConfirmGatePanel from './ConfirmGatePanel';
 import { useRuleEditorStore } from './useRuleEditorStore';
 import { loadDslRules } from './engineApi';
 import type { DslRuleItem } from './useEngineStore';
@@ -30,7 +31,6 @@ function App() {
     running, lastSample, pipelineResult, ragResults, ragQuery,
     clashResults, clashLoading, clashError,
     conflictResults, conflictLoading, conflictError,
-    confirmResults, confirmLoading,
     dwgScan, dwgScanLoading,
   } = useEngineStore();
 
@@ -101,23 +101,8 @@ function App() {
     await runDwgScan(dwgScanSample);
   }, [dwgScanSample]);
 
-  // 人在回路确认闸 (bridge /agent/confirm): 放行/拒绝 → 真续跑。
-  // session 级: 先「起图挂起」(runAgentStart → /agent/run) 起真实图拿 thread+真实 pending,
-  // 再对真实 task 确认 → bridge 用同一 thread 真续跑 (resume.session=true)。
-  // 演示级: 没起图直接确认演示 task → bridge 回退默认样本跑通链路 (resume.session=false)。
-  const { agentRun } = useEngineStore();
-  const [confirmTask, setConfirmTask] = useState('door-3');
-  const [confirmDecision, setConfirmDecision] = useState(true);
-  const handleConfirm = useCallback(async () => {
-    await runAgentConfirm(confirmTask, confirmDecision);
-  }, [confirmTask, confirmDecision]);
-  // 「起图挂起」: 起一次真实 auto_mode=False 图停在确认点, 把真实 pending 灌进 task 下拉
-  const handleStartRun = useCallback(async () => {
-    const res = await runAgentStart(lastSample);
-    if (res && res.pending_task_ids.length > 0) {
-      setConfirmTask(res.pending_task_ids[0]);
-    }
-  }, [lastSample]);
+  // 人在回路确认闸 (bridge /agent/confirm) 已抽成独立子组件 <ConfirmGatePanel />,
+  // 其 handler/state (起图挂起/逐 task 确认/同 thread 续跑) 一并搬入该组件。
 
   return (
     <div className="app">
@@ -257,6 +242,10 @@ function App() {
               ))}
             </div>
           )}
+
+          {/* P1 中列主从分层: 出图/违规是主任务流, 下面是「检查与协同工具」组 (碰撞/冲突/DWG/协同),
+              轻量分组标题帮设计师分清「先跑主线还是按需查工具」, 不重排 DOM 层级 */}
+          <div className="agent-group-title">检查与协同工具 · 按需运行</div>
 
           {/* M4 碰撞检测 — 真数据 (bridge /api/clash, 品红色呼应出图 CLASH 层) */}
           <div className="clash-section">
@@ -444,114 +433,8 @@ function App() {
             )}
           </div>
 
-          {/* 人在回路确认闸 — session 级 (起真实图挂起→逐 task 确认→同 thread 真续跑) */}
-          <div className="confirm-section">
-            <div className="clash-head-row">
-              <h3>人在回路 · 确认闸 <span className="confirm-tag">session</span></h3>
-              <button
-                className="btn-primary btn-sm"
-                onClick={handleStartRun}
-                disabled={!engineConnected || confirmLoading}
-              >
-                {confirmLoading ? '起图中…' : '起图挂起'}
-              </button>
-            </div>
-            <p className="clash-empty confirm-hint">
-              人工把关通路 — 起图挂起后逐 task 放行/拒绝 (与上方「自动出图」区分: 自动=一键全链路, 这里=同 thread 真续跑)
-            </p>
-            {agentRun && (
-              <div className={`clash-item ${agentRun.pending_task_count > 0 ? 'clash-hit' : 'clash-ok'}`}>
-                <span className="clash-scope">
-                  已挂起 {agentRun.thread_id} · {agentRun.pending_task_count} 个待确认 /
-                  CAD 已出 {agentRun.cad_result_count} 图元
-                </span>
-                {/* 接真实 CAD 数据源: 列出每个待确认项的类型+描述 (设计师看得懂) */}
-                {(agentRun.pending ?? []).map((p) => (
-                  <div key={p.task_id} className="pending-line">
-                    <span className="pending-kind">{p.type}</span>
-                    <span className="pending-id">{p.task_id}</span>
-                    {p.description && <span className="pending-desc">{p.description}</span>}
-                  </div>
-                ))}
-                {agentRun.preview_url && (
-                  <a className="pending-preview" href={agentRun.preview_url} target="_blank" rel="noreferrer">
-                    查看出图预览 →
-                  </a>
-                )}
-              </div>
-            )}
-            <div className="confirm-controls">
-              <select
-                value={confirmTask}
-                onChange={(e) => setConfirmTask(e.target.value)}
-                className="conflict-select"
-              >
-                {(agentRun?.pending_task_ids.length
-                  ? agentRun.pending_task_ids
-                  : ['door-3']
-                ).map((t) => {
-                  const p = agentRun?.pending?.find((x) => x.task_id === t);
-                  const label = p ? `${t} · ${p.type}${p.description ? ' · ' + p.description : ''}` : t;
-                  return <option key={t} value={t}>{label}{agentRun ? '' : ' (演示)'}</option>;
-                })}
-              </select>
-              <label className="confirm-radio">
-                <input
-                  type="radio"
-                  name="confirm-decision"
-                  checked={confirmDecision}
-                  onChange={() => setConfirmDecision(true)}
-                />
-                放行
-              </label>
-              <label className="confirm-radio">
-                <input
-                  type="radio"
-                  name="confirm-decision"
-                  checked={!confirmDecision}
-                  onChange={() => setConfirmDecision(false)}
-                />
-                拒绝
-              </label>
-              <button
-                className="btn-primary btn-sm"
-                onClick={handleConfirm}
-                disabled={!engineConnected || confirmLoading}
-              >
-                {confirmLoading ? '确认中…' : '提交确认'}
-              </button>
-            </div>
-            <p className="clash-empty">
-              session 级: 点「起图挂起」起一次真实图停在确认点 → 对真实 task 放行/拒绝 →
-              bridge 用同一 thread 真续跑出终态。未起图时提交 = 演示级 (bridge 用默认样本跑通链路)。
-            </p>
-            {confirmResults.map((r, i) => {
-              const isResumed = r.resume?.resumed === true;
-              const degraded = r.resume && !r.resume.resumed && r.resume.reason;
-              const isSession = r.resume?.session === true;
-              return (
-                <div key={i} className={`clash-item ${isResumed ? 'clash-ok' : 'clash-hit'}`}>
-                  {isResumed ? (
-                    <span className="clash-clean">
-                      ✓ 已放行 · {isSession ? '同 thread 续跑' : '演示跑'} — 违规{' '}
-                      {r.resume?.rule_violation_count ?? 0} 条 / 出图{' '}
-                      {r.resume?.export_status ?? '?'} / {r.resume?.final_dwg_path}
-                    </span>
-                  ) : r.status === 'pending_confirm' ? (
-                    <span className="clash-detail">
-                      · {r.task_id} 已登记「拒绝」, 图继续挂起 (未 resume)
-                    </span>
-                  ) : degraded ? (
-                    <span className="clash-detail">
-                      · {r.task_id} 放行未成 — {degraded}
-                    </span>
-                  ) : (
-                    <span className="clash-detail">· {r.task_id} {r.status}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {/* 人在回路确认闸 — 独立子组件 <ConfirmGatePanel /> (session 级, 起真实图挂起→逐 task 确认→同 thread 真续跑) */}
+          <ConfirmGatePanel />
         </section>
 
         {/* 右: 规则 + 知识 */}

@@ -74,8 +74,10 @@ Header:  品牌 + 状态徽章(● 引擎已连接/未连接) + Phase 标签
 Main:
   ├─ 左 CAD 视图:   画 <img src={api}/api/preview?sample=...> 真户型图 + 「重新出图」按钮
   │                 (未实现: 专业管/线/柱图元 → 置灰卡片 "出图深化 · 各专业图元标准")
-  ├─ 中 Agent 流程:  6 步流水线, 点「运行」→ POST /api/pipeline → 高亮已完成步 + 出 violations
-  │                 (M5 协同持久层区块已抽成独立子组件 <CollabPanel />: 日常主操作常显 +
+  ├─ 中 Agent 流程:  6 步流水线, 点「自动出图」→ POST /api/pipeline → 高亮已完成步 + 出 violations
+  │                 (P1 主从分层: 加「检查与协同工具 · 按需运行」分组标题, 主任务流 [出图/违规/确认放行]
+  │                  vs 检查工具 [碰撞/冲突/DWG/协同] 分层; 人在回路确认闸抽成 <ConfirmGatePanel /> 子组件)
+  │                 (M5 协同持久层区块抽成独立子组件 <CollabPanel />: 日常主操作常显 +
   │                  低频诊断工具(校验/死锁/矩阵)折叠进「诊断工具」子区, 降低认知负荷)
   └─ 右 规则/知识:   GET /api/rules 真规则列表(分 hard/dsl 两 tab) + RAG 检索框(POST /api/rag/search)
 Footer:  占位符卡片区 —— 未实现能力置灰, 每张含: 标题 / 一句话操作说明 / 所属专业 / [占位] 徽章
