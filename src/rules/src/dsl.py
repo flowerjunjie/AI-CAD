@@ -316,8 +316,12 @@ def audit_rule_elements(rules: list, constructible_types: set[str]) -> dict:
     if not isinstance(rules, list):
         return {"ok": False, "issues": [f"rules 非 list (畸形 {type(rules).__name__})"],
                 "checked": 0, "dangling_rules": []}
-    # 白名单并入小写变体 (与 ParametricRule._matches_type 同源判据)
-    allowed = {t for t in constructible_types or set()}
+    # 白名单并入小写变体 (与 ParametricRule._matches_type 严格同源判据):
+    # _matches_type 匹配 type_name 或其 .lower() vs 声明项 (含 .lower()) — 小写并入、
+    # **不去下划线**。故 snake_case 声明 (structural_beam) vs PascalCase 类
+    # (StructuralBeam): 主链路真实引擎本就命中不了 (structuralbeam != structural_beam),
+    # 体检如实判 dangling (提醒改回类名本身), 不放宽也不收紧。
+    allowed = {t for t in (constructible_types or set())}
     allowed |= {t.lower() for t in allowed}
 
     issues: list[str] = []

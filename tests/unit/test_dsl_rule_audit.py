@@ -170,8 +170,13 @@ def test_constructible_types_derivation():
 def test_bridge_dsl_audit_endpoint():
     """/api/rules/dsl-audit 200 + 结构固定 {ok, checked, issues, dangling_rules, note}。
 
-    真 default.json 的渠道规则 (clash-tolerance-range / collab-lock-integrity)
-    声明类型全落空 → 如实进 dangling_rules (不造假全绿)。"""
+    真 default.json 的渠道/占位规则如实进 dangling_rules (不虚标全绿):
+      · collab-lock-integrity 声明 ['design_sheet'] — 主链路无 DesignSheet extractor, 真落空。
+      · clash-tolerance-range 声明 snake_case (structural_beam/plumbing_pipe/...) —
+        主链路 _matches_type 匹配的是类名本身或其 .lower() (StructuralBeam →
+        structuralbeam, 无下划线), **不**等于 snake_case 声明 structural_beam (有下划线),
+        故主链路真实引擎本就命中不了 → 体检如实判 dangling (提醒改回类名本身)。
+    判据与 ParametricRule._matches_type 严格同源 (小写并入、不去下划线), 不放宽也不收紧。"""
     from fastapi.testclient import TestClient
     from src.gui.bridge import app
     with TestClient(app) as client:
@@ -181,11 +186,28 @@ def test_bridge_dsl_audit_endpoint():
         for k in ("ok", "checked", "issues", "dangling_rules", "note"):
             assert k in body, f"缺字段 {k}, 实际 {list(body)}"
         dangling_ids = {d["rule_id"] for d in body["dangling_rules"]}
-        # 渠道类规则如实落空 (诚实: 不虚标全绿)
-        assert "clash-tolerance-range" in dangling_ids
+        # 真落空 + snake_case 主链路命中不了, 均如实入 dangling (不虚标)
         assert "collab-lock-integrity" in dangling_ids
-        # 渠道规则 predicate="True" 无未声明标识符, 仅类型落空, 不误报 predicate
+        assert "clash-tolerance-range" in dangling_ids
+        # 渠道规则 predicate="True" 无未声明标识符, 不误报 predicate
         assert not any("predicate" in it for it in body["issues"])
+
+
+def test_audit_snake_case_declaration_not_matched_by_engine():
+    """判据同源正例 (钉死与 _matches_type 一致, 防误放宽): 规则声明 snake_case
+    (structural_beam) 对主链路 PascalCase 类 (StructuralBeam) — _matches_type 匹配
+    类名本身或 .lower() (structuralbeam, 无下划线), 不等于 snake_case structural_beam
+    → 主链路命中不了 → 体检如实判 dangling (不放宽: 不去下划线做假命中)。"""
+    dsl = _import_dsl()
+    rules = [_StubRule("sn-rule", ["structural_beam", "plumbing_pipe"])]
+    res = dsl.audit_rule_elements(rules, {"StructuralBeam", "PlumbingPipe"})
+    assert res["ok"] is False
+    assert res["dangling_rules"] and res["dangling_rules"][0]["rule_id"] == "sn-rule"
+    # 对照: 用类名本身或类名 .lower() 声明则命中
+    res2 = dsl.audit_rule_elements(
+        [_StubRule("ok-rule", ["StructuralBeam", "structuralbeam", "PlumbingPipe"])],
+        {"StructuralBeam", "PlumbingPipe"})
+    assert res2["ok"] is True and res2["dangling_rules"] == [], f"类名/.lower() 应命中, 得 {res2}"
 
 
 if __name__ == "__main__":
@@ -200,5 +222,6 @@ if __name__ == "__main__":
     test_audit_predicate_base_names_allowed()
     test_audit_real_parametric_rule_compatibility()
     test_constructible_types_derivation()
+    test_audit_snake_case_declaration_not_matched_by_engine()
     test_bridge_dsl_audit_endpoint()
     print("OK: all dsl rule audit tests passed")
