@@ -259,6 +259,109 @@ def load_dsl_rules(path: str | Path) -> list[ParametricRule]:
     return DslRuleProvider(path).load()
 
 
+# ─── 规则注册一致性体检 (机制层自主子集, 纯函数) ─────────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 校验「DSL 规则声明的 element_types
+# 是否真能被主链路喂到元素」— 主链路只按 raw_key 构造出白名单元素类,
+# 白名单外的 element_types (如渠道类 channel 规则误写 element_types) 命中的
+# predicate 永远不会被检查对象匹配 → 静默放行 (现有唯一护栏是 check() 里
+# 一条日志 warning)。本函数是**事前对账**: 不判「类名该叫什么」(命名是
+# 各专业的活), 只判「声明的类型集合是否全部落在主链路可喂类型白名单内 +
+# predicate 是否引用了未声明的 params 键」这类机制自洽缺口。
+
+
+def _rule_type_fields(rule) -> tuple[str | None, list, str | None, dict, dict]:
+    """从规则实例鸭子取 (rule_id, element_types, predicate, params, param_defaults)。
+
+    兼容真实 ParametricRule (字段挂在 _spec 上, 实例只挂 params) 与最小
+    对象 (字段直挂) — 两种来源不绑死类, 取不到给安全默认, 不崩。
+    """
+    spec = getattr(rule, "_spec", None)
+    rid = getattr(rule, "rule_id", None) or (getattr(spec, "rule_id", None) if spec is not None else None)
+    etypes = getattr(rule, "element_types", None)
+    if etypes is None and spec is not None:
+        etypes = getattr(spec, "element_types", None)
+    pred = getattr(rule, "predicate", None)
+    if pred is None and spec is not None:
+        pred = getattr(spec, "predicate", None)
+    params = getattr(rule, "params", None)
+    if params is None and spec is not None:
+        params = getattr(spec, "params", None)
+    pdefaults = getattr(rule, "param_defaults", None)
+    if pdefaults is None and spec is not None:
+        pdefaults = getattr(spec, "param_defaults", None)
+    return rid, (list(etypes) if etypes is not None else None), pred, \
+        (params or {}), (pdefaults or {})
+
+
+def audit_rule_elements(rules: list, constructible_types: set[str]) -> dict:
+    """对账 DSL 规则的 element_types 声明与主链路可构造元素类型白名单。
+
+    参数:
+      rules: 规则实例列表 (ParametricRule 或带 .rule_id/.element_types/.predicate
+             的类实例均可 — 鸭子类型, 不绑死 ParametricRule)。
+      constructible_types: 主链路可喂进 engine.check 的元素**类名**集合
+             (如 {"Door","Window","Room",...}; 小写变体由本函数自行并入白名单,
+             与 _matches_type 的大小写不敏感判定同源)。
+    返回 {ok: bool, issues: [str...], checked: int,
+          dangling_rules: [{rule_id, element_types}...]} (纯函数, 不崩):
+      ① 空 element_types 声明 → 通配规则 (对全部元素类判定), 记一条
+         「无类型约束, 全类命中」提示 (不判对错, 只标出来)。
+      ② element_types 全部不在白名单 (大小写不敏感) → 该规则命中的 predicate
+         永远匹配不到主链路元素 (静默放行隐患), 入 dangling_rules。
+    畸形输入 (rules 非 list / 条非对象) → 计入 issues, 不崩。
+    """
+    import ast as _ast
+
+    rules = rules or []
+    if not isinstance(rules, list):
+        return {"ok": False, "issues": [f"rules 非 list (畸形 {type(rules).__name__})"],
+                "checked": 0, "dangling_rules": []}
+    # 白名单并入小写变体 (与 ParametricRule._matches_type 同源判据)
+    allowed = {t for t in constructible_types or set()}
+    allowed |= {t.lower() for t in allowed}
+
+    issues: list[str] = []
+    dangling: list[dict] = []
+    for i, rule in enumerate(rules):
+        rid, etypes, pred, _params, _pdefaults = _rule_type_fields(rule)
+        rid = rid or f"rules[{i}]"
+        if etypes is None:
+            issues.append(f"{rid} 无 element_types 声明 (非规则实例, 跳过)")
+            continue
+        if not etypes:
+            issues.append(f"{rid} element_types 为空 → 通配全类判定 (无类型约束, 标出)")
+            continue
+        known = [t for t in etypes if t in allowed or t.lower() in allowed]
+        if not known:
+            dangling.append({"rule_id": rid, "element_types": etypes})
+            issues.append(
+                f"{rid}.element_types={etypes} 全部不在主链路可喂类型白名单内 "
+                f"(谓词将永不被匹配对象命中 → 静默放行, 现仅靠日志 warning)")
+    # predicate 引用面自诊断: 逐条 predicate 里出现的标识符须已在该规则
+    # params/param_defaults 声明 (编译期白名单已拒「非白名单」, 这里补
+    # 「引用了但没声明」的漂移面 — 防改 JSON 后漏同步 params)。
+    for i, rule in enumerate(rules):
+        rid, _etypes, pred, params, pdefaults = _rule_type_fields(rule)
+        rid = rid or f"rules[{i}]"
+        if not isinstance(pred, str) or not pred:
+            continue
+        declared = set(params) | set(pdefaults)
+        try:
+            tree = _ast.parse(pred, mode="eval")
+        except SyntaxError:
+            issues.append(f"{rid}.predicate 语法非法: {pred!r}")
+            continue
+        used = {n.id for n in _ast.walk(tree) if isinstance(n, _ast.Name)}
+        unallowed_base = {"element", "True", "False", "None", "len"}
+        unknown = used - declared - unallowed_base
+        if unknown:
+            issues.append(
+                f"{rid}.predicate 引用未声明标识符 {sorted(unknown)} "
+                f"(须先加进 params/param_defaults, 否则 load 期 fail-fast)")
+    return {"ok": not issues, "issues": issues, "checked": len(rules),
+            "dangling_rules": dangling}
+
+
 def validate_and_load_dsl_rules(
     path: str | Path,
 ) -> tuple[list[ParametricRule], list[Any]]:

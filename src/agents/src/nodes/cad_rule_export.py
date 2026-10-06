@@ -85,9 +85,23 @@ def _build_door(raw: dict) -> Door:
                 room_type=room_type, location=(0, 0))
 
 
+def _build_door_2(raw: dict, idx: int) -> Door:
+    """_build_door 的两参壳（供 _ELEMENT_CHECKS build(item, i) 调用点复用）。
+
+    带返回注解 -> Door：constructible_element_types() 靠各 build 的返回注解
+    派生「主链路可喂类名白名单」，lambda 无注解会丢 Door/Window，故用具名壳。
+    """
+    return _build_door(raw)
+
+
 def _build_window(raw: dict) -> Window:
     return Window(id=raw.get("id", "w0"), sill_height_m=float(raw.get("sill_height_m", 0.9)),
                  top_height_m=2.0, room_type=raw.get("room", "living"), location=(0, 0))
+
+
+def _build_window_2(raw: dict, idx: int) -> Window:
+    """_build_window 的两参壳（同 _build_door_2 的注解理由）。"""
+    return _build_window(raw)
 
 
 def _build_room(raw: dict, idx: int) -> Room:
@@ -187,7 +201,7 @@ def _build_structural_column(raw: dict, idx: int) -> StructuralColumn:
 _ELEMENT_CHECKS: list[dict] = [
     {
         "raw_key": "doors",
-        "build": lambda r, i: _build_door(r),
+        "build": _build_door_2,
         "rule_ids": [
             "residential-door-main-width",
             "residential-door-interior-width",
@@ -196,7 +210,7 @@ _ELEMENT_CHECKS: list[dict] = [
     },
     {
         "raw_key": "windows",
-        "build": lambda r, i: _build_window(r),
+        "build": _build_window_2,
         "rule_ids": ["residential-window-sill-height"],
     },
     {
@@ -261,6 +275,32 @@ _ELEMENT_CHECKS: list[dict] = [
         "rule_ids": ["structural-column-min-section"],
     },
 ]
+
+
+def constructible_element_types() -> set[str]:
+    """主链路可喂进 engine.check 的元素**类名**白名单（机制量，随 _ELEMENT_CHECKS 派生）。
+
+    唯一权威源——遍历 _ELEMENT_CHECKS 各 build，取其**返回类型注解**（各 build
+    已写 `-> Door` 等类型注解，本模块 return 语句与注解恒一致）。DSL 信任边界
+    体检（bridge /api/rules/dsl-audit → dsl.audit_rule_elements）据此对账「规则
+    声明 element_types 是否全部落空」。抽成 helper 而非在 bridge 硬编码副本，
+    加专业 = 加 _ELEMENT_CHECKS 表项（build 带返回注解）即自动跟上，零手动同步。
+    不判「类名该不该存在」，只报「主链路实际能喂哪些类」。
+    """
+    import typing
+    types: set[str] = set()
+    for entry in _ELEMENT_CHECKS:
+        build = entry.get("build")
+        if build is None:
+            continue
+        try:
+            ret = typing.get_type_hints(build).get("return")
+        except Exception:
+            ret = None
+        name = getattr(ret, "__name__", "")
+        if name:
+            types.add(name)
+    return types
 
 
 def _collision_violation(c: dict):

@@ -228,6 +228,39 @@ def _clash_tolerance_source() -> tuple[float, str]:
     return resolve_clash_tolerance(default_m=0.15, dsl_rule=dsl_rule, params=None)
 
 
+@app.get("/api/rules/dsl-audit")
+def api_rules_dsl_audit() -> dict:
+    """DSL 信任边界集中体检 (机制层自主子集): 出图主链路可喂进 engine.check 的
+    元素类白名单 vs default.json 各规则声明的 element_types 对账。
+
+    背景: ParametricRule.check 对「element_types 匹配不到任何主链路元素类」的
+    规则**静默放行** (唯一护栏是 check() 里一条日志 warning, 无人集中看)。
+    本端点把缺口集中透出: 哪条规则声明的类型白名单全部落空 → predicate 永远
+    不会被主链路命中 (渠道类规则如 clash-tolerance-range / collab-lock-integrity
+    属预期, 但写错的规则也会在这里暴露, 不留静默漂移)。
+
+    诚实边界: 白名单 = 主链路各 extractor 实际构造出的元素类名 (机制量, 非业务值);
+    本端点**不判**「某类名该不该存在」(那是各专业回填), 只判声明与可喂类型的
+    一致性。返回 {ok, checked, issues, dangling_rules, note}。"""
+    from src.rules.src.dsl import audit_rule_elements, load_dsl_rules
+    from src.agents.src.nodes.cad_rule_export import (
+        _dsl_rules_path, constructible_element_types,
+    )
+    try:
+        rules = load_dsl_rules(_dsl_rules_path())
+    except Exception as e:
+        return {"ok": False, "checked": 0, "issues": [f"default.json 加载失败: {e}"],
+                "dangling_rules": [],
+                "note": "DSL 源不可读, 体检降级 (不造假规则清单)"}
+    # 主链路可喂类型白名单: 由 _ELEMENT_CHECKS 各 build 派生 (单一权威源,
+    # 加专业=加表项即自动跟上, 不在 bridge 硬编码副本, 消除漂移面)。
+    constructible = constructible_element_types()
+    res = audit_rule_elements(rules, constructible)
+    res["note"] = ("element_types 与主链路可喂类名一致性体检 (机制层, 不判类名对错); "
+                   "dangling 规则 = 声明类型全落空, predicate 永不被主链路命中")
+    return res
+
+
 @app.get("/api/rule-violations")
 def api_rule_violations() -> List[dict]:
     """实测演示违规: 0.6m 户门 vs residential-door-main-width (照 run.py bad_door 写法)。"""
