@@ -149,3 +149,78 @@ def verify_violations(
         if sev not in valid_sev:
             issues.append(f"{tag}.severity={sev!r} 非合法枚举 {sorted(valid_sev)}")
     return {"ok": not issues, "issues": issues, "checked": len(violations)}
+
+
+# ─── 三桶 diff 结果结构自洽校验 (机制层, 通用, diff_violations/diff_rule_lists 共用) ─
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): diff_violations / diff_rule_lists 都产出
+# {"added","removed","changed"} 三桶, 但两条通路当前**都没有**校验三桶自身的结构
+# 不变量 (同 key 既进 added 又进 changed = 上游 diff 逻辑改动后静默失步)。本函数
+# 用 key 提取器注入的方式, 一次护住两条同构通路 (仿 verify_summary 的「产出对账」
+# 范式)。纯函数, 只判「三桶自身是否自洽」, 不判桶里业务内容。
+
+
+def verify_diff_buckets(
+    buckets: dict,
+    key_of,
+) -> dict:
+    """校验 {added/removed/changed} 三桶结构自洽 (纯函数, 不崩)。
+
+    key_of: 桶内单项 → key 的提取器 (diff_violations 传 (rule_id, element_id),
+    diff_rule_lists 传 rule_id)。不绑死桶 value 类型 (RuleViolation 对象 / dict 均可)。
+
+    校验四条 (缺哪条报哪条, 全过 → ok=True, issues=[]):
+      ① added 与 changed 的 key 不交叠 (同一 key 不能既「新增」又「改动」)。
+      ② removed 与 changed 的 key 不交叠 (同一 key 不能既「消失」又「改动」)。
+      ③ added 桶内 key 无重复。
+      ④ changed 桶内 key 无重复。
+    畸形输入 (buckets 非 dict / 桶非 list / key_of 取不到) → 计入 issues, 不崩。
+    返回 {ok, issues, checked}。
+    """
+    if not isinstance(buckets, dict):
+        return {"ok": False, "issues": [f"buckets 非 dict (畸形 {type(buckets).__name__})"],
+                "checked": 0}
+    issues: list[str] = []
+
+    def _keys(bucket_name: str) -> tuple[set, int]:
+        raw = buckets.get(bucket_name)
+        if raw is None:
+            return set(), 0
+        if not isinstance(raw, list):
+            issues.append(f"{bucket_name} 非 list (畸形 {type(raw).__name__})")
+            return set(), 0
+        keys: set = set()
+        for i, item in enumerate(raw):
+            try:
+                k = key_of(item)
+            except Exception:
+                issues.append(f"{bucket_name}[{i}] key 提取失败")
+                continue
+            keys.add(k)
+        return keys, len(raw)
+
+    added_keys, _ = _keys("added")
+    removed_keys, _ = _keys("removed")
+    changed_keys, _ = _keys("changed")
+
+    # 桶内重复 (set 去重后数变小 → 有重复 key)
+    for name in ("added", "changed"):
+        raw = buckets.get(name) or []
+        if isinstance(raw, list):
+            try:
+                unique = len({key_of(x) for x in raw})
+            except Exception:
+                continue
+            if unique != len(raw):
+                issues.append(f"{name} 桶内存在重复 key (diff 上游失步)")
+
+    overlap_ac = added_keys & changed_keys
+    if overlap_ac:
+        issues.append(f"added ∩ changed 交叠 {sorted(overlap_ac)} (同 key 既新增又改动)")
+    overlap_rc = removed_keys & changed_keys
+    if overlap_rc:
+        issues.append(f"removed ∩ changed 交叠 {sorted(overlap_rc)} (同 key 既消失又改动)")
+
+    checked = sum(len(buckets.get(n) or [])
+                  for n in ("added", "removed", "changed")
+                  if isinstance(buckets.get(n), list))
+    return {"ok": not issues, "issues": issues, "checked": checked}

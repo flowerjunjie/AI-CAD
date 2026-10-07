@@ -925,7 +925,8 @@ def api_dwg_scan(sample: str = "electrical_sample.dxf") -> dict:
           insert_total, available_samples, note}。
     sample 非 DXF / 不存在 → 诚实 404 (不崩不造假); 缺图层 → 空报告 (诚实两态)。
     懒 import: dwg_layer_scan 纯函数库 (依赖 ezdxf, 放函数体不触发模块收集冷启)。"""
-    from src.agents.src.tools.dwg_layer_scan import scan_sample_reader  # 懒
+    from src.agents.src.tools.dwg_layer_scan import (  # 懒
+        scan_sample_reader, verify_dwg_scan_report)
     p = os.path.join(ROOT, "data", "sample", sample)
     if not os.path.exists(p) or not sample.endswith(".dxf"):
         raise HTTPException(404,
@@ -936,6 +937,12 @@ def api_dwg_scan(sample: str = "electrical_sample.dxf") -> dict:
     report["available_samples"] = _DWGSAMPLES
     report["note"] = ("图层/块名频率报告 — 专家据此回填映射 dict "
                       "(docs/element-upstream-contract.md §5), 不判定 kind 归属")
+    # 机制层自洽诊断 (仿 verify_clashes.clashes_consistent 范式): 扫出的报告
+    # 聚合数字 (layer_count/insert_total/entity_type_totals) 与图层明细是否失步,
+    # 失步不静默穿透 — 专家照着一份「数字对不上」的报告回填映射 dict 会被误导。
+    check = verify_dwg_scan_report(report)
+    report["scan_consistent"] = check["ok"]
+    report["scan_issues"] = check["issues"]
     return report
 
 
