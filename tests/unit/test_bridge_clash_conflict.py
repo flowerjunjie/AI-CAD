@@ -87,6 +87,10 @@ def test_clash_sample_present_no_fake():
             f"默认容差应走 dsl 来源, 实际 {body.get('tolerance_source')}"
         # 无碰撞时: 空列表且 count=0 (诚实降级, 不造假)
         assert body["clashes"] == [] and body["count"] == 0
+        # 机制层自洽诊断透出 (P12): verify_clashes 结果带出, 前端 ClashSection 消费。
+        # 无碰撞 (空列表) → 恒 valid=true / issues 空 (自洽, 不虚标)。
+        assert body["clashes_consistent"] is True
+        assert body["clashes_issues"] == []
 
 
 def test_clash_tolerance_source_param_override():
@@ -131,6 +135,8 @@ def test_clash_hit_path(monkeypatch, tmp_path):
         assert body["count"] == len(body["clashes"]) >= 2
         # 每条带中文 detail (面板肉眼可读)
         assert all(c["detail"] for c in body["clashes"])
+        # P12 自洽诊断: 构造的碰撞 raw 两端 id 都在 raw + kind 合法 → 自洽 valid=true
+        assert body["clashes_consistent"] is True
 
 
 # ─── /api/conflict ────────────────────────────────────────────────
@@ -149,6 +155,9 @@ def test_conflict_same_sample_zero():
         # 全字段透传 (面板要 summary 计数)
         for k in ("value_conflicts", "added", "removed"):
             assert body["summary"][k] == 0
+        # P12 自洽诊断透出: 同稿自比 0 冲突 → 汇总/列表恒一致, valid=true (不虚标)
+        assert body["summary_consistent"] is True
+        assert body["summary_issues"] == []
 
 
 def test_conflict_missing_sample_404():
