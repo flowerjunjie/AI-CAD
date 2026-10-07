@@ -800,15 +800,13 @@ def rule_check_node(state: dict) -> dict:
         _clash_rule = engine.get_rule("clash-tolerance-range")  # 若 DSL 有该规则
     except Exception:
         _clash_rule = None
-    _tol, _tol_src = resolve_clash_tolerance(
+    _tol, _ = resolve_clash_tolerance(
         default_m=0.15,
         dsl_rule=_clash_rule,
         params=state.get("clash_params"),
     )
     for c in detect_clashes(raw, tolerance_m=_tol):
         violations.append(_clash_violation(c))
-    # 来源透出 (供 GUI / 报告标注, 不虚标): 默认走 default 时 0 改动行为不变
-    state["clash_tolerance_used"] = {"value_m": _tol, "source": _tol_src}
 
     # M5 两稿改动冲突：仅当 state 提供第二稿 (conflict_raw_b) 时比对, 记一条汇总
     # 违规。无第二稿 → 0 新增, 默认样本 (仅 raw_data) 零影响。
