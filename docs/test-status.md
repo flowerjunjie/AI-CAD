@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   536 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   542 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
@@ -63,4 +63,5 @@ python -m pytest tests/ -q 2>&1 | tail -1
 \* 早期 commit 短哈希已不在当前 git 历史精确映射（演进史见 DELIVERY §七/§八），
 趋势表只锚定「日期 + 数字 + 触发点」，历史精确 commit 以 DELIVERY 带日期段落为准。
 
-*最后刷新：2026-10-06 · 536 passed / 5 skipped / 0 failed（三条机制层自主子集护栏: 违规清单/出图圈数/协同waits 自洽校验 + DSL 判据同源纠正, 纯前端 DSL 体检接线, 全量无回归）*
+| 2026-10-06 | 542 | 批量校验报告结构自洽护栏 (无需外部专家): batch_check.verify_batch_report (by_severity/by_rule 各档之和==明细条数, 各计数≥0 防负数篡改, 畸形 report 优雅降级不崩) + /api/rules/batch-verify 端点 (走主链路 _ELEMENT_CHECKS 构造元素→run_batch_check→对账, 主链路不可用诚实降级不造假全绿) | `HEAD` | 纯函数+主链路 0 改动+畸形不崩, 补 run_batch_check 聚合层一直裸奔的自洽校验; 全量实测 542 |
+*最后刷新：2026-10-06 · 542 passed / 5 skipped / 0 failed（批量校验报告结构自洽护栏 verify_batch_report, 纯函数+主链路 0 改动, 全量无回归）*

@@ -314,6 +314,49 @@ def api_rules_violations_verify() -> dict:
     }
 
 
+@app.get("/api/rules/batch-verify")
+def api_rules_batch_verify(sample: str = "residential_100sqm.json") -> dict:
+    """批量校验报告结构自洽体检 (机制层自主子集): 起真实样本 → 走主链路
+    _ELEMENT_CHECKS 各 build 构造元素 → run_batch_check 出聚合报告 →
+    verify_batch_report 对账「by_severity/by_rule 之和 == 明细条数」, 防
+    _aggregate 被改动后未同步 / 外部直构了不自洽 Report 的静默失步。
+
+    诚实边界: 只判「报告自身聚合数字是否自洽」, **不判**「某条违规该不该发生」
+    (那是 M1 业务值)。主链路不可用 → 诚实降级, 不造假自洽全绿。
+    返回 {sample, ok, total, checked, issues, note}。"""
+    from src.rules.src.batch_check import run_batch_check, verify_batch_report
+    from src.agents.src.nodes.cad_rule_export import (
+        _ELEMENT_CHECKS, constructible_element_types)
+    from src.rules.src.engine import get_engine
+
+    try:
+        raw = _load_sample_raw(sample)
+        # 与出图侧同一权威路径构造元素 (主链路 build, 非端点自造), 防「喂的类
+        # 与出图侧不同」测不到真缺口; 单一源, 加专业=加表项即自动跟上。
+        elements: list = []
+        for entry in _ELEMENT_CHECKS:
+            raw_key = entry.get("raw_key")
+            builder = entry.get("build")
+            if raw_key is None or builder is None:
+                continue
+            for i, item in enumerate(raw.get(raw_key, [])):
+                if not isinstance(item, dict):
+                    continue
+                elem = builder(item, i)
+                if elem is not None:
+                    elements.append(elem)
+        report = run_batch_check(elements, engine=get_engine())
+    except Exception as e:
+        return {"sample": sample, "ok": False, "total": 0, "checked": 0,
+                "issues": [f"主链路出元素/批量校验不可用: {e}"],
+                "note": "批量报告对账降级 (主链路异常), 不造假全绿"}
+    res = verify_batch_report(report)
+    res["sample"] = sample
+    res["note"] = ("批量校验报告聚合自洽体检 (机制层, 不判违规判得对不对); "
+                   "by_severity/by_rule 之和 与 明细条数失步在此可见")
+    return res
+
+
 @app.get("/api/rule-violations")
 def api_rule_violations() -> List[dict]:
     """实测演示违规: 0.6m 户门 vs residential-door-main-width (照 run.py bad_door 写法)。"""
