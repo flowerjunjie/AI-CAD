@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   563 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   570 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
@@ -66,4 +66,6 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-06 | 542 | 批量校验报告结构自洽护栏 (无需外部专家): batch_check.verify_batch_report (by_severity/by_rule 各档之和==明细条数, 各计数≥0 防负数篡改, 畸形 report 优雅降级不崩) + /api/rules/batch-verify 端点 (走主链路 _ELEMENT_CHECKS 构造元素→run_batch_check→对账, 主链路不可用诚实降级不造假全绿) | `HEAD` | 纯函数+主链路 0 改动+畸形不崩, 补 run_batch_check 聚合层一直裸奔的自洽校验; 全量实测 542 |
 | 2026-10-06 | 551 | DWG 图层扫描报告结构自洽护栏 (无需外部专家): dwg_layer_scan.verify_dwg_scan_report (layer_count/insert_total/entity_type_totals 聚合 vs 图层明细对账, 各计数≥0 防篡改, 畸形报告降级不崩) + /api/dwg-scan 透出 scan_consistent/scan_issues 诊断 (扩展既有端点, 非新路由) | `HEAD` | 补 scan_dwg (M2 扫描工具, 专家回填映射 dict 直接输入) 聚合层一直裸奔的自洽校验; 防专家照一份「数字对不上」报告做回填决策 |
 | 2026-10-06 | 558 | 三桶 diff 结果结构自洽护栏 (无需外部专家): diff.verify_diff_buckets (key 提取器注入, diff_violations/diff_rule_lists 共用; added∩changed/removed∩changed 交叠 + 桶内重复 揪出, 畸形不崩) + 真实 diff 产物自洽回归测试 (钉死两条 diff 通路没被改坏) | `HEAD` | 补最后 1 条「产出函数无 verify 孪生」缺口 — 全仓 grep 出的 10 个 run_*/diff_*/scan_*/detect_* 产出函数现 10/10 都有对应校验; 无消费侧故不加端点 (不为没有的场景造路由) |
-| 2026-10-06 | 563 | 机制层自主子集 (无需外部专家): bridge._prune_dsl_backups 备份轮转 (default.json.bak.<ts> 保留最近 keep=10 个, 按文件名时间戳排序删旧的, 防 .bak. 无界堆积, 不破坏可回滚护栏); /api/rules/dsl/apply + /api/rules/backfill 写盘成功后统一接入; 揪出并修掉 splitext 拆前缀导致轮转变 no-op 静默失效的 bug | `HEAD` | 写盘前备份只写不删, 每应用/回填一次磁盘多一个永不清理文件; 起桥真验 15→10 收敛 | *最后刷新：2026-10-06 · 563 passed / 5 skipped / 0 failed（DSL 备份轮转 _prune_dsl_backups — apply/backfill 写盘成功后统一清理旧 .bak. 备份, 防无界堆积, 修掉 splitext 拆前缀致轮转 no-op 的 bug）*
+| 2026-10-06 | 563 | 机制层自主子集 (无需外部专家): bridge._prune_dsl_backups 备份轮转 (default.json.bak.<ts> 保留最近 keep=10 个, 按文件名时间戳排序删旧的, 防 .bak. 无界堆积, 不破坏可回滚护栏); /api/rules/dsl/apply + /api/rules/backfill 写盘成功后统一接入; 揪出并修掉 splitext 拆前缀导致轮转变 no-op 静默失效的 bug | `HEAD` | 写盘前备份只写不删, 每应用/回填一次磁盘多一个永不清理文件; 起桥真验 15→10 收敛 |
+| 2026-10-06 | 570 | 机制层自主子集 (无需外部专家): layout.verify_opening_collisions (门窗碰撞结果自洽: a_id≠b_id / kind∈OPENING_KINDS 3类 / a_id·b_id 在门窗元素 / overlap_m>0, 畸形不崩) + OPENING_KINDS 常量; 揪出上轮「10/10 产出函数都有 verify」的漏网同类 — detect_opening_collisions 与 M4 detect_clashes 同构(几何碰撞→出图反画圈), 出图侧 cad_rule_export L783 消费但一直无自洽校验, 脏 a_id/b_id 会静默兜底原点假圈 | `HEAD` | 补门窗碰撞这条「几何碰撞→出图反查」失步面 (M4 verify_clashes 的孪生), 全量 570 |
+*最后刷新：2026-10-06 · 570 passed / 5 skipped / 0 failed（门窗碰撞结果自洽护栏 verify_opening_collisions — M4 verify_clashes 的孪生, 补「几何碰撞→出图反查」失步面, 全量无回归）*

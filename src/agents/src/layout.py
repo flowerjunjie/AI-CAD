@@ -354,3 +354,69 @@ def detect_opening_collisions(doors: list[dict], windows: list[dict]) -> list[di
                     "a_id": ida, "b_id": idb, "kind": kind, "overlap_m": ov,
                 })
     return collisions
+
+
+# ─── 门窗碰撞结果自洽校验 (机制层自主子集, 纯函数) ─────────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): 这是「detect_opening_collisions 输出
+# 自身是否自洽」的校验 — 供出图侧 (cad_rule_export L783 遍历结果画门窗重叠圈) 在
+# 消费前对账, 防脏 a_id/b_id (元素已被上游删掉/写错) 静默穿透进 DWG 兜底原点假圈。
+# 与 M4 的 verify_clashes 同构 (都是「几何碰撞检测 → 出图反查」失步面), 判据适配
+# 门窗 3 类 kind + 门窗元素 id 集合。纯函数, 不修数据, 畸形输入优雅降级不崩。
+# 不判「该不该有碰撞」(业务), 只判「这份碰撞清单自身是否自洽」。
+
+# 合法门窗碰撞 kind (3 类, 与 detect_opening_collisions 产出的键集合同源)。
+# 抽成可导出常量, 消除「出图侧 _CLASH_KIND_CN (L309 键集合)」与本库隐式白名单
+# 两处漂移 (verify 据此校验, 消费侧可 import 同源)。
+OPENING_KINDS: frozenset = frozenset({
+    "door-door", "door-window", "window-window",
+})
+
+
+def _opening_ids(doors: list, windows: list) -> set:
+    """门窗元素全量 id 集合 (a_id/b_id 反查依据), 缺 id 字段跳过不崩。"""
+    ids: set = set()
+    for items in (doors or [], windows or []):
+        for it in items:
+            if isinstance(it, dict) and it.get("id") is not None:
+                ids.add(it.get("id"))
+    return ids
+
+
+def verify_opening_collisions(
+    doors: list[dict],
+    windows: list[dict],
+    collisions: list[dict],
+) -> dict:
+    """校验门窗碰撞结果 (detect_opening_collisions 产物) 自身是否自洽。纯函数, 不崩。
+
+    校验四条 (缺哪条报哪条, 全过 → valid=True, issues=[]):
+      ① 无自碰撞: 每条 a_id != b_id (门窗碰撞必是两个不同元素)。
+      ② kind 合法: kind ∈ OPENING_KINDS (3 类, 与本库产出同源, 消隐式白名单漂移)。
+      ③ a_id/b_id 在门窗: 两端 id 真存在于 doors/windows (出图反查才不会兜底原点假圈)。
+      ④ overlap_m 为正: 有碰撞必有正重叠 (overlap_m 须 > 0, 防零/负重叠误报)。
+    畸形输入 (collisions 非 list / 条非 dict / 缺 a_id/b_id) → 计入 issues, 不崩。
+    """
+    collisions = collisions or []
+    issues: list[str] = []
+    known_ids = _opening_ids(doors, windows)
+
+    for i, c in enumerate(collisions):
+        if not isinstance(c, dict):
+            issues.append(f"collisions[{i}] 非 dict")
+            continue
+        a, b, kind, ov = c.get("a_id"), c.get("b_id"), c.get("kind"), c.get("overlap_m")
+        if a is None or b is None:
+            issues.append(f"collisions[{i}] 缺 a_id/b_id (a={a!r}, b={b!r})")
+            continue
+        if a == b:
+            issues.append(f"collisions[{i}] 自碰撞 (a_id==b_id=={a!r})")
+        if kind not in OPENING_KINDS:
+            issues.append(
+                f"collisions[{i}].kind={kind!r} 非合法 3 类 {sorted(OPENING_KINDS)}")
+        for tag, eid in (("a_id", a), ("b_id", b)):
+            if eid not in known_ids:
+                issues.append(f"collisions[{i}].{tag}={eid!r} 不在门窗元素 (出图会兜底原点假圈)")
+        if not isinstance(ov, (int, float)) or ov <= 0:
+            issues.append(f"collisions[{i}].overlap_m={ov!r} 非正数 (碰撞须有正重叠)")
+
+    return {"valid": not issues, "issues": issues, "count": len(collisions)}
