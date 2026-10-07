@@ -574,6 +574,49 @@ import shutil
 from datetime import datetime
 
 
+# ─── 备份轮转 (机制层, 两类写盘端点共用 — 一个模式埋两处, 统一生命周期) ───
+# apply/backfill 每次写盘前都 copy 出 default.json.bak.<ts>, 但**从不删旧备份**
+# (apply 仅在写盘失败分支 unlink, 写成功则备份永久留下; backfill 连失败分支都没清)。
+# 全仓无 .bak. 清理逻辑 — 每回填/应用一次磁盘就多一个永不清理的文件。
+# 统一抽一个轮转: 保留最近 keep 个, 按文件名时间戳排序删旧的。
+# 边界 (诚实): 备份是「可回滚」护栏, 轮转不是删光 — 保留最近 N 个 (默认 10),
+# 防堆积的同时不破坏"不留坏盘"回滚能力。纯函数, 不碰 default.json 本体。
+
+_DSL_BACKUP_KEEP = 10
+
+
+def _prune_dsl_backups(main_path: str, keep: int = _DSL_BACKUP_KEEP) -> list[str]:
+    """清理 main_path 的旧备份 (default.json.bak.<ts>), 保留最近 keep 个。
+
+    按备份文件名中的时间戳 (mtime 兜底) 从新到旧排序, 只删超出 keep 的旧文件。
+    返回实际删除的备份路径列表 (无旧备份可删 → [])。畸形 main_path/无备份不崩。
+    """
+    # 备份文件名范式: <main_path>.bak.<ts> (见 apply/backfill 的 f"{p}.bak.{ts}"),
+    # 前缀 = 主文件完整路径 + ".bak." — 不拆 splitext (那会把 default.json 拆成
+    # default 漏掉 .json, 前缀匹配不到真备份 → 轮转变 no-op 静默失效)。
+    prefix = f"{main_path}.bak."
+    bak_dir = os.path.dirname(main_path)
+    try:
+        cands = [os.path.join(bak_dir, n) for n in os.listdir(bak_dir)
+                 if n.startswith(os.path.basename(prefix))]
+    except OSError:
+        return []
+    cands = [c for c in cands if os.path.isfile(c)]
+    if len(cands) <= keep:
+        return []
+    # 新→旧排序: 优先按文件名时间戳 (default.json.bak.YYYYMMDDHHMMSS), mtime 兜底
+    cands.sort(key=lambda c: (os.path.basename(c), os.path.getmtime(c)), reverse=True)
+    to_remove = cands[keep:]
+    removed: list[str] = []
+    for c in to_remove:
+        try:
+            os.unlink(c)
+            removed.append(c)
+        except OSError:
+            pass  # 单文件删失败不影响其余, 不静默吞 — 记在返回里 (由调用方决策是否报)
+    return removed
+
+
 class DslRulesApplyReq(BaseModel):
     """POST /api/rules/dsl/apply 入参: 整份 DSL 规则 JSON + 人工确认开关。"""
 
@@ -691,6 +734,8 @@ def api_rules_dsl_apply(req: DslRulesApplyReq) -> dict:
             raise HTTPException(500, f"写盘后重载失败且回滚也失败: load={e} rollback={rb}")
         raise HTTPException(500, f"default.json 写盘后 DslRuleProvider 重载失败, 已回滚: {e}")
 
+    # 写成功 → 轮转旧备份 (保留最近 N 个, 防 .bak. 无界堆积; 刚写的 backup 在保留窗口内)
+    _prune_dsl_backups(p)
     return {
         "status": "applied",
         "valid": True,
@@ -766,6 +811,8 @@ def api_rules_backfill(req: RuleBackfillReq) -> dict:
         shutil.copyfile(backup, p)  # 回滚
         raise HTTPException(500, f"回填写盘后重载失败, 已回滚: {e}")
 
+    # 写成功 → 轮转旧备份 (与 apply 同一套生命周期, 防 .bak. 无界堆积)
+    _prune_dsl_backups(p)
     return {
         "status": "applied", "rule_id": req.rule_id, "backup": backup,
         "confirmed": rule.get("confirmed"), "confidence": rule.get("confidence"),
