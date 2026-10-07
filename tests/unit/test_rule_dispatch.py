@@ -98,3 +98,24 @@ def test_dispatch_table_entries_are_simple_raw_element_rule_mapping():
         assert not hasattr(elem, "polygon") and not hasattr(elem, "bbox"), \
             f"{entry['raw_key']} 的 build 产出几何对象 (polygon/bbox), 几何逻辑不该进分发表"
 
+
+def test_rule_check_node_wires_opening_collision_diagnosis():
+    """接线护栏 (机制层自主子集): rule_check_node 门窗碰撞段检出结果过
+    verify_opening_collisions, 诊断随节点 return 带出 (DesignState 声明该 channel,
+    仿 export_status 范式 — 未声明的键 langgraph 会丢弃, 端点/出图侧拿不到)。
+
+    不依赖全样本几何, 直接喂最小 raw_data 调 rule_check_node, 断言:
+      ① 返回 dict 带 opening_collisions_check 键 (接线真生效, 非写了没人读的死代码)
+      ② 该诊断结构 {valid, issues, count} 合法
+      ③ 无门窗 raw → count=0 空诊断自洽 (不虚报碰撞)
+    """
+    from src.agents.src.nodes.cad_rule_export import rule_check_node
+    # 空 raw_data: 走 _ELEMENT_CHECKS 空跳 + 门窗碰撞段 (无门窗 → 0 碰撞)
+    res = rule_check_node({"raw_data": {}, "project_structure": {}})
+    assert "opening_collisions_check" in res, "rule_check_node 未把门窗碰撞诊断随 return 带出 (接线失效)"
+    chk = res["opening_collisions_check"]
+    for k in ("valid", "issues", "count"):
+        assert k in chk, f"opening_collisions_check 缺字段 {k}: {chk}"
+    # 无门窗元素 → 0 碰撞, 诊断自洽 (valid 空态不误报)
+    assert chk["count"] == 0 and chk["valid"] is True, f"空 raw 门窗碰撞诊断异常: {chk}"
+

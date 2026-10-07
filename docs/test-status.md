@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   570 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   571 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
@@ -69,4 +69,5 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-06 | 563 | 机制层自主子集 (无需外部专家): bridge._prune_dsl_backups 备份轮转 (default.json.bak.<ts> 保留最近 keep=10 个, 按文件名时间戳排序删旧的, 防 .bak. 无界堆积, 不破坏可回滚护栏); /api/rules/dsl/apply + /api/rules/backfill 写盘成功后统一接入; 揪出并修掉 splitext 拆前缀导致轮转变 no-op 静默失效的 bug | `HEAD` | 写盘前备份只写不删, 每应用/回填一次磁盘多一个永不清理文件; 起桥真验 15→10 收敛 |
 | 2026-10-06 | 570 | 机制层自主子集 (无需外部专家): layout.verify_opening_collisions (门窗碰撞结果自洽: a_id≠b_id / kind∈OPENING_KINDS 3类 / a_id·b_id 在门窗元素 / overlap_m>0, 畸形不崩) + OPENING_KINDS 常量; 揪出上轮「10/10 产出函数都有 verify」的漏网同类 — detect_opening_collisions 与 M4 detect_clashes 同构(几何碰撞→出图反画圈), 出图侧 cad_rule_export L783 消费但一直无自洽校验, 脏 a_id/b_id 会静默兜底原点假圈 | `HEAD` | 补门窗碰撞这条「几何碰撞→出图反查」失步面 (M4 verify_clashes 的孪生), 全量 570 |
 | 2026-10-06 | 570 | 机制层护栏接线 (无需外部专家, 测试水位不变): 把孤儿纯函数 diff.verify_diff_buckets 接入 /api/rules/dsl/apply 落盘预览 — confirm=False 响应新增 diff_consistent/diff_issues 诊断 (仿 verify_clashes.clashes_consistent 范式), 防「同一 rule_id 既进 added 又进 changed」静默穿透落盘预览; test_bridge_rules_dsl_apply 补 3 断言钉死。全仓 verify_* 从「造了没接线」补到「真消费方」 | `HEAD` | 纯接线不改引擎判据, 全量实测仍 570 (无回归) |
+| 2026-10-06 | 571 | 机制层护栏接线 (无需外部专家): 孤儿纯函数 layout.verify_opening_collisions 接入 rule_check_node 门窗碰撞段 — 检出结果过自洽校验, 诊断随节点 return 带出, DesignState 声明 opening_collisions_check channel (仿 export_status 范式; langgraph 未声明的键会丢弃, 端点/出图侧才拿得到); 揪出 M4 clash_tolerance_used 同为「写了没人读」的死代码 (既有隐患, 同类)。+1 接线测试钉死 | `HEAD` | 纯接线不改引擎判据, 全量实测 571 无回归 |
 *最后刷新：2026-10-06 · 570 passed / 5 skipped / 0 failed（verify_diff_buckets 接入 apply 端点落盘预览诊断, 纯接线, 全量无回归）*

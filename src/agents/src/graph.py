@@ -57,6 +57,7 @@ class DesignState(TypedDict, total=False):
     # Rule checking
     rule_violations: list[dict]
     rule_check_passed: bool
+    opening_collisions_check: dict  # 门窗碰撞自洽诊断 (rule_check_node 产出; 声明进 schema 才随 state 持久化, 仿 export_status 范式)
 
     # Output
     final_dwg_path: str | None

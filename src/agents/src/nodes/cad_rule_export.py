@@ -780,8 +780,15 @@ def rule_check_node(state: dict) -> dict:
     rooms = _layout_from_state(state)["rooms"]
     door_layout = place_doors_on_walls(raw_doors, rooms)
     win_layout = place_windows_on_walls(raw_windows, rooms)
-    for c in detect_opening_collisions(door_layout, win_layout):
+    opening_collisions = detect_opening_collisions(door_layout, win_layout)
+    for c in opening_collisions:
         violations.append(_collision_violation(c))
+    # 门窗碰撞结果自洽诊断 (仿 M4 clash 侧 verify_clashes 范式): 检出结果过
+    # verify_opening_collisions, 脏 a_id/b_id / 非法 kind / 非正 overlap 会被如实
+    # 标出 (不静默穿透)。诊断随节点 return 带出 (langgraph 只有节点返回 dict 的键
+    # 才进最终 state, 端点/出图侧才拿得到), 主链路 violations 追加逻辑 0 改动。
+    from src.agents.src.layout import verify_opening_collisions
+    opening_check = verify_opening_collisions(door_layout, win_layout, opening_collisions)
 
     # 多专业碰撞：管线/电气/暖通 段与点位 vs 结构梁/柱 (几何层, 非规范条文)
     # 只追加, 不改既有 _ELEMENT_CHECKS / 门窗碰撞逻辑; 无碰撞样本零新增。
@@ -836,6 +843,9 @@ def rule_check_node(state: dict) -> dict:
             for v in violations
         ],
         "rule_check_passed": len(violations) == 0,
+        # 门窗碰撞自洽诊断 (机制层, 仿 M4 verify_clashes 范式): 随节点 return 带出,
+        # 端点/出图侧拿得到。valid=False 时 issues 逐条定位脏 a_id/b_id / 非法 kind。
+        "opening_collisions_check": opening_check,
     }
 
 
