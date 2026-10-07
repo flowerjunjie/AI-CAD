@@ -698,6 +698,13 @@ def api_rules_dsl_apply(req: DslRulesApplyReq) -> dict:
     old_rules = old_data.get("rules", []) if isinstance(old_data, dict) else []
     diff = _diff_rules(old_rules, req.rules)
 
+    # 机制层自洽诊断 (仿 verify_clashes.clashes_consistent 范式): 三桶 diff
+    # (added/removed/changed) 自身是否自洽 — 防上游 diff 逻辑改动后「同一 rule_id
+    # 既进 added 又进 changed」的静默失步穿透进落盘预览。给 verify_diff_buckets
+    # 接上第一个真实生产消费方 (此前仅测试引用, 孤儿纯函数)。失步不静默进预览。
+    from src.rules.src.diff import verify_diff_buckets
+    diff_check = verify_diff_buckets(diff, key_of=lambda rid: rid)
+
     # ── 2. 人工确认闸: 未确认 → 只回 diff 预览, 不落盘 ──
     if not req.confirm:
         return {
@@ -705,6 +712,8 @@ def api_rules_dsl_apply(req: DslRulesApplyReq) -> dict:
             "valid": True,
             "error_count": 0,
             "diff": diff,
+            "diff_consistent": diff_check["ok"],
+            "diff_issues": diff_check["issues"],
             "message": "校验通过, 待人工确认。请带 confirm=true 再调本端点落盘。",
         }
 

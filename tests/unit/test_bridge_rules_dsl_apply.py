@@ -70,6 +70,10 @@ def test_apply_confirm_false_returns_diff_no_write(patched_dsl_dir):
     assert body["status"] == "pending_confirm"
     assert body["valid"] is True
     assert "diff" in body
+    # verify_diff_buckets 已接入 apply 端点: 正确 diff 三桶产物必自洽 (added∩changed
+    # 交叠 / 桶内重复 揪出), 透出诊断防「同一 rule_id 既新增又改动」静默穿透落盘预览
+    assert body["diff_consistent"] is True
+    assert body["diff_issues"] == []
     assert patched_dsl_dir.read_text(encoding="utf-8") == before  # 未落盘
     # 未确认不产备份
     for f in patched_dsl_dir.parent.iterdir():
