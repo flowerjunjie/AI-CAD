@@ -72,9 +72,20 @@ export default function ClashSection() {
                   <span className="clash-detail">{c.detail}</span>
                 </div>
               ))}
+              {r.clashes_consistent === false && (r.clashes_issues?.length ?? 0) > 0 && (
+                <div className="clash-line clash-diag-bad">
+                  <span className="clash-kind">自洽诊断</span>
+                  <span className="clash-detail">
+                    {r.clashes_issues!.length} 处脏碰撞 (a≠b / 非法 kind / id 不在 raw) — 出图圈位可能失真
+                  </span>
+                </div>
+              )}
             </>
           ) : (
-            <span className="clash-clean">✓ 无跨专业碰撞 · {r.sample}</span>
+            <span className="clash-clean">
+              ✓ 无跨专业碰撞 · {r.sample}
+              {r.clashes_consistent === false && ' · 自洽诊断异常'}
+            </span>
           )}
         </div>
       ))}

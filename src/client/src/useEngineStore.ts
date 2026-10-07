@@ -61,6 +61,9 @@ export interface ClashResult {
   tolerance_source?: 'param' | 'dsl' | 'default';  // 来源标注 (诚实: 不虚标)
   clashes: ClashItem[];
   count: number;
+  // 机制层自洽诊断 (bridge verify_clashes 透出, 防脏碰撞静默穿透出图假圈)
+  clashes_consistent?: boolean;
+  clashes_issues?: string[];
 }
 
 /** M5 单条冲突 (bridge /api/conflict 的 conflicts[i])。 */
@@ -94,6 +97,9 @@ export interface ConflictResult {
     removed: number;
     duplicates: number;  // 几何等价类维度 (同坐标不同 id = 疑似重复)
   };
+  // 机制层自洽诊断 (bridge verify_summary 透出, 防汇总/列表失步静默穿透 UI)
+  summary_consistent?: boolean;
+  summary_issues?: string[];
 }
 
 // ─── M5 在线协同持久层 (bridge.py H 段, 本地锁演示通路) ───

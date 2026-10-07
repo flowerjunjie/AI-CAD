@@ -36,6 +36,7 @@ export default function ConflictSection() {
             value={conflictSampleB}
             onChange={(e) => setConflictSampleB(e.target.value)}
             className="conflict-select"
+            title="稿 B 下拉候选 = data/sample/ 下 JSON 文件；当前仅 1 份样本 (真多稿比对待业务提供第 2 稿)"
           >
             <option value="residential_100sqm.json">residential_100sqm.json</option>
           </select>
@@ -86,6 +87,14 @@ export default function ConflictSection() {
                 </div>
               ))}
               {r.conflicts.length > 8 && <div className="clash-detail">… 共 {r.conflicts.length} 条</div>}
+              {r.summary_consistent === false && (r.summary_issues?.length ?? 0) > 0 && (
+                <div className="clash-line clash-diag-bad">
+                  <span className="clash-kind">自洽诊断</span>
+                  <span className="clash-detail">
+                    汇总计数与列表失步 ({r.summary_issues!.length} 处) — 上方条数不可信, 以列表为准
+                  </span>
+                </div>
+              )}
             </>
           ) : (
             <span className="clash-clean">✓ 两稿无改动冲突 · {r.sample_a} vs {r.sample_b}</span>
