@@ -203,10 +203,14 @@ function M1BackfillBlock({ rule }: { rule: DslRuleItem }) {
   const onBackfill = async () => {
     setBusy(true);
     setMsg('');
+    // 传 rule.params: 设计师在上方 ParamsEditor 调的阈值随回填一起写盘,
+    // 否则只回填 confirmed/confidence 而阈值改动被静默丢弃 (断层)。
+    // 后端 api_rules_backfill 会同步写 param_defaults + params (同键覆盖)。
     const res = await backfillRule(rule.rule_id, {
       confirmed: true,
       confidence,
       confirm_note: note.trim() || undefined,
+      params: Object.keys(rule.params).length > 0 ? { ...rule.params } : undefined,
     });
     setBusy(false);
     if (res && res.status === 'applied') {
