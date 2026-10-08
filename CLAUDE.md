@@ -32,6 +32,15 @@
 - **改懒 import 的新模块要同步补 `build_exe.py` 的 `HIDDEN_IMPORTS`**（如 M4/M5 的
   `clash_detection`/`conflict_detection`）——`tools` 是命名空间包，PyInstaller 静态分析
   追不到，不显式列则 exe 运行时 ModuleNotFoundError（开发态正常、打包态才炸的坑）。
+  **精确判定（2026-10-08 固化，防误判"该不该补"）**：先分清包性质再决定——
+  - **命名空间包**（目录无 `__init__.py`，如 `src/agents/src/tools/`）：静态分析追不到
+    跨目录懒 import，**必须**列进 HIDDEN_IMPORTS。
+  - **普通包**（有 `__init__.py`，如 `src/rules/src/`）：整包被 PyInstaller 追进 PYZ，
+    包内成员（`diff.py` 等）自动进，**不必**单列某文件——但前提是该成员自身**不懒 import
+    命名空间包**（若 `diff.py` 内部 `from ...tools import x`，那 x 仍要补）。
+  拿不准就**起 exe 真调一次该端点**验证（红线二：验证再归因，别猜"会不会炸"）——
+  2026-10-08 曾据误判要补 `src.rules.src.diff`，实测 `/api/rules/dsl/apply` 真透出
+  `diff_consistent`，证明普通包成员无需补 spec，避免白改。
 - 前端 `vite.config` 已开 `emptyOutDir`（outDir 在根外默认不清空会堆积历史 bundle 进 exe）。
 
 ## 诚实边界（不虚标，留给人）
