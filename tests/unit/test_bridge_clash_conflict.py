@@ -121,10 +121,10 @@ def test_clash_hit_path(monkeypatch, tmp_path):
     不碰真 sample 文件 (红线: 不改数据), 只替换端点的读取层,
     验证 detect_clashes 真被调用 + 结果真透传 (a_id/b_id/kind/detail 全字段)。
     """
-    from src.gui import bridge as bridge_mod
+    from src.gui import bridge as bridge_main, bridge_clash as bridge_mod
 
     monkeypatch.setattr(bridge_mod, "_load_sample_raw", lambda s: _build_clashing_raw())
-    with TestClient(bridge_mod.app) as client:
+    with TestClient(bridge_main.app) as client:
         resp = client.get(f"/api/clash?sample={_SAMPLE}")
         assert resp.status_code == 200
         body = resp.json()
@@ -172,7 +172,7 @@ def test_conflict_missing_sample_404():
 def test_conflict_hit_path(monkeypatch):
     """命中路径: monkeypatch 两稿读取层 (同 sample 改一个字段 + 删一个元素)
     → 真命中 value + removed, summary 计数对得上。"""
-    from src.gui import bridge as bridge_mod
+    from src.gui import bridge as bridge_main, bridge_clash as bridge_mod
 
     raw_a = _raw()
     raw_b = copy.deepcopy(raw_a)
@@ -186,7 +186,7 @@ def test_conflict_hit_path(monkeypatch):
         return raw_a if sample == "A.json" else raw_b
 
     monkeypatch.setattr(bridge_mod, "_load_sample_raw", fake_loader)
-    with TestClient(bridge_mod.app) as client:
+    with TestClient(bridge_main.app) as client:
         resp = client.get("/api/conflict?sample_a=A.json&sample_b=B.json")
         assert resp.status_code == 200
         body = resp.json()
