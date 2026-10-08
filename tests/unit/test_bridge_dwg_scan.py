@@ -64,9 +64,25 @@ def test_dwg_scan_does_not_judge_kind():
     print("PASS test_dwg_scan_does_not_judge_kind")
 
 
+def test_dwg_scan_consistent_diagnostic_surfaced():
+    """P12 同类收口: /api/dwg-scan 透出自洽诊断 (verify_dwg_scan_report 结果),
+    前端 DwgScanSection 消费 scan_consistent 显式「失步才示警」。
+    自产报告 (扫真样本) 恒自洽 → scan_consistent=true / scan_issues 空, 不虚标。
+    护栏钉死「后端真透出该字段」— 否则前端 interface 声明了却收不到, 又是黑洞。"""
+    with TestClient(app) as client:
+        resp = client.get("/api/dwg-scan", params={"sample": "electrical_sample.dxf"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "scan_consistent" in body, "端点未透出自洽诊断字段 (前端 interface 声明了却收不到)"
+    assert body["scan_consistent"] is True, f"自产报告应自洽, 实际 {body.get('scan_issues')}"
+    assert body["scan_issues"] == []
+    print("PASS test_dwg_scan_consistent_diagnostic_surfaced")
+
+
 if __name__ == "__main__":
     test_dwg_scan_electrical_sample()
     test_dwg_scan_missing_sample_404()
     test_dwg_scan_non_dxf_404()
     test_dwg_scan_does_not_judge_kind()
+    test_dwg_scan_consistent_diagnostic_surfaced()
     print("OK: all dwg-scan endpoint tests passed")

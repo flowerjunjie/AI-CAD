@@ -151,6 +151,9 @@ export interface DwgScanResult {
   insert_total: number;
   available_samples?: string[];
   note?: string;
+  // 机制层自洽诊断 (bridge verify_dwg_scan_report 透出, 防「数字对不上」的报告误导回填)
+  scan_consistent?: boolean;
+  scan_issues?: string[];
 }
 
 // ─── M5 协同 + duplicate 联动 (bridge.py H 段, 取锁前看元素是否疑似重复) ───

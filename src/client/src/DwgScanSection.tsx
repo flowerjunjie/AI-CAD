@@ -74,6 +74,14 @@ export default function DwgScanSection() {
               </span>
             </div>
           )}
+          {dwgScan.scan_consistent === false && (dwgScan.scan_issues?.length ?? 0) > 0 && (
+            <div className="clash-line clash-diag-bad">
+              <span className="clash-kind">自洽诊断</span>
+              <span className="clash-detail">
+                报告聚合数与图层明细失步 ({dwgScan.scan_issues!.length} 处) — 数字对不上, 回填映射前请先核
+              </span>
+            </div>
+          )}
           <p className="clash-empty">
             频率报告 · 专家据此回填映射 dict (docs/element-upstream-contract.md §5), 不判定 kind 归属
           </p>
