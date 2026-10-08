@@ -30,7 +30,7 @@ _SAMPLE = "residential_100sqm.json"
 
 def test_confirmed_rule_ids_parse_fail_returns_empty(tmp_path, monkeypatch):
     """_confirmed_rule_ids 读 default.json 失败 (缺文件) → 空集, 不阻塞主链路 (171-172)。"""
-    import src.gui.bridge as b
+    import src.gui.bridge_rules as b
 
     fake_root = tmp_path
     default_dir = fake_root / "src" / "rules" / "rules"
@@ -42,7 +42,7 @@ def test_confirmed_rule_ids_parse_fail_returns_empty(tmp_path, monkeypatch):
 
 def test_confirmed_rule_ids_reads_true_flags(tmp_path, monkeypatch):
     """_confirmed_rule_ids 解析成功 → 返回 confirmed=true 的 rule_id 集合。"""
-    import src.gui.bridge as b
+    import src.gui.bridge_rules as b
 
     fake_root = tmp_path
     default_dir = fake_root / "src" / "rules" / "rules"
@@ -59,7 +59,7 @@ def test_rule_source_classifies_hardcoded_dsl():
 
     不 import ParametricRule 造假, 用带/不带 dsl_only 的普通对象覆盖 146-154 分支。
     """
-    import src.gui.bridge as b
+    import src.gui.bridge_rules as b
 
     class _Plain:
         pass
@@ -280,7 +280,7 @@ def test_health_engine_load_failure_degrades(monkeypatch):
 
     monkeypatch _load_rules_module 抛异常, 验证探活对引擎故障诚实降级 + rag 布尔仍出。
     """
-    import src.gui.bridge as b
+    import src.gui.bridge_rules as b
 
     def boom():
         raise RuntimeError("engine down")
