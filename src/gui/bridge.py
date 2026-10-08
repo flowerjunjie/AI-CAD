@@ -833,23 +833,8 @@ def api_rules_backfill(req: RuleBackfillReq) -> dict:
 # ─── F 碰撞/冲突域段: M4 跨专业碰撞 + M5 两稿改动冲突 (只调用工具库, 不重写) ───
 # 懒 import 放函数体: module 收集期不触发 clash/conflict 重依赖。
 # 红线二: sample 不存在 → 404 诚实报错, 无碰撞/无冲突 → 0 + 空列表, 绝不造假。
-
-_CLASH_SAMPLE_KEYS = [
-    "structural_beams", "structural_columns", "pipes", "hvac_ducts",
-    "outlets", "hvac_grilles",
-]
-
-
-def _load_sample_raw(sample: str) -> dict:
-    """读 data/sample/<sample> 顶层元素数据 (键缺失/缺键优雅取空 dict)。
-    文件不存在 → HTTPException 404 (诚实报错, 不造假数据)。"""
-    p = os.path.join(ROOT, "data", "sample", sample)
-    if not os.path.exists(p):
-        raise HTTPException(404, f"样本不存在: {sample}")
-    with open(p, encoding="utf-8") as fh:
-        data = json.load(fh)
-    # 顶层是元素数据 (doors/pipes/... 各带 id), 只取碰撞检测用到的键
-    return {k: data.get(k, []) for k in _CLASH_SAMPLE_KEYS}
+# _load_sample_raw / _CLASH_SAMPLE_KEYS 上提到 bridge_common (B/F 域段共用, 解耦跨段引用)。
+from src.gui.bridge_common import _load_sample_raw, _CLASH_SAMPLE_KEYS  # noqa: F401
 
 
 @app.get("/api/dwg-marker-verify")
