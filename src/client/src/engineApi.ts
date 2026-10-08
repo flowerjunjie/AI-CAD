@@ -322,6 +322,17 @@ export async function fetchCollabDeadlockLive(): Promise<import('./useEngineStor
   return result;
 }
 
+/** GET /api/collab/waits-verify: waits 字段完整性体检 (机制层, 防幽灵等待边脏死锁判定)。 */
+export async function fetchCollabWaitsVerify(): Promise<import('./useEngineStore').CollabWaitsVerify | null> {
+  const store = useEngineStore.getState();
+  const result = await getJson<import('./useEngineStore').CollabWaitsVerify>(
+    '/api/collab/waits-verify',
+  );
+  if (result) { store.setCollabWaitsVerify(result); store.setFetchError(null); }
+  else store.setFetchError(`「校验 waits」未生效 (引擎断连或异常)`);
+  return result;
+}
+
 // ─── M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验) ───
 /** GET /api/permission/matrix: 角色→权限矩阵 + 结构自洽校验 (机制层, 不判业务值)。 */
 export async function fetchPermissionMatrix(): Promise<import('./useEngineStore').PermissionMatrix | null> {

@@ -3,6 +3,7 @@ import { useEngineStore } from './useEngineStore';
 import {
   fetchCollabSnapshot, collabAcquire, collabRelease,
   fetchCollabElements, fetchCollabVerify, fetchCollabDeadlockLive,
+  fetchCollabWaitsVerify,
   fetchPermissionMatrix,
 } from './engineApi';
 
@@ -20,7 +21,7 @@ export default function CollabPanel() {
     engineConnected, lastSample,
     collabSnapshot, collabLoading,
     collabElements, collabElementsLoading,
-    collabVerify, collabDeadlock, permissionMatrix,
+    collabVerify, collabDeadlock, collabWaitsVerify, permissionMatrix,
   } = useEngineStore();
 
   // 主操作 state (与 App.tsx 抽出的局部 state 保持一致的默认值)
@@ -34,6 +35,7 @@ export default function CollabPanel() {
   const handleElements = () => fetchCollabElements(lastSample);
   const handleVerify = () => void fetchCollabVerify();
   const handleDeadlock = () => void fetchCollabDeadlockLive();
+  const handleWaitsVerify = () => void fetchCollabWaitsVerify();
   const handleMatrix = () => void fetchPermissionMatrix();
 
   // 选中资源的重复标记 (取锁前提示用): duplicate_of 非空 = 疑似重复
@@ -136,6 +138,8 @@ export default function CollabPanel() {
             <div className="collab-diag-controls">
               <button className="btn-sm collab-scan-btn" onClick={handleVerify} disabled={!engineConnected}>校验日志</button>
               <button className="btn-sm collab-scan-btn" onClick={handleDeadlock} disabled={!engineConnected}>查死锁</button>
+              <button className="btn-sm collab-scan-btn" onClick={handleWaitsVerify} disabled={!engineConnected}
+                title="waits 字段完整性体检: 幽灵等待边/缺字段/重复边 在此失步可见 (机制层, 防脏死锁判定)">校验 waits</button>
               <button className="btn-sm collab-scan-btn" onClick={handleMatrix} disabled={!engineConnected}>看矩阵</button>
             </div>
 
@@ -169,6 +173,24 @@ export default function CollabPanel() {
                     <span className="clash-ids">环: {collabDeadlock.cycle.join(' → ')}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {collabWaitsVerify && (
+              <div className={`clash-item ${collabWaitsVerify.valid ? 'clash-ok' : 'clash-hit'}`}>
+                <div className="clash-line">
+                  <span className="clash-kind">{collabWaitsVerify.valid ? 'waits 自洽' : 'waits 失步'}</span>
+                  <span className="clash-scope">
+                    问题 {collabWaitsVerify.issues.length}
+                    {(collabWaitsVerify.ghost_holders?.length ?? 0) > 0
+                      ? ` · 幽灵等待边 ${(collabWaitsVerify.ghost_holders ?? []).length}`
+                      : ''}
+                    {collabWaitsVerify.source === 'empty' ? ' · 空态' : ''}
+                  </span>
+                </div>
+                {collabWaitsVerify.issues.map((it, i) => (
+                  <div key={i} className="clash-line"><span className="clash-ids">{it}</span></div>
+                ))}
               </div>
             )}
 

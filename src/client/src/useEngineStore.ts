@@ -198,6 +198,16 @@ export interface CollabDeadlockLive extends CollabDeadlock {
   source?: 'file' | 'empty';
 }
 
+/** GET /api/collab/waits-verify 响应: waits 字段完整性体检 (机制层, verify_event_log 孪生)。
+ *  防「幽灵等待边 (wait 指向不持锁 holder)」让 check_deadlock_from_state 建立在脏数据上误判。 */
+export interface CollabWaitsVerify {
+  valid: boolean;
+  issues: string[];
+  ghost_holders?: string[];  // wait 指向但当前不持写锁的 holder (幽灵等待边)
+  source?: 'file' | 'empty';
+  note?: string;
+}
+
 // ─── M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验) ───
 
 /** GET /api/permission/matrix 响应: 角色→权限矩阵 + 结构自洽校验结论。 */
@@ -316,6 +326,8 @@ interface EngineState {
   // M5 协同正确性地基 (bridge H 段, 机制层完整性校验 + 死锁环检测)
   collabVerify: import('./useEngineStore').CollabVerify | null;
   collabDeadlock: import('./useEngineStore').CollabDeadlockLive | null;
+  // M5 协同 waits 字段完整性体检 (bridge /api/collab/waits-verify, 机制层, 防幽灵等待边)
+  collabWaitsVerify: import('./useEngineStore').CollabWaitsVerify | null;
   // M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验)
   permissionMatrix: import('./useEngineStore').PermissionMatrix | null;
   // 人在回路确认闸 (bridge G 段, 演示通路)
@@ -347,6 +359,7 @@ interface EngineState {
   setCollabElementsLoading: (l: boolean) => void;
   setCollabVerify: (v: import('./useEngineStore').CollabVerify | null) => void;
   setCollabDeadlock: (d: import('./useEngineStore').CollabDeadlockLive | null) => void;
+  setCollabWaitsVerify: (v: import('./useEngineStore').CollabWaitsVerify | null) => void;
   setPermissionMatrix: (m: import('./useEngineStore').PermissionMatrix | null) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
@@ -380,6 +393,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   dslAuditLoading: false,
   collabVerify: null,
   collabDeadlock: null,
+  collabWaitsVerify: null,
   permissionMatrix: null,
   confirmResults: [],
   confirmLoading: false,
@@ -408,6 +422,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   setCollabElementsLoading: (collabElementsLoading) => set({ collabElementsLoading }),
   setCollabVerify: (collabVerify) => set({ collabVerify }),
   setCollabDeadlock: (collabDeadlock) => set({ collabDeadlock }),
+  setCollabWaitsVerify: (collabWaitsVerify) => set({ collabWaitsVerify }),
   setPermissionMatrix: (permissionMatrix) => set({ permissionMatrix }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),
