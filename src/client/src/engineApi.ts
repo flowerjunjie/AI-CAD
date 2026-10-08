@@ -333,6 +333,36 @@ export async function fetchCollabWaitsVerify(): Promise<import('./useEngineStore
   return result;
 }
 
+// ─── 出图/批量 自洽体检 (bridge /api/rules/batch-verify + /api/dwg-marker-verify, 机制层) ───
+// batch-verify 走主链路出元素+批量校验 (秒级); dwg-marker-verify 懒触发 run_agent_demo
+// 全链路出图 (冷启动 ~58s), 前端必须 loading 态防首屏卡死 (agent 重依赖判断坐实)。
+
+/** GET /api/rules/batch-verify: 批量校验报告聚合自洽体检 (秒级, 不触发出图)。 */
+export async function runBatchVerify(sample: string): Promise<import('./useEngineStore').BatchVerifyResult | null> {
+  const store = useEngineStore.getState();
+  store.setBatchVerifyLoading(true);
+  const result = await getJson<import('./useEngineStore').BatchVerifyResult>(
+    `/api/rules/batch-verify?sample=${encodeURIComponent(sample)}`,
+  );
+  store.setBatchVerifyLoading(false);
+  if (result) { store.setBatchVerify(result); store.setFetchError(null); }
+  else store.setFetchError(`「批量校验」未生效 (引擎断连或异常) — ${sample}`);
+  return result;
+}
+
+/** GET /api/dwg-marker-verify: 出图 CLASH/DUP 圈实数对账 (重依赖, 出图链路, 慢)。 */
+export async function runDwgMarkerVerify(sample: string): Promise<import('./useEngineStore').DwgMarkerVerifyResult | null> {
+  const store = useEngineStore.getState();
+  store.setDwgMarkerVerifyLoading(true);
+  const result = await getJson<import('./useEngineStore').DwgMarkerVerifyResult>(
+    `/api/dwg-marker-verify?sample=${encodeURIComponent(sample)}`,
+  );
+  store.setDwgMarkerVerifyLoading(false);
+  if (result) { store.setDwgMarkerVerify(result); store.setFetchError(null); }
+  else store.setFetchError(`「出图圈对账」未生效 (引擎断连或异常) — ${sample}`);
+  return result;
+}
+
 // ─── M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验) ───
 /** GET /api/permission/matrix: 角色→权限矩阵 + 结构自洽校验 (机制层, 不判业务值)。 */
 export async function fetchPermissionMatrix(): Promise<import('./useEngineStore').PermissionMatrix | null> {

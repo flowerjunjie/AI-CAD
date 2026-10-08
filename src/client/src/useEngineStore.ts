@@ -208,6 +208,28 @@ export interface CollabWaitsVerify {
   note?: string;
 }
 
+/** GET /api/rules/batch-verify 响应: 批量校验报告聚合自洽体检 (机制层, 不判违规判得对不对)。 */
+export interface BatchVerifyResult {
+  sample: string;
+  ok: boolean;
+  total: number;
+  checked: number;
+  issues: string[];
+  note?: string;
+}
+
+/** GET /api/dwg-marker-verify 响应: 出图 CLASH/DUP 警示圈实数 vs 期望数对账 (机制层)。 */
+export interface DwgMarkerVerifyResult {
+  sample: string;
+  ok: boolean;
+  clash_drawn: number;
+  clash_expected: number;
+  dup_drawn: number;
+  dup_expected: number;
+  issues: string[];
+  note?: string;
+}
+
 // ─── M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验) ───
 
 /** GET /api/permission/matrix 响应: 角色→权限矩阵 + 结构自洽校验结论。 */
@@ -328,6 +350,11 @@ interface EngineState {
   collabDeadlock: import('./useEngineStore').CollabDeadlockLive | null;
   // M5 协同 waits 字段完整性体检 (bridge /api/collab/waits-verify, 机制层, 防幽灵等待边)
   collabWaitsVerify: import('./useEngineStore').CollabWaitsVerify | null;
+  // 出图/批量 自洽体检 (bridge /api/rules/batch-verify + /api/dwg-marker-verify, 机制层)
+  batchVerify: import('./useEngineStore').BatchVerifyResult | null;
+  batchVerifyLoading: boolean;
+  dwgMarkerVerify: import('./useEngineStore').DwgMarkerVerifyResult | null;
+  dwgMarkerVerifyLoading: boolean;
   // M5 权限矩阵 (bridge /api/permission/matrix, 结构自洽校验)
   permissionMatrix: import('./useEngineStore').PermissionMatrix | null;
   // 人在回路确认闸 (bridge G 段, 演示通路)
@@ -360,6 +387,10 @@ interface EngineState {
   setCollabVerify: (v: import('./useEngineStore').CollabVerify | null) => void;
   setCollabDeadlock: (d: import('./useEngineStore').CollabDeadlockLive | null) => void;
   setCollabWaitsVerify: (v: import('./useEngineStore').CollabWaitsVerify | null) => void;
+  setBatchVerify: (v: import('./useEngineStore').BatchVerifyResult | null) => void;
+  setBatchVerifyLoading: (l: boolean) => void;
+  setDwgMarkerVerify: (v: import('./useEngineStore').DwgMarkerVerifyResult | null) => void;
+  setDwgMarkerVerifyLoading: (l: boolean) => void;
   setPermissionMatrix: (m: import('./useEngineStore').PermissionMatrix | null) => void;
   setConfirmResults: (c: import('./engineApi').AgentConfirmResult[]) => void;
   setConfirmLoading: (l: boolean) => void;
@@ -394,6 +425,10 @@ export const useEngineStore = create<EngineState>((set) => ({
   collabVerify: null,
   collabDeadlock: null,
   collabWaitsVerify: null,
+  batchVerify: null,
+  batchVerifyLoading: false,
+  dwgMarkerVerify: null,
+  dwgMarkerVerifyLoading: false,
   permissionMatrix: null,
   confirmResults: [],
   confirmLoading: false,
@@ -423,6 +458,10 @@ export const useEngineStore = create<EngineState>((set) => ({
   setCollabVerify: (collabVerify) => set({ collabVerify }),
   setCollabDeadlock: (collabDeadlock) => set({ collabDeadlock }),
   setCollabWaitsVerify: (collabWaitsVerify) => set({ collabWaitsVerify }),
+  setBatchVerify: (batchVerify) => set({ batchVerify }),
+  setBatchVerifyLoading: (batchVerifyLoading) => set({ batchVerifyLoading }),
+  setDwgMarkerVerify: (dwgMarkerVerify) => set({ dwgMarkerVerify }),
+  setDwgMarkerVerifyLoading: (dwgMarkerVerifyLoading) => set({ dwgMarkerVerifyLoading }),
   setPermissionMatrix: (permissionMatrix) => set({ permissionMatrix }),
   setConfirmResults: (confirmResults) => set({ confirmResults }),
   setConfirmLoading: (confirmLoading) => set({ confirmLoading }),

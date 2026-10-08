@@ -695,6 +695,10 @@ body {
   font-size: 13px; color: #7c6ee5; font-weight: 700; margin-bottom: 8px;
 }
 .dwgscan-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+/* 出图/批量 自洽体检区块 (VerifyPanel): 复用撞车区块的 head/line/item 范式, 加两条控制行 */
+.verify-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.verify-marker-btn { opacity: .85; }
+.verify-marker-btn:hover:not(:disabled) { opacity: 1; }
 .dwgscan-layer { color: #7c6ee5; background: #1a163a; }
 .dwgscan-attr { color: #4caf50; background: #0d1a12; }
 

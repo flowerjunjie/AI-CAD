@@ -8,6 +8,7 @@ import ConfirmGatePanel from './ConfirmGatePanel';
 import ClashSection from './ClashSection';
 import ConflictSection from './ConflictSection';
 import DwgScanSection from './DwgScanSection';
+import VerifyPanel from './VerifyPanel';
 import PlaceholderFooter from './PlaceholderFooter';
 
 declare global {
@@ -221,6 +222,9 @@ function App() {
 
           {/* M2 制图约定对齐 — 独立子组件 <DwgScanSection /> (bridge I 段, 扫 DWG → 图层/块名频率报告) */}
           <DwgScanSection />
+
+          {/* 出图/批量 自洽体检 — 独立子组件 <VerifyPanel /> (bridge /api/rules/batch-verify + /api/dwg-marker-verify) */}
+          <VerifyPanel />
 
           {/* 人在回路确认闸 — 独立子组件 <ConfirmGatePanel /> (session 级, 起真实图挂起→逐 task 确认→同 thread 真续跑) */}
           <ConfirmGatePanel />
