@@ -23,6 +23,18 @@
 - 收口/重构后必跑全量 `python -m pytest tests/ -q` + `python scripts/smoke_test.py`，
   贴真实数字才交付（红线一：没有输出的完成叫自嗨）。
 
+## 重构纪律（物理搬文件前必做，2026-10-08 固化）
+- **物理搬模块/段到子文件前，先 grep 谁在 patch/引用被搬的模块级符号（含测试的
+  monkeypatch），搬家后全量必绿才 commit**——2026-10-08 拆 bridge.py H 段时把
+  模块级 `_COLLAB_STATE_PATH` 随段体搬走，测试 `monkeypatch bridge._COLLAB_STATE_PATH`
+  的 patch 目标直接悬空（端点读子模块的值，patch 打偏），撞出 9 个回归 + 误 push 带病状态。
+  教训：任何"物理搬家"必须**先拉通隐式契约**（测试 monkeypatch / 模块级全局被跨段引用），
+  再动手；单一事实源留在测试契约的稳定位置（如 bridge.py），子模块运行时惰性读。
+- **判定"段是否自包含"要 grep 跨段函数引用，不能只看段内 import**——bridge.py F 段
+  定义了 `_load_sample_raw`，但 B 段 `api_rules_batch_verify`（L333）也跨段引用它，
+  看似"只调工具库"的 F 段实际非自包含，拆它须先处理这条跨段依赖（H 段能"段间 0 交叉"
+  纯物理搬，F 段不能照搬）。
+
 ## 打包 / 长任务纪律（2026-09-30 固化）
 - **重打包 exe 前必须先刷新前端**：`cd src/client && npm run build`（产物落 `src/dist`，
   非 `src/client/dist`——vite `outDir: '../dist'` 上移一层）。旧 dist 打进去 = 界面里没有新面板。
