@@ -32,7 +32,20 @@ router = APIRouter()
 #     协议 + 用户体系) 需业务定协议后再接, 端点 docstring 与响应 note 均显式标注。
 # 懒 import: collab_protocol 依赖 permission_model (纯函数, 无重依赖), 但照范式放函数体。
 
-_COLLAB_STATE_PATH = os.path.join(ROOT, "data", "collab", "state.json")
+# 协同 state 路径的单一事实源留在 bridge.py (测试 monkeypatch bridge._COLLAB_STATE_PATH
+# 的契约稳定, 拆文件不破坏它)。本模块端点运行时惰性读 bridge 的当前值 (函数内 import
+# 规避循环), 测试改 bridge 侧的名字即对本模块端点生效 — 拆与不拆测试都绿。
+# 默认值 (bridge 未 patch 时) 与 bridge 模块初始 _COLLAB_STATE_PATH 一致。
+_DEFAULT_COLLAB_STATE_PATH = os.path.join(ROOT, "data", "collab", "state.json")
+
+
+def _collab_state_path() -> str:
+    """运行时读 bridge 模块当前的 _COLLAB_STATE_PATH (测试 patch 目标)。
+
+    惰性 import 规避循环 (bridge 顶层 import 本模块挂 router)。bridge 若未定义该
+    名 (理论上不会, 契约锚点) 回退默认值。"""
+    import src.gui.bridge as _bridge
+    return getattr(_bridge, "_COLLAB_STATE_PATH", _DEFAULT_COLLAB_STATE_PATH)
 
 
 @router.get("/api/collab/snapshot")
@@ -45,7 +58,7 @@ def api_collab_snapshot(designer: str = "designer") -> dict:
     from src.agents.src.tools.collab_protocol import (  # 懒
         JsonFileCollabStore, make_snapshot)
 
-    store = JsonFileCollabStore(_COLLAB_STATE_PATH)
+    store = JsonFileCollabStore(_collab_state_path())
     snap = make_snapshot(store, designer=designer)
     # 诚实标注来源: 真有落盘 state 才 "file", 空态标 "empty"
     has_state = store.load()
@@ -78,8 +91,9 @@ def api_permission_matrix() -> dict:
 def _collab_store() -> object:
     """懒建默认协同 store (data/collab/state.json, 缺目录自动建)。"""
     from src.agents.src.tools.collab_protocol import JsonFileCollabStore
-    os.makedirs(os.path.dirname(_COLLAB_STATE_PATH), exist_ok=True)
-    return JsonFileCollabStore(_COLLAB_STATE_PATH)
+    _sp = _collab_state_path()
+    os.makedirs(os.path.dirname(_sp), exist_ok=True)
+    return JsonFileCollabStore(_sp)
 
 
 @router.get("/api/collab/verify")
@@ -98,7 +112,7 @@ def api_collab_verify() -> dict:
     from src.agents.src.tools.collab_protocol import (  # 懒
         JsonFileCollabStore, verify_event_log)
 
-    store = JsonFileCollabStore(_COLLAB_STATE_PATH)
+    store = JsonFileCollabStore(_collab_state_path())
     state = store.load()
     res = verify_event_log(state)
     res["source"] = "file" if state else "empty"
@@ -234,7 +248,7 @@ def api_collab_deadlock() -> dict:
     诚实标 source="empty"。"""
     from src.agents.src.tools.collab_protocol import (  # 懒
         JsonFileCollabStore, check_deadlock_from_state)
-    store = JsonFileCollabStore(_COLLAB_STATE_PATH)
+    store = JsonFileCollabStore(_collab_state_path())
     state = store.load()
     res = check_deadlock_from_state(state)
     res["source"] = "file" if state else "empty"

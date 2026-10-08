@@ -60,7 +60,9 @@ def test_no_cross_designer_sync_endpoint():
     """诚实边界: 快照 + 本地锁端点存在, 但**没有**跨设计师同步端点
     (多机在线协同 CRDT/OT/单写者多读者协议 + 用户体系, 需业务定协议才接)。
     本地锁端点 acquire/release 存在 (单进程演示通路, 落本地 state.json)。"""
-    paths = {r.path for r in app.routes if hasattr(r, "path")}
+    # include_router 后子路由在 app.routes 里是嵌套包装, 直接读 r.path 拿不全;
+    # OpenAPI paths 是展开全部路由的权威源 (FastAPI 官方), 用它判端点存在性。
+    paths = set(app.openapi()["paths"].keys())
     assert "/api/collab/snapshot" in paths
     assert "/api/collab/acquire" in paths
     assert "/api/collab/release" in paths

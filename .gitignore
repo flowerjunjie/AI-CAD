@@ -81,3 +81,6 @@ doc/*词汇速查*.md
 
 # coverage 工具产物 (coverage run 生成, 非源码)
 .coverage
+
+# M5 协同运行态数据 (bridge /api/collab/* 写锁演示产生, 非源码, 不追踪)
+data/collab/

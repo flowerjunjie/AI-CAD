@@ -1228,6 +1228,9 @@ def agent_status() -> dict:
 # 端点路径 0 改动, 段间无调用依赖 (已核实 H 段自包含), 拆物理文件不破坏既有端点。
 from src.gui.bridge_collab import router as _collab_router  # 拆出的 H 域段
 app.include_router(_collab_router)
+# 协同 state 路径的单一事实源 (bridge_collab 端点运行时读本名, 测试 patch 此处即对端点生效)。
+# 拆出 H 段后保留该名字在 bridge, 锚定 test_bridge_collab_snapshot 的 monkeypatch 契约。
+_COLLAB_STATE_PATH = os.path.join(ROOT, "data", "collab", "state.json")
 
 # ─── E 入口域段: 兜底落地页 + 端口探测 + uvicorn 起法 ─────────────
 # (fork E 追加, 不碰 B/C/D 段。CORS 已在上, 这里补 127.0.0.1 各端口 origin。)
