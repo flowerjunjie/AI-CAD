@@ -40,10 +40,11 @@ def _good_rules() -> list:
 
 @pytest.fixture()
 def patched_dsl_dir(tmp_path, monkeypatch):
-    """把 bridge._dsl_default_path 指到 tmp 目录, 写真 default.json 前备份可安全还原。"""
+    """把 bridge_dsl._dsl_default_path 指到 tmp 目录, 写真 default.json 前备份可安全还原。"""
+    import src.gui.bridge_dsl as bridge_dsl
     fake = tmp_path / "default.json"
     fake.write_text(json.dumps({"rules": _good_rules()}, ensure_ascii=False, indent=2), encoding="utf-8")
-    monkeypatch.setattr(bridge, "_dsl_default_path", lambda: str(fake))
+    monkeypatch.setattr(bridge_dsl, "_dsl_default_path", lambda: str(fake))
     return fake
 
 
@@ -103,8 +104,9 @@ def test_apply_confirm_true_writes_and_backs_up(patched_dsl_dir):
 
 def test_apply_missing_file_404(tmp_path, monkeypatch):
     """default.json 不存在 → 404 (不造假)。"""
+    import src.gui.bridge_dsl as bridge_dsl
     missing = str(tmp_path / "nope.json")
-    monkeypatch.setattr(bridge, "_dsl_default_path", lambda: missing)
+    monkeypatch.setattr(bridge_dsl, "_dsl_default_path", lambda: missing)
     with TestClient(bridge.app) as client:
         resp = client.post("/api/rules/dsl/apply", json={"rules": _good_rules(), "confirm": True})
     assert resp.status_code == 404

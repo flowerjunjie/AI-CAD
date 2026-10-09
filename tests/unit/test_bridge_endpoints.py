@@ -299,8 +299,9 @@ def test_health_engine_load_failure_degrades(monkeypatch):
 
 def test_rules_dsl_missing_file_404(tmp_path, monkeypatch):
     """/api/rules/dsl default.json 不存在 → 404 诚实报错 (不造假)。"""
+    import src.gui.bridge_dsl as bridge_dsl
     missing = str(tmp_path / "no_default.json")
-    monkeypatch.setattr(bridge, "_dsl_default_path", lambda: missing)
+    monkeypatch.setattr(bridge_dsl, "_dsl_default_path", lambda: missing)
     with TestClient(app) as client:
         resp = client.get("/api/rules/dsl")
         assert resp.status_code == 404
@@ -347,10 +348,11 @@ def _valid_rules() -> list:
 
 @pytest.fixture()
 def patched_dsl_dir(tmp_path, monkeypatch):
+    import src.gui.bridge_dsl as bridge_dsl
     fake = tmp_path / "default.json"
     fake.write_text(json.dumps({"rules": _valid_rules()}, ensure_ascii=False, indent=2),
                     encoding="utf-8")
-    monkeypatch.setattr(bridge, "_dsl_default_path", lambda: str(fake))
+    monkeypatch.setattr(bridge_dsl, "_dsl_default_path", lambda: str(fake))
     return fake
 
 
@@ -360,7 +362,7 @@ def test_apply_diff_non_dict_skipped(patched_dsl_dir):
     非 dict 元素被集合推导 (isinstance dict) 过滤, 不进 added/removed 键集;
     合法 dict rule_id 正常对比。验证 430 continue + 集合推导过滤分支。
     """
-    import src.gui.bridge as b
+    import src.gui.bridge_dsl as b
     # old 含 dict 'a' + 非 dict; new 含 dict 'a'(同值) + dict 'b'(新增) + 非 dict
     diff = b._diff_rules(
         [{"rule_id": "a", "name": "x"}, "notdict", 42],

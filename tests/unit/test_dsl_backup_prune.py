@@ -21,7 +21,7 @@ sys.path.insert(0, project_root)
 
 def _prune(tmp, name):
     """造 name 个 default.json.bak.<ts> 备份 + 主文件, 跑轮转, 返回剩余备份数。"""
-    from src.gui import bridge
+    from src.gui import bridge_dsl
     main = os.path.join(tmp, "default.json")
     with open(main, "w", encoding="utf-8") as fh:
         fh.write("{}")
@@ -29,7 +29,7 @@ def _prune(tmp, name):
         with open(os.path.join(tmp, f"default.json.bak.2026010{i:06d}"),
                   "w", encoding="utf-8") as fh:
             fh.write("{}")
-    removed = bridge._prune_dsl_backups(main, keep=_KEEP)
+    removed = bridge_dsl._prune_dsl_backups(main, keep=_KEEP)
     left = [f for f in os.listdir(tmp) if f.startswith("default.json.bak.")]
     return len(left), len(removed), main
 
@@ -64,12 +64,12 @@ def test_prune_within_keep_noop():
 def test_prune_no_backups_no_crash():
     """无任何备份 → 不崩, removed=0, 主文件仍在。"""
     import tempfile
-    from src.gui import bridge
+    from src.gui import bridge_dsl
     with tempfile.TemporaryDirectory() as tmp:
         main = os.path.join(tmp, "default.json")
         with open(main, "w", encoding="utf-8") as fh:
             fh.write("{}")
-        assert bridge._prune_dsl_backups(main, _KEEP) == []
+        assert bridge_dsl._prune_dsl_backups(main, _KEEP) == []
         assert os.path.exists(main)
 
 
@@ -77,7 +77,7 @@ def test_prune_ignores_non_bak_files():
     """同目录非 default.json.bak. 前缀的文件 (如 default.json.bak2 / 其他.json)
     不被轮转误删 — 只认 .bak. 严格前缀。"""
     import tempfile
-    from src.gui import bridge
+    from src.gui import bridge_dsl
     with tempfile.TemporaryDirectory() as tmp:
         main = os.path.join(tmp, "default.json")
         with open(main, "w", encoding="utf-8") as fh:
@@ -91,7 +91,7 @@ def test_prune_ignores_non_bak_files():
             with open(os.path.join(tmp, f"default.json.bak.{i:09d}"),
                       "w", encoding="utf-8") as fh:
                 fh.write("{}")
-        bridge._prune_dsl_backups(main, 2)
+        bridge_dsl._prune_dsl_backups(main, 2)
         assert os.path.exists(os.path.join(tmp, "default.json.bakX")), "误删了非备份文件"
         assert os.path.exists(os.path.join(tmp, "other.json"))
         left = [f for f in os.listdir(tmp) if f.startswith("default.json.bak.")]
@@ -100,8 +100,8 @@ def test_prune_ignores_non_bak_files():
 
 def test_prune_missing_dir_no_crash():
     """main_path 所在目录不存在 → 优雅降级 (返回 [] 不崩)。"""
-    from src.gui import bridge
-    assert bridge._prune_dsl_backups("/nonexistent/dir/default.json", _KEEP) == []
+    from src.gui import bridge_dsl
+    assert bridge_dsl._prune_dsl_backups("/nonexistent/dir/default.json", _KEEP) == []
 
 
 if __name__ == "__main__":

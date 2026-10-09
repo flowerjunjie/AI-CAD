@@ -23,16 +23,18 @@ DEFAULT_JSON = os.path.join(project_root, "src", "rules", "rules", "default.json
 
 
 def _patch_to(tmp_path: str):
-    """让 bridge 写到 tmp_path 的 default.json 副本; 返回真实盘备份路径 (供回滚对比)。"""
+    """让 bridge_dsl 写到 tmp_path 的 default.json 副本; 返回真实盘备份路径 (供回滚对比)。"""
+    import src.gui.bridge_dsl as bridge_dsl
     shutil.copy(DEFAULT_JSON, tmp_path + ".default.json")
-    bridge._dsl_default_path = lambda: tmp_path + ".default.json"
+    bridge_dsl._dsl_default_path = lambda: tmp_path + ".default.json"
     return tmp_path + ".default.json"
 
 
 def _restore():
-    """恢复 bridge._dsl_default_path 原函数 (防测试间泄漏)。"""
+    """恢复 bridge_dsl._dsl_default_path 原函数 (防测试间泄漏)。"""
     import importlib
-    importlib.reload(bridge)
+    import src.gui.bridge_dsl as bridge_dsl
+    importlib.reload(bridge_dsl)
 
 
 def test_backfill_writes_and_backs_up(tmp_path, monkeypatch):
