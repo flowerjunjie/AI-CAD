@@ -269,6 +269,103 @@ def load_dsl_rules(path: str | Path) -> list[ParametricRule]:
 # predicate 是否引用了未声明的 params 键」这类机制自洽缺口。
 
 
+def audit_dispatch_coverage(
+    table: list,
+    rules: list,
+    confirmed: dict,
+    entry_class_hints: dict | None = None,
+) -> dict:
+    """对账分发表 _ELEMENT_CHECKS 是否 dispatch 了「全部 confirmed 且命中该表项类」
+    的 DSL 规则（机制层自主子集，不判业务值）。
+
+    背景：rule_check_node 主链路走 engine.check(elems, rule_ids=表项.rule_ids)，
+    **只跑表项声明的 rule_ids**。隔离测试（engine.check 不带 rule_ids）跑全部注册
+    规则是绿的，恰好盖住「主链路分发表漏 dispatch」这条盲区：一条 confirmed=True
+    的规则若命中某表项 build 类却没列进该表项 rule_ids，真实出图永远跑不到它。
+
+    参数：
+      table: _ELEMENT_CHECKS 表项列表（每项含 raw_key / build / rule_ids）。
+      rules: DSL 规则实例列表（load_dsl_rules 返回，含 .rule_id / .element_types）。
+      confirmed: {rule_id: bool}（default.json 每条规则 confirmed 机制量，只读不改）。
+      entry_class_hints: 可选 {raw_key: {build 类名...}}；缺省则从 build 注解现读
+      （constructible_element_types 同款判据，单一事实源不在此硬编码副本）。
+
+    返回 {ok, issues, coverage: [{raw_key, confirmed_missing: [rule_id...]}...]}
+    （纯函数，畸形不崩）：
+      逐表项收集「confirmed=True 且 element_types 命中该表项 build 类，却不在该表项
+      rule_ids 里」的规则 → confirmed_missing。任一非空则 ok=False。
+      confirmed=False 的规则**一律不报**（M1 占位，机制层不判，专家回填 confirmed
+      后该条自动要求进分发表）。
+
+    诚实边界：只校验 dispatch 覆盖的机制自洽，不判阈值/类名对错。
+    """
+    table = table or []
+    rules = rules or []
+    confirmed = confirmed or {}
+    entry_class_hints = entry_class_hints or {}
+
+    # rule_id → element_types（取自实例，鸭子取，仿 _rule_type_fields）
+    etypes_by_rid: dict[str, list] = {}
+    for r in rules:
+        rid = getattr(r, "rule_id", None)
+        if rid is None:
+            spec = getattr(r, "_spec", None)
+            rid = getattr(spec, "rule_id", None)
+        et = getattr(r, "element_types", None)
+        if et is None:
+            spec = getattr(r, "_spec", None)
+            et = getattr(spec, "element_types", None)
+        if rid:
+            etypes_by_rid[rid] = list(et) if et else []
+
+    issues: list[str] = []
+    coverage: list[dict] = []
+    for entry in table:
+        if not isinstance(entry, dict):
+            continue
+        raw_key = entry.get("raw_key")
+        entry_rule_ids = set(entry.get("rule_ids") or [])
+        # 该表项 build 类名集合
+        if raw_key in entry_class_hints:
+            entry_classes = set(entry_class_hints[raw_key])
+        else:
+            build = entry.get("build")
+            entry_classes = set()
+            if build is not None:
+                import typing
+                try:
+                    ret = typing.get_type_hints(build).get("return")
+                except Exception:
+                    ret = None
+                nm = getattr(ret, "__name__", "")
+                if nm:
+                    entry_classes.add(nm)
+        entry_classes_lc = {c.lower() for c in entry_classes}
+        # 命中判定：规则 element_types 里有类 ∈ 该表项 build 类（大小写不敏感，
+        # 与 ParametricRule._matches_type 同源判据）
+        confirmed_missing = []
+        for rid, etypes in etypes_by_rid.items():
+            if not confirmed.get(rid, False):
+                continue  # 未 confirmed 的占位规则不判（守 M1 不虚标）
+            if rid in entry_rule_ids:
+                continue  # 已 dispatch
+            if not etypes or not entry_classes:
+                continue  # 无法判定命中 → 保守不报
+            hit = any(
+                (t in entry_classes or t.lower() in entry_classes_lc)
+                for t in etypes
+            )
+            if hit:
+                confirmed_missing.append(rid)
+        confirmed_missing.sort()
+        if confirmed_missing:
+            issues.append(
+                f"分发表项 {raw_key} 漏 dispatch confirmed 规则 {confirmed_missing}"
+            )
+        coverage.append({"raw_key": raw_key, "confirmed_missing": confirmed_missing})
+    return {"ok": not issues, "issues": issues, "coverage": coverage}
+
+
 def _rule_type_fields(rule) -> tuple[str | None, list, str | None, dict, dict]:
     """从规则实例鸭子取 (rule_id, element_types, predicate, params, param_defaults)。
 

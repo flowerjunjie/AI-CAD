@@ -165,6 +165,50 @@ def api_rules_dsl_audit() -> dict:
     return res
 
 
+@router.get("/api/rules/dsl-dispatch-audit")
+def api_rules_dsl_dispatch_audit() -> dict:
+    """分发表规则覆盖护栏 (机制层自主子集, 不判业务值): 对账 _ELEMENT_CHECKS 各
+    表项 rule_ids 是否 dispatch 了「全部 confirmed=True 且 element_types 命中该表项
+    build 类」的 DSL 规则。
+
+    背景: rule_check_node 主链路走 engine.check(elems, rule_ids=表项.rule_ids), 只跑
+    表项声明的 rule_ids; 隔离测试 (engine.check 不带 rule_ids) 跑全部注册规则是绿的,
+    恰好盖住「主链路分发表漏 dispatch」盲区 — 一条 confirmed 规则若命中某表项 build
+    类却漏列进该表项 rule_ids, 真实出图永远跑不到它。
+
+    诚实边界: 只校验「confirmed 规则是否漏 dispatch」的机制自洽; confirmed=False 的
+    占位规则 (M1 待专家回填) 一律不报 — 专家把某规则 confirmed 那天, 本端点即自动
+    要求其进分发表, 把「回填后忘接主链路」的坑前置暴露。返回 {ok, checked, issues,
+    coverage, note}。"""
+    from src.rules.src.dsl import audit_dispatch_coverage, load_dsl_rules
+    from src.agents.src.nodes.cad_rule_export import (
+        _ELEMENT_CHECKS, _dsl_rules_path,
+    )
+    try:
+        rules = load_dsl_rules(_dsl_rules_path())
+    except Exception as e:
+        return {"ok": False, "checked": 0, "issues": [f"default.json 加载失败: {e}"],
+                "coverage": [],
+                "note": "DSL 源不可读, 体检降级 (不造假规则清单)"}
+    # confirmed 机制量: 直接从 default.json 读 (只取 confirmed 字段, 不碰业务值)
+    import json
+    try:
+        with open(_dsl_rules_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        confirmed = {r.get("rule_id"): bool(r.get("confirmed"))
+                     for r in (data.get("rules") or data.get("dsl_rules") or [])
+                     if r.get("rule_id")}
+    except Exception as e:
+        return {"ok": False, "checked": 0, "issues": [f"default.json 读 confirmed 失败: {e}"],
+                "coverage": [], "note": "降级"}
+    res = audit_dispatch_coverage(_ELEMENT_CHECKS, rules, confirmed)
+    res["checked"] = len(res.get("coverage", []))
+    res["note"] = ("confirmed 规则 vs 分发表 dispatch 覆盖对账 (机制层, 不判阈值); "
+                   "confirmed_missing = 该表项漏 dispatch 的 confirmed 规则 "
+                   "(confirmed=False 占位规则不参与, 专家回填后自动纳入)")
+    return res
+
+
 @router.get("/api/rules/violations-verify")
 def api_rules_violations_verify() -> dict:
     """违规清单结构自洽体检 (机制层自主子集): 引擎已注册 rule_id 全集 vs 违规清单
