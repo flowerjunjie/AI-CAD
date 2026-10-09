@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   571 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   572 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
