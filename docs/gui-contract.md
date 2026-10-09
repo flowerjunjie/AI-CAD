@@ -1,5 +1,9 @@
 # AI-CAD 专业 GUI · 共享契约 (专家团作战地图)
 
+> **⚠️ 现状纠偏（2026-10-10）**：本文 §0/§2 的 "Electron 主进程 + Three.js + `src/server`" 是**立项期设想**，
+> 现实已演进为 **FastAPI 桥（`src/gui/`，bridge.py 拆多段模块）+ 纯浏览器 React 面板（`src/client/`）+ PyInstaller exe**（无 Electron 壳、无 Three.js 3D）。
+> §1 的 FastAPI 端点契约表仍**有效**（桥真实现）；§3「桥是同一文件按段切」已过时——桥已物理拆成 `bridge_rules/dsl/clash/collab` 多段模块（`include_router` 挂载）。详见 [architecture.md](architecture.md) 顶部纠偏块 + [README](../README.md)。
+
 > 本文件是所有专家团的**唯一接口基准**。谁先动谁就按这份写，不许猜接口。
 > 目标：把"黑框命令行"升级成专业级 Electron 桌面 GUI —— 已实现的能力真驱动 Python 引擎，
 > 未实现的能力置灰卡片 + 操作说明 + 所属专业，诚实标注不造假。

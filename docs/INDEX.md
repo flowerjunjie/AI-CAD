@@ -8,8 +8,8 @@
 |------|------|------|
 | [README.md](../README.md) | 项目概述、快速开始 | ✅ |
 | [DELIVERY.md](../DELIVERY.md) | 技术实力交付报告（占位+路线图） | ✅ |
-| [architecture.md](architecture.md) | 技术架构设计 | ✅ |
-| [phases.md](phases.md) | 分阶段实施计划 | ✅ |
+| [architecture.md](architecture.md) | 技术架构设计（立项期设想，顶部已加现状纠偏块） | ⚠️ 已演进·立项审计 |
+| [phases.md](phases.md) | 分阶段实施计划（立项期计划，顶部已加现状纠偏块） | ⚠️ 已演进·立项审计 |
 | [capability-map.md](capability-map.md) | 一页纸能力地图（展示用） | ✅ |
 | [plan-confirm-gate-real-cad.md](plan-confirm-gate-real-cad.md) | 立项：确认闸接真实 CAD 数据源（人在回路最后一公里） | ✅ 已落地 |
 | [capability-slide.html](capability-slide.html) | 单屏技术实力幻灯片（展示用） | ✅ |

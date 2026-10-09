@@ -1,8 +1,17 @@
 # AI-CAD 项目架构设计
 
+> **⚠️ 现状纠偏（2026-10-10 标注，读下文前先扫这段）**
+> 本文是 **Phase 0 立项时的初始架构设想**（Electron + Node.js/Express + Three.js + `src/server/`），
+> **多数已被实现时的技术选型取代**，下文据此演进，勿当现状照抄：
+> - 交付形态：**非 Electron 桌面壳**，而是 **FastAPI 桥（`src/gui/`）+ React 面板（`src/client/`）+ PyInstaller 双击 exe**（见 README「快速开始」）。
+> - 后端：`src/server/`（Node/Express）**已废弃收敛进 `src/gui/bridge.py`**（单套 Python 后端）；`src/server/` 目录现为**未追踪的残留空壳**（仅 `node_modules`/`src` 残留，全仓 0 活引用），`bridge.py` 与 `test_agent_confirm_routes.py` 注释已标注"原 src/server routes.py 并入"。
+> - CAD 视图：现走 **ezdxf 出图 + PNG 渲染**（`render_sample_png`），非 Three.js 3D 视图。
+> - LLM 默认主模型 **Agnes**（`AI_CAD_LLM_PROVIDER=agnes`），MiniMax/Kimi/GLM 备用（本文 §5.3 与之一致）。
+> - 权威现状见 [README](../README.md) + [DELIVERY.md](../DELIVERY.md) + [capability-map.md](capability-map.md)；本文保留作 ADR 追溯，**非活文档**。
+
 > 文档版本：v0.1  
 > 创建日期：2026-09-09  
-> 状态：Phase 0 · 技术预研
+> 状态：Phase 0 · 技术预研（初始设想，部分选型已演进，见上方纠偏块）
 
 ---
 
