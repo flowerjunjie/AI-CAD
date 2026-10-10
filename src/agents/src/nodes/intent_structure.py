@@ -28,7 +28,7 @@ def _get_llm() -> BaseLLMAdapter | None:
         if api_key:
             return LLMFactory.create(provider, api_key=api_key)
     except Exception:
-        pass
+        pass  # 契约: 无 LLM/无 key/构造失败 → 返 None, 上层走默认值 (设计降级非吞错)
     return None
 
 

@@ -993,7 +993,7 @@ def count_dwg_markers(dxf_path: str) -> dict:
         out["clash"] = len(msp.query('CIRCLE[layer=="CLASH"]'))
         out["dup"] = len(msp.query('CIRCLE[layer=="DUP"]'))
     except Exception:
-        pass
+        pass  # 契约: 图层查询失败 → 保持默认 0 (opened 已置 True, 计数缺省安全)
     return out
 
 

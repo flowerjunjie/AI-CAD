@@ -54,7 +54,7 @@ def _rule_source(rule: object) -> str:
         if isinstance(rule, ParametricRule):
             return "dsl"
     except Exception:
-        pass
+        pass  # 契约: DSL 类型判不了 → 归 hardcoded (source 仅诊断用途, 兜底安全)
     return "hardcoded"
 
 
