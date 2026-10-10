@@ -5,6 +5,9 @@ Agent 节点 — 意图理解 + 方案结构化
 from typing import Any
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import rule modules to register rules
 import src.rules.src.residential.doors as _doors
@@ -81,8 +84,9 @@ def intent_understanding_node(state: dict) -> dict:
                     "special_requirements": parsed.get("special_requirements", []),
                 },
             }
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            # 静默吞 → 可见降级: LLM 回非 JSON 时落 fallback 默认值, 记 warning 不崩
+            logger.warning("LLM intent JSON 解析失败, 落住宅默认: %s", e)
 
     # Fallback: 默认住宅建筑
     return {
