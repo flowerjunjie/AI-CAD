@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import './App.css';
 import { useEngineStore } from './useEngineStore';
+import { useRuleEditorStore } from './useRuleEditorStore';
 import { syncEngine, runPipeline, runRagSearch, previewUrl, API } from './engineApi';
 import RuleEditorPanel from './RuleEditorPanel';
 import CollabPanel from './CollabPanel';
@@ -33,6 +34,9 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [previewKey, setPreviewKey] = useState(0);
   const [useLlm, setUseLlm] = useState(false);
+  // C·预览批次元信息: 记录最近一次「自动出图」完成时刻 + 样本, 挂到预览图下,
+  // 让设计师分清"我看的这张图 = 哪次跑出来的" (此前 previewSrc 硬刷不标批次, 靠肉眼对)。
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
   // Phase 2 规则编辑器: 右侧规则面板加「编辑器」子 tab (列表 / DSL 编辑器)
   const [rulesPane, setRulesPane] = useState<'list' | 'editor'>('list');
   // 列表态源过滤 tab (原 rulesTab, 挪进列表子面板)
@@ -58,7 +62,16 @@ function App() {
   const handleRun = useCallback(async () => {
     await runPipeline(lastSample, useLlm);
     setPreviewKey((k) => k + 1); // 强制重刷 <img>
+    setLastRunAt(new Date().toLocaleTimeString('zh-CN', { hour12: false })); // C·记录本次批次时刻
   }, [lastSample, useLlm]);
+
+  // B·违规→规则定位出口: 设计师看到一条违规不知"去哪改" → 点「改这条规则」切到
+  // 右栏 DSL 编辑器 + 选中该 rule_id (复用 P11 定位机制 selectRule, 不另造轮子)。
+  // 硬编码类规则不在 DSL 编辑器里 (只可查), 选中落空时编辑器如实留空不报错。
+  const handleGoFixRule = useCallback((ruleId: string) => {
+    setRulesPane('editor');
+    useRuleEditorStore.getState().selectRule(ruleId);
+  }, []);
 
   const handleRag = useCallback(async () => {
     if (!searchQuery.trim()) return;
@@ -151,6 +164,19 @@ function App() {
               <span>{pipelineResult.task_count} 任务</span>
             </div>
           )}
+
+          {/* C·预览批次标注: 让设计师分清「我看的这张图 = 哪次跑出来的」。
+              没跑过流水线 (lastRunAt=null) 时说明预览是占位/未出图, 不虚标批次。 */}
+          <div className="cad-batch">
+            {lastRunAt ? (
+              <span className="cad-batch-label">
+                预览批次 · {lastSample} @ {lastRunAt}
+                {useLlm ? ' · LLM' : ' · 本地'}
+              </span>
+            ) : (
+              <span className="cad-batch-empty">尚未出图 (点中列「自动出图」生成批次)</span>
+            )}
+          </div>
         </section>
 
         {/* 中: Agent 流程 */}
@@ -199,7 +225,16 @@ function App() {
               <h3>规范违规 ({violations.length})</h3>
               {violations.map((v, i) => (
                 <div key={i} className={`violation sev-${v.severity}`}>
-                  <span className="vio-name">{v.rule_name}</span>
+                  <div className="vio-head">
+                    <span className="vio-name">{v.rule_name}</span>
+                    <button
+                      className="vio-fix-rule-btn"
+                      onClick={() => handleGoFixRule(v.rule_id)}
+                      title="跳去 DSL 编辑器定位这条规则, 改阈值/启用开关"
+                    >
+                      改这条规则 →
+                    </button>
+                  </div>
                   <span className="vio-desc">{v.description}</span>
                   {v.suggested_fix && <span className="vio-fix">→ {v.suggested_fix}</span>}
                 </div>
@@ -286,7 +321,7 @@ function App() {
               />
               <button onClick={handleRag} disabled={!engineConnected}>检索</button>
             </div>
-            {ragResults.length > 0 && (
+            {ragResults.length > 0 ? (
               <div className="search-results">
                 <div className="rag-hit-line">「{ragQuery}」命中 {ragResults.length} 条</div>
                 {ragResults.map((r, i) => (
@@ -296,7 +331,14 @@ function App() {
                   </div>
                 ))}
               </div>
-            )}
+            ) : ragQuery !== '' ? (
+              // A·RAG 0 命中反馈: 检索成功但没有结果时, 明确告知「0 命中」而非静默
+              // 空白 (此前搜了没结果一片空白, 分不清"没搜到"还是"请求没发")。
+              <div className="search-results rag-no-hit">
+                <div className="rag-hit-line">「{ragQuery}」0 命中</div>
+                <p className="hint">没在本地规范库检索到相关条文 — 换个关键词 (如「疏散走道 宽度」→「疏散 走道」), 或确认 RAG 库已 seed。</p>
+              </div>
+            ) : null}
             </>
           ) : (
             <RuleEditorPanel />

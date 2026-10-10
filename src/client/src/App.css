@@ -362,6 +362,21 @@ body {
 .violation.sev-error { border-left-color: #e74c3c; }
 .violation.sev-warning { border-left-color: #f0b429; }
 .violation.sev-info { border-left-color: #3498db; }
+/* B·违规→规则定位出口: 违规项头部并排「规则名 + 改这条规则按钮」 */
+.violation .vio-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.violation .vio-head .vio-name { display: block; margin-bottom: 0; }
+.vio-fix-rule-btn {
+  flex-shrink: 0; font-size: 11px; padding: 3px 10px; cursor: pointer;
+  background: #16213e; color: #3498db; border: 1px solid #3498db; border-radius: 6px;
+}
+.vio-fix-rule-btn:hover { background: #3498db; color: #fff; }
+/* C·预览批次标注 */
+.cad-batch { margin-top: 8px; padding: 4px 0; font-size: 11px; }
+.cad-batch-label { color: #8ea2c5; }
+.cad-batch-empty { color: #5a6a85; }
+/* A·RAG 0 命中空态 */
+.rag-no-hit { padding: 12px; color: #8ea2c5; border: 1px dashed #3a4a68; border-radius: 8px; }
+.rag-no-hit .hint { color: #6a7a95; font-size: 11px; margin-top: 6px; }
 
 /* rules tabs */
 .tabs { display: flex; gap: 4px; }
