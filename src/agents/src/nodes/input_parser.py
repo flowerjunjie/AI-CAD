@@ -3,14 +3,27 @@
 支持: 自然语言 → LLM结构化, JSON文件 → 直接解析
 """
 import json
+import logging
 import os
 from typing import Optional
 
+logger = logging.getLogger(__name__)
+
 
 def parse_json_input(file_path: str) -> dict:
-    """从JSON文件解析户型数据"""
+    """从JSON文件解析户型数据。
+
+    坏输入响亮报错 (非静默): JSON 文件是用户给的硬输入, 解析失败抛带文件
+    路径的明确异常 — 不崩成裸 JSONDecodeError, 也不吞成 task_list=[] 空跑。
+    """
     with open(file_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error("户型 JSON 解析失败 (%s): %s", file_path, e)
+            raise ValueError(
+                f"户型 JSON 文件解析失败 ({os.path.basename(file_path)}): {e}"
+            ) from e
 
     zones = data.get('zones', [])
     doors = data.get('doors', [])
@@ -263,7 +276,8 @@ def parse_natural_language(text: str) -> dict:
             'raw_data': parsed,
         }
     except (json.JSONDecodeError, KeyError) as e:
-        print(f"[Parser] JSON parse failed: {e}")
+        # LLM 偶发抽风降级: 空跑可接受, 但必须留痕 (对齐 intent_structure 降级标准)
+        logger.warning("LLM 户型解析失败, 落住宅默认: %s", e)
         # Return fallback
         return {
             'project_type': '住宅',
