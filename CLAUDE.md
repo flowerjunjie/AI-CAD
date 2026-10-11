@@ -43,6 +43,15 @@
   commit 原子搬, 每步全量绿了再进下一步 (一锅端定位回归面指数爆炸); ③ 命名空间包子
   模块同步补 build_exe HIDDEN_IMPORTS (cad_types/dxf_reader/dxf_writer 三个全要列,
   漏一个=打包态 ModuleNotFoundError)。
+  **耦合面分级 (2026-10-11 补, cad_rule_export 拆时踩出)**: 搬前按耦合度选稳/快策略——
+  - **零同名冲突 + 纯数据/纯函数** (如 cad_tools 数据类段): 直接搬, 低风险。
+  - **跨段调用 + 注解派生 + 同名多来源** (如 cad_rule_export ②段, _build_* 分发表锁死
+    11 类 + ③段跨调): 高危, **分步搬**, 每步全量绿再下一步。
+  **注解派生是搬家最高危点**: `typing.get_type_hints(build)` 取函数返回注解的代码,
+  函数搬新模块后注解在**新作用域**解析, 某注解类没跟 import 搬齐会**静默丢类而全量
+  照绿** (其他测试感知不到)。搬完必须实证「类名集合搬前后一致」(手工或补护栏), 别
+  靠全量绿就放心。实例: cad_rule_export 拆后补 test_constructible_whitelist_guard 锁
+  11 类白名单不丢。
 
 ## 测试加载顺序（拆 bridge 段后的循环 import 契约，2026-10-11 固化）
 - **护栏/单测要测 `bridge_*` 子模块时，先 `import src.gui.bridge` 再取子模块，
