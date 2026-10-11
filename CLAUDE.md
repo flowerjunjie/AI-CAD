@@ -35,6 +35,17 @@
   看似"只调工具库"的 F 段实际非自包含，拆它须先处理这条跨段依赖（H 段能"段间 0 交叉"
   纯物理搬，F 段不能照搬）。
 
+## 测试加载顺序（拆 bridge 段后的循环 import 契约，2026-10-11 固化）
+- **护栏/单测要测 `bridge_*` 子模块时，先 `import src.gui.bridge` 再取子模块，
+  别裸 import 子模块**——拆 bridge.py 段体时把 router 挂载留在 bridge.py 顶部
+  （`from src.gui.bridge_rules import router` 等），而子模块顶部又
+  `from src.gui.bridge import _project_root`。直接 `import bridge_rules` 触发
+  半初始化循环（`ImportError: cannot import name 'router' from partially
+  initialized module`），全量炸 2 条。教训：段拆分后**加载顺序成了新的隐式
+  契约**，照 `test_bridge_silent_degrade_guard.py` 的范式写——顶部先载主模块
+  `import src.gui.bridge` 完成子模块注册，再 `from src.gui import bridge_rules`。
+  跟"重构纪律"那条同源：物理搬家后必须拉通隐式契约，只是这条发生在 **import 时序** 上。
+
 ## 打包 / 长任务纪律（2026-09-30 固化）
 - **重打包 exe 前必须先刷新前端**：`cd src/client && npm run build`（产物落 `src/dist`，
   非 `src/client/dist`——vite `outDir: '../dist'` 上移一层）。旧 dist 打进去 = 界面里没有新面板。
