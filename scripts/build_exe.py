@@ -46,6 +46,7 @@ HIDDEN_IMPORTS = [
     "src.agents.src.tools.cad_tools",
     "src.agents.src.tools.cad_types",  # cad_tools 顶部 re-export 数据类, 命名空间包须显式列
     "src.agents.src.tools.dxf_reader",  # 同上, DXFReader 段拆出
+    "src.agents.src.tools.dxf_writer",  # DXFWriter + marker 对账 段拆出
     "src.agents.src.tools.plumbing_extractor",
     "src.agents.src.tools.electrical_extractor",
     "src.agents.src.tools.hvac_extractor",
