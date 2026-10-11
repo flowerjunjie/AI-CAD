@@ -66,6 +66,7 @@ def _span_from_segment(start, end) -> float:
         dx = float(end[0]) - float(start[0])
         dy = float(end[1]) - float(start[1])
     except (TypeError, ValueError, IndexError):
+        # 契约: 端点非数值/占位 → 兜 0.0, 跨度类规则因 span_m>0 前置安全放行 (见 docstring §2.1)
         return 0.0
     return (dx * dx + dy * dy) ** 0.5
 
