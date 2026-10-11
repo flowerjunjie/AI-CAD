@@ -9,7 +9,10 @@ AI-CAD GUI FastAPI 桥 — B 规则域段 (/api/rules + /api/rule-violations + /
 """
 from __future__ import annotations
 
+import logging
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException
 
@@ -73,6 +76,9 @@ def _confirmed_rule_ids() -> set[str]:
             data = json.load(fh)
         return {r["rule_id"] for r in data.get("rules", []) if r.get("confirmed")}
     except Exception:
+        # 留痕: 读 default.json 失败 → 空 confirmed 集 (前端按"0 专家确认"渲染),
+        # 与"确实没有 confirmed"区分开 — 文件缺失/损坏是两种不同故障, 得看得见
+        logger.warning("confirmed rule 集读取失败, /api/rules 按 0 确认渲染")
         return set()
 
 

@@ -11,8 +11,11 @@ _load_sample_raw (batch-verify 若在此段) 走 bridge_common。
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -124,6 +127,8 @@ def _prune_dsl_backups(main_path: str, keep: int = _DSL_BACKUP_KEEP) -> list[str
         cands = [os.path.join(bak_dir, n) for n in os.listdir(bak_dir)
                  if n.startswith(os.path.basename(prefix))]
     except OSError:
+        # 留痕: 目录读不到/列不出 → 返回空 (上层按"无备份"处理), 区别于下方"备份数未超 keep"
+        logger.warning("备份目录 listdir 失败, 剪枝跳过: %s", bak_dir)
         return []
     cands = [c for c in cands if os.path.isfile(c)]
     if len(cands) <= keep:
