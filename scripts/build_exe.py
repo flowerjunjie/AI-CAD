@@ -39,6 +39,7 @@ HIDDEN_IMPORTS = [
     "src.agents.src.graph",
     "src.agents.src.nodes",
     "src.agents.src.nodes.cad_rule_export",
+    "src.agents.src.nodes.cad_clash_layout",  # cad_rule_export ②段拆出, 命名空间包须显式列
     "src.agents.src.nodes.input_parser",
     "src.agents.src.nodes.intent_structure",
     "src.agents.src.tools",
