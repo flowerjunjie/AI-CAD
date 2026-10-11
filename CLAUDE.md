@@ -34,6 +34,15 @@
   定义了 `_load_sample_raw`，但 B 段 `api_rules_batch_verify`（L333）也跨段引用它，
   看似"只调工具库"的 F 段实际非自包含，拆它须先处理这条跨段依赖（H 段能"段间 0 交叉"
   纯物理搬，F 段不能照搬）。
+- **拆文件用 re-export 兼容层, 旧引用 0 改动（2026-10-11 固化, 破 800 红线 SOP）**——
+  段搬到子模块后, 在原文件顶部 `from ...子模块 import X  # noqa: F401` 兜住旧 import
+  路径: 搬出去但旧引用全活, 回归面最小化; 新代码直用子模块, 旧引用自然迁移 (不强迁,
+  不 break userspace)。实例: cad_tools.py 1051→52 行 (数据类→cad_types / 读→dxf_reader /
+  写+marker→dxf_writer 三段, 全仓 20+ 处旧 import 0 改动)。三步纪律: ① 搬前 grep 段体
+  引用哪些数据类/跨段符号定 import 面, 不读原文就搬=重演 10-08 那 9 回归; ② 分 3 个
+  commit 原子搬, 每步全量绿了再进下一步 (一锅端定位回归面指数爆炸); ③ 命名空间包子
+  模块同步补 build_exe HIDDEN_IMPORTS (cad_types/dxf_reader/dxf_writer 三个全要列,
+  漏一个=打包态 ModuleNotFoundError)。
 
 ## 测试加载顺序（拆 bridge 段后的循环 import 契约，2026-10-11 固化）
 - **护栏/单测要测 `bridge_*` 子模块时，先 `import src.gui.bridge` 再取子模块，
