@@ -192,7 +192,7 @@ class DXFReader:
             try:
                 height_m = float(raw_h) if raw_h not in (None, "") else None
             except (TypeError, ValueError):
-                height_m = None
+                height_m = None  # 契约: ATTRIB 非数值 → 缺省, extractor 兜底占位高度 (非吞错)
             raw_e = (a.get("has_earthing") or "").strip().lower()
             if raw_e in ("true", "false"):
                 has_earthing = raw_e == "true"

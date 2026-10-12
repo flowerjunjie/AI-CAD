@@ -134,7 +134,7 @@ def _clash_tolerance_source() -> tuple[float, str]:
                 dsl_rule = r
                 break
     except Exception:
-        dsl_rule = None
+        dsl_rule = None  # 契约: JSON 缺/损坏 → 走几何默认容差 (resolve 兜 0.15), 非吞错
     return resolve_clash_tolerance(default_m=0.15, dsl_rule=dsl_rule, params=None)
 
 

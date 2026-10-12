@@ -447,7 +447,7 @@ def rule_check_node(state: dict) -> dict:
     try:
         _clash_rule = engine.get_rule("clash-tolerance-range")  # 若 DSL 有该规则
     except Exception:
-        _clash_rule = None
+        _clash_rule = None  # 契约: DSL 无该规则/取不到 → 走几何默认 (resolve 兜 0.15), 非吞错
     _tol, _ = resolve_clash_tolerance(
         default_m=0.15,
         dsl_rule=_clash_rule,

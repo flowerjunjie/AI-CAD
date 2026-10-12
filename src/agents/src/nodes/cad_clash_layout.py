@@ -298,7 +298,7 @@ def constructible_element_types() -> set[str]:
         try:
             ret = typing.get_type_hints(build).get("return")
         except Exception:
-            ret = None
+            ret = None  # 契约: build 注解解析不了 → 该专业不贡献白名单 (design 降级, 非吞错)
         name = getattr(ret, "__name__", "")
         if name:
             types.add(name)

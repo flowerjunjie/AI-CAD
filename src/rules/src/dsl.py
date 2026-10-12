@@ -336,7 +336,7 @@ def audit_dispatch_coverage(
                 try:
                     ret = typing.get_type_hints(build).get("return")
                 except Exception:
-                    ret = None
+                    ret = None  # 契约: build 注解解析不了 → 该表项不贡献类 (design 降级, 非吞错)
                 nm = getattr(ret, "__name__", "")
                 if nm:
                     entry_classes.add(nm)

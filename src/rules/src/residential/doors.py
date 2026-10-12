@@ -102,7 +102,7 @@ class BathroomDoorWidth(BaseRule):
 # ─── Demo ───────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from src.rules.engine import get_engine
+    from src.rules.src.engine import get_engine
 
     engine = get_engine()
     doors = [

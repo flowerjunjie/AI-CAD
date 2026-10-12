@@ -30,8 +30,10 @@ sys.path.insert(0, project_root)
 _SUBTREES = ["src/rules", "src/gui", "src/agents"]
 
 # ① 失败信号: return 体出现这些 → 调用方能判断失败, 非歧义缺省值
+# 注意: "None" 故意不列 — None 是歧义缺省值本身 (该抓的对象), 非失败信号;
+# 列了会让 `x = None` 因子串命中 "None" 被误放行 (2026-10-11 P1 踩出的判据矛盾)。
 _FAIL_SIGNALS = [
-    "False", "None", "error", "Error", "issue", "reason", "ok", "valid",
+    "False", "error", "Error", "issue", "reason", "ok", "valid",
     "fail", "Fail", "consist", "DslJsonError", "HTTPException",
 ]
 
@@ -46,9 +48,19 @@ def _iter_src_files():
 
 
 def _is_ambiguous_default(ret_val) -> bool:
-    """return 体是否为「歧义缺省值」— 空容器字面量 或 裸标量默认。"""
-    if ret_val is None:          # bare `return`
-        return False             # bare return 不是 return 缺省值, 交给别判据
+    """return 体 / 回写值是否为「歧义缺省值」— 空容器字面量、裸标量默认、None。
+
+    扩展 (2026-10-11 P1 收口): 除 return 缺省值, 也认「把已声明变量回写成
+    None / 空容器」这类多语句 handler 的静默降级 — 之前判据只认单语句
+    `except: return []`, 漏了 `except: x = None` 这种 (冰山下盲区)。
+    """
+    # bare `return` (无值, AST Return.value is None) → 不是缺省值, 放行
+    # (合法的中途 return; 只有显式 None 字面量 / 空容器 / 裸 0 才算歧义缺省)
+    if isinstance(ret_val, ast.Return) and ret_val.value is None:
+        return False
+    # 显式 None 字面量 (ast.Constant value is None) — 静默回写降级信号
+    if isinstance(ret_val, ast.Constant) and ret_val.value is None:
+        return True
     # 空容器字面量: [] {} set()  (list/set/dict 无参)
     if isinstance(ret_val, ast.Dict) and not ret_val.keys:
         return True
@@ -78,17 +90,34 @@ def _handler_has_log(handler) -> bool:
     return False
 
 
-def _nearby_comment(lines, ret_line) -> bool:
-    """② return 行尾注释 或 紧邻上一行为整行注释。"""
-    same = lines[ret_line - 1]
-    same_comment = "#" in same[same.find("return"):]
-    prev = lines[ret_line - 2].strip() if ret_line >= 2 else ""
+def _nearby_comment(lines, line) -> bool:
+    """② 该行行尾注释 或 紧邻上一行为整行注释 (对 return / assign 行通用)。"""
+    same = lines[line - 1]
+    same_comment = "#" in same
+    prev = lines[line - 2].strip() if line >= 2 else ""
     return same_comment or prev.startswith("#")
+
+
+def _scan_one(handler, value, lines, rel, offenders) -> None:
+    """对单个「回写值/return 值」判是否静默缺省值降级, 是则记 offender。
+
+    放行条件 ①②③ 任一满足 → 安全 (有失败信号 / 有注释背书 / handler 有 logger)。
+    P1 扩展: 值可以是 return 体 (Return.value) 或变量回写 (Assign.value)。"""
+    if not _is_ambiguous_default(value):
+        return
+    ln = value.lineno
+    snippet = "\n".join(lines[max(0, ln - 1): (getattr(value, "end_lineno", ln)) + 1])
+    has_signal = any(s in snippet for s in _FAIL_SIGNALS)
+    if has_signal or _nearby_comment(lines, ln) or _handler_has_log(handler):
+        return
+    offenders.append((rel, ln, snippet.strip().split("\n")[0][:50]))
 
 
 def find_silent_default_returns() -> list:
     """扫 3 子树, 返回 [(file, line, snippet)] — 静默缺省值降级 offender。
 
+    P1 扩展 (2026-10-11): 覆盖单语句 `except: return []` + 多语句 handler 里
+    对已声明变量的回写降级 `except: x = None` (原判据 len(body)!=1 硬跳过, 是盲区)。
     空 = 全仓干净 (当前基线)。CI 断言空, 防未来回归。"""
     offenders = []
     for path in _iter_src_files():
@@ -106,19 +135,16 @@ def find_silent_default_returns() -> list:
             if not isinstance(node, ast.Try):
                 continue
             for handler in node.handlers:
-                if len(handler.body) != 1:
-                    continue
-                r = handler.body[0]
-                if not isinstance(r, ast.Return):
-                    continue
-                if not _is_ambiguous_default(r.value):
-                    continue
-                # 放行条件 ①②③ 任一满足 → 安全
-                ret_snippet = "\n".join(lines[max(0, r.lineno - 1): (r.end_lineno or r.lineno) + 1])
-                has_signal = any(s in ret_snippet for s in _FAIL_SIGNALS)
-                if has_signal or _nearby_comment(lines, r.lineno) or _handler_has_log(handler):
-                    continue
-                offenders.append((rel, r.lineno, ret_snippet.strip().split("\n")[0][:50]))
+                # 统一处理单/多语句 handler (P1: 原来只认单语句, 漏了多语句
+                # `except: x = None; ...` 回写盲区) — 逐条扫 return 值 / assign 值
+                for stmt in handler.body:
+                    vals = []
+                    if isinstance(stmt, ast.Return) and stmt.value is not None:
+                        vals.append(stmt.value)
+                    elif isinstance(stmt, ast.Assign):
+                        vals.append(stmt.value)
+                    for v in vals:
+                        _scan_one(handler, v, lines, rel, offenders)
     return sorted(offenders)
 
 
@@ -153,6 +179,13 @@ def test_finder_judges_bare_default_correctly():
         # 带失败信号 → 放行
         "signaled.py": "def f():\n    try:\n        return load()\n"
                        "    except Exception:\n        return {'ok': False, 'items': []}\n",
+        # P1 多语句回写降级 (裸, 无注释/信号/log) → 应被抓
+        # (原判据 len(body)!=1 跳过多语句, 是盲区; 扩后能抓)
+        "multistmt.py": "def f():\n    try:\n        x = load()\n        return x\n"
+                        "    except Exception:\n        x = None\n        return x\n",
+        # P1 多语句回写降级, 但有注释背书 → 放行
+        "multistmt_doc.py": "def f():\n    try:\n        x = load()\n"
+                            "    except Exception:\n        # 读失败兜 None, 上层据此重建\n        x = None\n        return x\n",
     }
     for name, body in cases.items():
         with open(os.path.join(tmp, name), "w", encoding="utf-8") as fh:
@@ -167,7 +200,8 @@ def test_finder_judges_bare_default_correctly():
         for name in cases:
             os.unlink(os.path.join(tmp, name))
     assert "bare.py" in offs, "裸 except:return [] 应被抓"
-    for ok in ("logged.py", "commented.py", "signaled.py"):
+    assert "multistmt.py" in offs, "P1: 多语句裸回写 x=None 应被抓"
+    for ok in ("logged.py", "commented.py", "signaled.py", "multistmt_doc.py"):
         assert ok not in offs, f"{ok} 有背书/信号应放行"
 
 
