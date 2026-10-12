@@ -10,7 +10,7 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   609 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   611 passed / 5 skipped / 0 failed
 ```
 
 - **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
@@ -74,4 +74,4 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-08 | 571 | UI 第七批 (纯前端轮, 测试数字不变) + 端点自洽诊断护栏: P12 机制层 verify 诊断值透出 UI (clashes_consistent/summary_consistent 补进 ClashResult/ConflictResult interface + Clash/ConflictSection 失步才显诊断行, 正常静默不刷屏; 根治「护栏装了摄像头没接监控屏」— 4 轮 verify 做了诊断值前端一直收而丢弃) + P13 稿B 下拉诚实标注。配套补 3 条端点断言护栏 (无碰撞/命中/同稿三态钉死 *_consistent 透出, 同文件用例数 7→7); 全量 571 不变。+ 重打包 onedir exe (build/dist, verify_exe PASS + 交付态 curl 真验 /api/clash 透出 clashes_consistent, P12 字段非开发态独有) | `HEAD` | 纯前端 + 端点护栏轮, Python 测试水位不变 571; exe 交付物已刷到含本批成果 |
 | 2026-10-08 | 572 | P12 同类收口 (无需外部专家, 纯前端 + 1 端点用例): /api/dwg-scan 自洽诊断 scan_consistent/scan_issues 透出前端 (P12 只接了 clash/conflict, 漏了直接同类 dwg-scan — bridge verify_dwg_scan_report 早透出了, DwgScanResult interface 没声明又成黑洞; 补 interface + DwgScanSection 失步才显行 + 1 端点用例「自产报告恒自洽不虚标」)。另核实并**证伪**后台 agent 的 C 候选「diff 未进 HIDDEN_IMPORTS 会打包态炸」: 起 exe 真调 dsl/apply → diff_consistent 真透出 (src.rules.src 整包进 PYZ 可被静态分析, 非命名空间包跨目录懒 import), 无需补 spec | `HEAD` | 全量实测 572/5/0 (新增 1 用例), 冒烟/直跑护栏过 |
 | 2026-10-08 | 572 | 重构轮 (纯后端拆分 + 纯前端, Python 水位不变): ① M1 回填断层收口 (M1BackfillBlock 把 rule.params 传进 backfill, 阈值改动不再静默丢弃); ② 接线孤儿端点 waits-verify 进 CollabPanel 诊断区 + batch-verify/dwg-marker-verify 进新 VerifyPanel; ③ 拆 bridge.py H 协同域段 → bridge_collab.py (APIRouter 挂载, 1575→1301 行, 端点路径 0 改动); ④ 修 ③ 撞出的 10 回归 (patch 目标悬空 _COLLAB_STATE_PATH 加回 bridge + 子模块惰性读; OpenAPI paths 替 r.path 遍历; .gitignore 忽略运行态 data/collab/)。全 4 commit 收口, 全量 572/5/0 | `HEAD` | 重构+接线轮, Python 测试水位不变 572; 重打包 exe 固化本批成果 |
-*最后刷新：2026-10-11 · 609 passed / 5 skipped / 0 failed（M1 机制层护栏·六轮: 注解派生类白名单完整性护栏 (get_type_hints 搬家高危点, 锁 11 专业元素类不丢), 607→609）*
+*最后刷新：2026-10-11 · 611 passed / 5 skipped / 0 failed（P0+P1 收口: doors.py:105 断链 import 修 + 静默降级 lint 判据扩多语句回写盲区 (修判据自相矛盾 bug + 5 处设计降级补契约注释), 609→611）*
