@@ -287,3 +287,55 @@ def verify_summary(summary: dict, conflicts: list[dict]) -> dict:
     if cat_sum != total:
         issues.append(f"by_category 之和={cat_sum} != total={total}")
     return {"consistent": not issues, "issues": issues, "recounted_total": total}
+
+
+# duplicate 结果里合法 kind (与 detect_duplicate_elements 产出同源)
+_DUPLICATE_KINDS = {"duplicate"}
+
+
+def verify_duplicates(raw_a: dict, raw_b: dict, duplicates: list[dict]) -> dict:
+    """校验 detect_duplicate_elements 产出与两稿源数据是否自洽 (纯函数, 不崩)。
+
+    仿 verify_clashes 范式, 喂 M5 出图侧前对账 (脏重复清单会静默进 DWG 出假圈):
+      ① 无自重复: 每条 id_a != id_b (重复必是两个不同 id 同坐标)。
+      ② kind 合法: kind ∈ _DUPLICATE_KINDS (本库只产 'duplicate', 消隐式白名单漂移)。
+      ③ category 合法: category ∈ _CONFLICTABLE_KEYS (与本库可冲突类同源)。
+      ④ id_a 在 raw: id_a 真存在于 raw_a/raw_b 该 category (出图反查才不兜底原点)。
+      ⑤ id_b 在 raw: 同 ④。
+      ⑥ coord 完整: 每条带非空坐标 (点位 2 元素 / 线段 4 元素), 缺坐标的脏条揪出。
+    畸形输入 (duplicates 非 list / 条非 dict / 缺 id_a·id_b) → 计入 issues, 不崩。
+    """
+    raw_a = raw_a or {}
+    raw_b = raw_b or {}
+    duplicates = duplicates or []
+    issues: list[str] = []
+    # 预建两稿全量 id 集合 (各可冲突类里带 id 的元素), 供 ④⑤ 反查
+    known_ids: set = set()
+    for raw in (raw_a, raw_b):
+        for items in raw.values():
+            for it in (items or []):
+                if isinstance(it, dict) and it.get("id") is not None:
+                    known_ids.add(it.get("id"))
+
+    for i, d in enumerate(duplicates):
+        if not isinstance(d, dict):
+            issues.append(f"duplicates[{i}] 非 dict")
+            continue
+        a, b = d.get("id_a"), d.get("id_b")
+        if a is None or b is None:
+            issues.append(f"duplicates[{i}] 缺 id_a/id_b (a={a!r}, b={b!r})")
+            continue
+        if a == b:
+            issues.append(f"duplicates[{i}] 自重复 (id_a==id_b=={a!r})")
+        if d.get("kind") not in _DUPLICATE_KINDS:
+            issues.append(f"duplicates[{i}].kind={d.get('kind')!r} 非合法 {_DUPLICATE_KINDS}")
+        if d.get("category") not in _CONFLICTABLE_KEYS:
+            issues.append(f"duplicates[{i}].category={d.get('category')!r} 非可冲突类")
+        if a not in known_ids:
+            issues.append(f"duplicates[{i}].id_a={a!r} 不在两稿 (出图会兜底原点假圈)")
+        if b not in known_ids:
+            issues.append(f"duplicates[{i}].id_b={b!r} 不在两稿 (出图会兜底原点假圈)")
+        coord = d.get("coord")
+        if not isinstance(coord, (list, tuple)) or len(coord) not in (2, 4):
+            issues.append(f"duplicates[{i}].coord={coord!r} 缺/畸形 (应 2 点位或 4 线段端点)")
+    return {"valid": not issues, "issues": issues, "count": len(duplicates)}

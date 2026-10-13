@@ -326,24 +326,32 @@ def cad_execute_node(state: dict) -> dict:
                 # conflict_raw_b (稿B) 按元素 id 比对, 记冲突计数 + 几何等价类
                 # (同坐标不同 id = 疑似重复) 画琥珀色 DUP 警示圈 (出图侧增量)。
                 # 无第二稿 (state 未带 conflict_raw_b) → 0 冲突 0 出图 (no-op)。
+                from src.agents.src.tools.conflict_detection import (
+                    detect_conflicts, detect_duplicate_elements,
+                    verify_duplicates)
                 raw_data = state.get("raw_data", {}) or {}
                 raw_b = state.get("conflict_raw_b")
                 if raw_b is None:
                     conflict_count, dup_count = 0, 0
+                    duplicates: list[dict] = []
                 else:
-                    from src.agents.src.tools.conflict_detection import (
-                        detect_conflicts, detect_duplicate_elements)
                     conflicts = detect_conflicts(raw_data, raw_b)
                     conflict_count = len(conflicts)
                     # 几何等价类维度出图: 同坐标不同 id 画 DUP 圈 (M5 增量, 无重复 0 实体)
+                    duplicates = detect_duplicate_elements(raw_data, raw_b)
                     dup_count = 0
-                    for d in detect_duplicate_elements(raw_data, raw_b):
+                    for d in duplicates:
                         cx, cy = _duplicate_point(d)
                         writer.add_duplicate_marker(cx, cy, label="DUP")
                         dup_count += 1
+                # 自洽校验: 出图前的重复清单与两稿源数据对账 (脏清单不静默出假圈,
+                # 仿 verify_clashes.clashes_consistent 范式, 失步才留痕, 正常静默)
+                dup_check = verify_duplicates(raw_data, raw_b, duplicates)
                 results.append({"task_id": task_id, "status": "completed",
                                 "conflicts": conflict_count,
-                                "duplicates_marked": dup_count})
+                                "duplicates_marked": dup_count,
+                                "duplicates_consistent": dup_check["valid"],
+                                "duplicates_issues": dup_check["issues"]})
 
             elif task_type == "dimension":
                 axis_count = 0

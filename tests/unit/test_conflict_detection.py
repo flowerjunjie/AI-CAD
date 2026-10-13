@@ -431,6 +431,89 @@ def test_cad_execute_conflict_task_noop_no_duplicate_marker():
     assert r["duplicates_marked"] == 0, f"无第二稿应 0 重复标记, 实际 {r}"
 
 
+# ─── verify_duplicates (M5 重复清单自洽, 出图前对账, 机制层自主子集) ───
+
+
+def test_verify_duplicates_clean_self_produced():
+    """自产重复清单恒自洽 — detect_duplicate_elements 输出喂 verify 必 valid (不虚标)."""
+    cf = _import()
+    raw_a = {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]}
+    raw_b = {"outlets": [{"id": "o2", "x": 1.0, "y": 1.0}]}
+    dups = cf.detect_duplicate_elements(raw_a, raw_b)
+    assert len(dups) == 1
+    res = cf.verify_duplicates(raw_a, raw_b, dups)
+    assert res["valid"], f"自产清单应自洽, 反例 {res['issues']}"
+    assert res["count"] == 1
+
+
+def test_verify_duplicates_self_duplicate_flagged():
+    """id_a == id_b (自重复) → 揪出 (重复必是两个不同 id)."""
+    cf = _import()
+    dups = [{"category": "outlets", "id_a": "o1", "id_b": "o1",
+            "coord": [1.0, 1.0], "kind": "duplicate"}]
+    res = cf.verify_duplicates({}, {}, dups)
+    assert not res["valid"]
+    assert any("自重复" in s for s in res["issues"])
+
+
+def test_verify_duplicates_id_not_in_raw_flagged():
+    """id_b 不在两稿源数据 → 揪出 (出图会兜底原点假圈)."""
+    cf = _import()
+    raw_a = {"outlets": [{"id": "o1", "x": 0.0, "y": 0.0}]}
+    dups = [{"category": "outlets", "id_a": "o1", "id_b": "oX",
+            "coord": [0.0, 0.0], "kind": "duplicate"}]
+    res = cf.verify_duplicates(raw_a, {}, dups)
+    assert not res["valid"]
+    assert any("oX" in s and "不在两稿" in s for s in res["issues"])
+
+
+def test_verify_duplicates_bad_kind_and_category_flagged():
+    """kind 非法 / category 非可冲突类 → 逐条揪出 (白名单漂移护栏)."""
+    cf = _import()
+    dups = [{"category": "no_such_cat", "id_a": "o1", "id_b": "o2",
+             "coord": [1.0, 1.0], "kind": "no_such_kind"}]
+    res = cf.verify_duplicates({}, {}, dups)
+    assert not res["valid"]
+    assert any("kind" in s for s in res["issues"])
+    assert any("category" in s for s in res["issues"])
+
+
+def test_verify_duplicates_missing_coord_flagged():
+    """coord 缺 / 畸形 (非 2/4 元素) → 揪出 (出图反查取中点需要坐标)."""
+    cf = _import()
+    dups = [{"category": "outlets", "id_a": "o1", "id_b": "o2",
+             "coord": None, "kind": "duplicate"}]
+    res = cf.verify_duplicates({}, {}, dups)
+    assert not res["valid"]
+    assert any("coord" in s for s in res["issues"])
+
+
+def test_verify_duplicates_malformed_no_crash():
+    """畸形输入 (非 list / 条非 dict / 缺 id) → 计入 issues, 不崩."""
+    cf = _import()
+    assert cf.verify_duplicates({}, {}, [])["valid"] is True
+    res = cf.verify_duplicates({}, {}, ["not_a_dict"])
+    assert not res["valid"] and any("非 dict" in s for s in res["issues"])
+    res2 = cf.verify_duplicates({}, {}, [{"category": "outlets"}])
+    assert not res2["valid"] and any("缺 id_a/id_b" in s for s in res2["issues"])
+
+
+def test_cad_execute_conflict_task_surfaces_duplicates_diagnostic():
+    """出图侧 self-consistent 诊断值随 task 结果带出 (正常静默 valid, 不虚标)."""
+    cf = _import()
+    from src.agents.src.nodes.cad_rule_export import cad_execute_node
+
+    state = {
+        "raw_data": {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]},
+        "conflict_raw_b": {"outlets": [{"id": "o2", "x": 1.0, "y": 1.0}]},
+        "task_list": [{"id": "conflict-x", "type": "conflict"}],
+        "output_path": "/tmp/aicad_conflict_dupdiag.dwg", "auto_mode": True}
+    res = cad_execute_node(state)
+    r = [x for x in res["cad_results"] if x["task_id"] == "conflict-x"][0]
+    assert r["duplicates_consistent"] is True, f"自产 DUP 应自洽, 实际 {r}"
+    assert r["duplicates_issues"] == []
+
+
 if __name__ == "__main__":
     test_diff_elements_value_conflict()
     test_diff_elements_identical_returns_empty()
@@ -454,4 +537,11 @@ if __name__ == "__main__":
     test_add_duplicate_marker_creates_dup_entities()
     test_cad_execute_conflict_task_marks_duplicates()
     test_cad_execute_conflict_task_noop_no_duplicate_marker()
+    test_verify_duplicates_clean_self_produced()
+    test_verify_duplicates_self_duplicate_flagged()
+    test_verify_duplicates_id_not_in_raw_flagged()
+    test_verify_duplicates_bad_kind_and_category_flagged()
+    test_verify_duplicates_missing_coord_flagged()
+    test_verify_duplicates_malformed_no_crash()
+    test_cad_execute_conflict_task_surfaces_duplicates_diagnostic()
     print("OK: all conflict detection tests passed")

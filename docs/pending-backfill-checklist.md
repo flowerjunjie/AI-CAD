@@ -134,5 +134,25 @@ M2-3 定"多宽的那根梁在哪个图层上找"。
    agent 只拉清单、不替签（CLAUDE.md 诚实边界红线）。
 4. **每填一处**：本清单对应行 `status: open → confirmed`，全仓确认后本清单可归档。
 
-> status 追踪（逐条回填后更新）：
+## 一键验证命令速查（专家照表填完, 复制即跑, 不靠"想跑啥测试"）
+
+> 每条命令独立可跑, 全绿才收口。改占位值 → 跑对应单测 → 全量必绿 (CLAUDE.md 验证纪律)。
+> 命令在项目根 `E:\workspace0525\AI-CAD` 下执行。
+
+| 回填点 | 一键验证命令 | 过判据 |
+|---|---|---|
+| M1-1 给排水 管径 | `python -m pytest tests/unit/test_plumbing_extractor.py -q` | 全绿 (改 `_LAYER_MAP` 值后重跑) |
+| M1-2 结构 梁截面 | `python -m pytest tests/unit/test_structural_extractor.py -q` | 全绿 |
+| M1-3 电气 点位高度 | `python -m pytest tests/unit/test_electrical_extractor.py -q` | 全绿 |
+| M1-4 暖通 点位字段 | `python -m pytest tests/unit/test_hvac_extractor.py -q` | 全绿 |
+| M2 图层/块名 映射 | ① `python -c "from src.agents.src.tools.dwg_layer_scan import scan_dwg; print('OK')"` ② 扫真实 DWG 出候选 ③ `python -m pytest tests/unit/test_dwg_layer_scan.py -q` | 命中真实图层/块名 |
+| M5 权限矩阵 | `python -m pytest tests/unit/test_permission_model.py -q` | 全绿 (结构自洽 + 死锁用例) |
+| 全量收口 | `python -m pytest tests/ -q` + `python scripts/smoke_test.py` | 618/5/0 + 冒烟全过 |
+
+> 诚实边界: 以上只验证"值改对了机制认不认", **不替专家判"值该填几"**——
+> 管径填 110 还是 150、设计师该不该有 merge.lock, 决定权在专家 (不虚标红线)。
+
+---
+
+## status 追踪（逐条回填后更新）
 > - M1-1 M1-2 M1-3 M1-4 M2-1 M2-2 M2-3 M5-1 : **open**
