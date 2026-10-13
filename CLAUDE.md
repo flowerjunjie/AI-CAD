@@ -7,7 +7,10 @@
 
 ### `test_direct_run.py` 会直跑每个带 `__main__` 块的 unit 测试文件
 `tests/unit/test_direct_run.py` 把所有「带 `if __name__ == "__main__"` 的
-`tests/unit/test_*.py`」逐个独立 subprocess 直跑，断言 exit 0。两条硬约束：
+`tests/unit/test_*.py`」逐个独立 subprocess 直跑，断言 exit 0。**2026-10-13 起
+用 `ThreadPoolExecutor` 并行冷启（并发度 = 物理核数，墙钟从全量 7 分钟级降到
+~2 分钟），护栏语义不变——每文件仍独立判 exit 0，失败信息按基名稳定排序。**
+两条硬约束：
 
 - **`__main__` 块里不能调用带 pytest fixture 的用例**（`monkeypatch` / `tmp_path` /
   `capsys` 等）——直跑没有 fixture 注入，调了直接 `TypeError`，全量 pytest 炸 1 条。

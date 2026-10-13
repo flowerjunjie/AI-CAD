@@ -37,32 +37,48 @@ def test_all_unit_test_files_direct_run_exit_0():
     这是把「直跑不炸」固化成回归: 任何人改了某个文件的 __main__ 块
     (比如 print 了 emoji / 断言依赖全局引擎填充), pytest 会在这里先炸,
     而不是等到有人手动 python 那个文件才暴露。
+
+    并发模型: 每个文件独立冷启 Python 解释器, 48 个文件若串行跑全量
+    pytest 时 CPU 被抢占会拖到 7 分钟级墙钟。改用 ThreadPoolExecutor
+    并行 (subprocess.run 等待时释放 GIL), 并发度 = 物理核数, 把墙钟
+    压到 1-2 分钟。护栏语义不变: 每文件仍独立判 exit 0。
     """
+    import concurrent.futures
     import time
 
     cands = _direct_run_candidates()
     assert cands, "没找到可直跑的 unit 测试文件 — 护栏本身坏了"
-    failures = []
-    for path in cands:
+
+    def _run_one(path):
         # 从项目根起, 隔离 subprocess 的 CWD; PYTHONPATH 保证 import src.* 通
         env = dict(os.environ, PYTHONPATH=PROJECT_ROOT)
-        # timeout=300: 18 个文件各自冷启一个 Python 解释器 (~0.4-5s/个,
-        # 全量直跑累计 ~20-25s), 单独跑全绿; 全量 pytest 并发时 CPU 被
-        # 抢占, 个别文件偶发变慢顶到上限。提到 300s 留足余量, 真卡死才报警。
+        # timeout=300: 单文件冷启一个 Python 解释器 (~0.4-5s), 并行时留足
+        # 余量, 真卡死才报警。
         start = time.monotonic()
         try:
             r = subprocess.run([sys.executable, path],
                                capture_output=True, text=True, env=env,
                                cwd=PROJECT_ROOT, timeout=300)
         except subprocess.TimeoutExpired as e:
-            # 诊断: 指明是哪个文件、实测跑了多久(不静默吞), 方便下次定位
-            # 是"真卡死"还是"正常慢但被抢占顶到 300s 上限"。
             elapsed = time.monotonic() - start
-            failures.append(
-                f"{os.path.basename(path)} "
-                f"(TIMEOUT after {elapsed:.0f}s of 300s limit):\n{e}"
-            )
-            continue
+            return (os.path.basename(path),
+                    f"{os.path.basename(path)} "
+                    f"(TIMEOUT after {elapsed:.0f}s of 300s limit):\n{e}")
         if r.returncode != 0:
-            failures.append(f"{os.path.basename(path)} (exit {r.returncode}):\n{r.stderr[-800:]}")
+            return (os.path.basename(path),
+                    f"{os.path.basename(path)} (exit {r.returncode}):\n{r.stderr[-800:]}")
+        return (os.path.basename(path), None)
+
+    # 并发度 = 物理核数, 上限夹到文件数; 48 文件在 8 核机上 ~6 批, 墙钟从
+    # 7 分钟级降到 1-2 分钟级。subprocess.run 阻塞等待时释放 GIL, 线程并行有效。
+    workers = min(os.cpu_count() or 4, len(cands))
+    failures = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_run_one, path): path for path in cands}
+        for fut in concurrent.futures.as_completed(futures):
+            name, err = fut.result()
+            if err is not None:
+                failures.append(err)
+    # 按文件基名稳定排序, 失败信息可读、可复现
+    failures.sort()
     assert not failures, "以下测试文件直跑失败:\n" + "\n\n".join(failures)
