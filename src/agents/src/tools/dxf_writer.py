@@ -6,6 +6,12 @@ DXFWriter + 出图警示标记对账 — ezdxf DWG/DXF 写入器 (从 cad_tools.
 轴网/碰撞标记) + 读回警示圈数对账 (count_dwg_markers / verify_dwg_markers)。
 依赖: 数据类从 cad_types import; ezdxf 函数内 import; math 顶部 import。
 cad_tools.py 顶部 re-export DXFWriter/两个 marker 函数, 旧 import 路径 0 改动。
+
+拆文件判断 (2026-10-13): 本文件 692 行是「内聚类」— 单个 DXFWriter 类 33 个方法
+共享 self.doc/self._layers 状态, 非多段独立纯函数。CLAUDE.md re-export SOP 的
+「零同名冲突 + 纯函数段直接搬」不适用; 硬拆共享状态类 = 造跨模块状态耦合,
+回归面爆炸。当前 692 < 800 红线, 不物理拆; 若日后突破 800 按「类内方法分组」
+另议 (非 re-export 范式)。勿误判为「胖就该拆」。
 """
 import math
 

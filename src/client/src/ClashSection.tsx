@@ -13,6 +13,11 @@ export default function ClashSection() {
     clashResults, clashLoading, clashError,
   } = useEngineStore();
 
+  // 只看最新 (组件级开关, 不污染全局 store): 默认开, 追加多次结果时
+  // 只渲染最新一份, 避免历史刷屏; 可切「全部」看历史 (治追加式结果回溯体验)。
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? clashResults : clashResults.slice(-1);
+
   const handleClash = useCallback(async () => {
     await runClashCheck(lastSample);
   }, [lastSample]);
@@ -29,6 +34,16 @@ export default function ClashSection() {
           <span className="tool-tag">M4</span>
         </h3>
         <div className="clash-head-actions">
+          {clashResults.length > 1 && (
+            <button
+              type="button"
+              className="btn-sm clash-clear-btn"
+              onClick={() => setShowAll((v) => !v)}
+              title={showAll ? '只看最新一份' : `已 ${clashResults.length} 份, 当前显示全部`}
+            >
+              {showAll ? '只看最新' : `全部 ${clashResults.length}`}
+            </button>
+          )}
           {clashResults.length > 0 && (
             <button
               className="btn-sm clash-clear-btn"
@@ -53,9 +68,9 @@ export default function ClashSection() {
       {clashResults.length === 0 && !clashError && (
         <p className="clash-empty">尚未检测 — 点「检测碰撞」跑 {lastSample} 的跨专业碰撞 (管线/暖通 vs 结构梁柱)</p>
       )}
-      {clashResults.map((r, i) => (
+      {visible.map((r, i) => (
         <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
-          {i === clashResults.length - 1 && <span className="clash-latest">最新</span>}
+          {i === visible.length - 1 && <span className="clash-latest">最新</span>}
           {r.count > 0 ? (
             <>
               <span className="clash-badge">{r.count}</span>

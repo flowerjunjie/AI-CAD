@@ -15,6 +15,10 @@ export default function ConflictSection() {
 
   // 两稿默认同 sample (自比 → 0 冲突); 稿B 下拉当前仅 residential_100sqm.json
   const [conflictSampleB, setConflictSampleB] = useState('residential_100sqm.json');
+  // 只看最新 (组件级开关, 不污染全局 store): 默认开, 追加多次比对时只渲染
+  // 最新一份避免历史刷屏, 可切「全部」看历史 (同 ClashSection 结果回溯范式)。
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? conflictResults : conflictResults.slice(-1);
 
   const handleConflict = useCallback(async () => {
     await runConflict(lastSample, conflictSampleB);
@@ -47,6 +51,16 @@ export default function ConflictSection() {
           >
             {conflictLoading ? '比对中…' : '比冲突'}
           </button>
+          {conflictResults.length > 1 && (
+            <button
+              type="button"
+              className="btn-sm clash-clear-btn"
+              onClick={() => setShowAll((v) => !v)}
+              title={showAll ? '只看最新一份' : `已 ${conflictResults.length} 份, 当前显示全部`}
+            >
+              {showAll ? '只看最新' : `全部 ${conflictResults.length}`}
+            </button>
+          )}
           {conflictResults.length > 0 && (
             <button
               className="btn-sm clash-clear-btn"
@@ -64,9 +78,9 @@ export default function ConflictSection() {
       {conflictResults.length === 0 && !conflictError && (
         <p className="clash-empty">尚未比对 — 点「比冲突」比对稿A与稿B 的元素改动 (改值/新增/删除)</p>
       )}
-      {conflictResults.map((r, i) => (
+      {visible.map((r, i) => (
         <div key={i} className={`clash-item ${r.count > 0 ? 'clash-hit' : 'clash-ok'}`}>
-          {i === conflictResults.length - 1 && <span className="clash-latest">最新</span>}
+          {i === visible.length - 1 && <span className="clash-latest">最新</span>}
           {r.count > 0 ? (
             <>
               <span className="clash-badge">{r.count}</span>
