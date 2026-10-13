@@ -10,10 +10,10 @@
 ## 当前水位
 
 ```
-python -m pytest tests/ -q   →   611 passed / 5 skipped / 0 failed
+python -m pytest tests/ -q   →   620 passed / 5 skipped / 0 failed
 ```
 
-- **测试文件**：50（49 unit + 4 integration；含文档水位护栏 test_doc_test_waterlevel 5 测试）
+- **测试文件**：72（unit + integration 非 __init__; 含文档水位护栏 test_doc_test_waterlevel 5 测试）
 - **5 skipped**：外部依赖用例（4 条 langgraph 框架需 `AI_CAD_RUN_FRAMEWORK=1`；
   1 条 LLM 需 `AGNES_API_KEY`），非缺陷。
 - **冒烟**：`python scripts/smoke_test.py` 秒级验 5 大核心不变量。
@@ -74,4 +74,5 @@ python -m pytest tests/ -q 2>&1 | tail -1
 | 2026-10-08 | 571 | UI 第七批 (纯前端轮, 测试数字不变) + 端点自洽诊断护栏: P12 机制层 verify 诊断值透出 UI (clashes_consistent/summary_consistent 补进 ClashResult/ConflictResult interface + Clash/ConflictSection 失步才显诊断行, 正常静默不刷屏; 根治「护栏装了摄像头没接监控屏」— 4 轮 verify 做了诊断值前端一直收而丢弃) + P13 稿B 下拉诚实标注。配套补 3 条端点断言护栏 (无碰撞/命中/同稿三态钉死 *_consistent 透出, 同文件用例数 7→7); 全量 571 不变。+ 重打包 onedir exe (build/dist, verify_exe PASS + 交付态 curl 真验 /api/clash 透出 clashes_consistent, P12 字段非开发态独有) | `079d2b3` | 纯前端 + 端点护栏轮, Python 测试水位不变 571; exe 交付物已刷到含本批成果 |
 | 2026-10-08 | 572 | P12 同类收口 (无需外部专家, 纯前端 + 1 端点用例): /api/dwg-scan 自洽诊断 scan_consistent/scan_issues 透出前端 (P12 只接了 clash/conflict, 漏了直接同类 dwg-scan — bridge verify_dwg_scan_report 早透出了, DwgScanResult interface 没声明又成黑洞; 补 interface + DwgScanSection 失步才显行 + 1 端点用例「自产报告恒自洽不虚标」)。另核实并**证伪**后台 agent 的 C 候选「diff 未进 HIDDEN_IMPORTS 会打包态炸」: 起 exe 真调 dsl/apply → diff_consistent 真透出 (src.rules.src 整包进 PYZ 可被静态分析, 非命名空间包跨目录懒 import), 无需补 spec | `a67bf3e` | 全量实测 572/5/0 (新增 1 用例), 冒烟/直跑护栏过 |
 | 2026-10-08 | 572 | 重构轮 (纯后端拆分 + 纯前端, Python 水位不变): ① M1 回填断层收口 (M1BackfillBlock 把 rule.params 传进 backfill, 阈值改动不再静默丢弃); ② 接线孤儿端点 waits-verify 进 CollabPanel 诊断区 + batch-verify/dwg-marker-verify 进新 VerifyPanel; ③ 拆 bridge.py H 协同域段 → bridge_collab.py (APIRouter 挂载, 1575→1301 行, 端点路径 0 改动); ④ 修 ③ 撞出的 10 回归 (patch 目标悬空 _COLLAB_STATE_PATH 加回 bridge + 子模块惰性读; OpenAPI paths 替 r.path 遍历; .gitignore 忽略运行态 data/collab/)。全 4 commit 收口, 全量 572/5/0 | `2bf96d4` | 重构+接线轮, Python 测试水位不变 572; 重打包 exe 固化本批成果 |
-*最后刷新：2026-10-11 · 611 passed / 5 skipped / 0 failed（P0+P1 收口: doors.py:105 断链 import 修 + 静默降级 lint 判据扩多语句回写盲区 (修判据自相矛盾 bug + 5 处设计降级补契约注释), 609→611）*
+| 2026-10-13 | 620 | 机制层护栏续命 + UI 诊断收口轮 (无外部依赖): ① test-status 13 行 HEAD 裸哈希回填真实 commit (审计链可追溯) + test_direct_run 串行 subprocess→ThreadPoolExecutor 并行 (全量提速 59%); ② M5 verify_duplicates 自洽护栏 (仿 verify_clashes, 出图前对账脏重复清单) + /api/conflict 端点透出 duplicates_consistent + 出图节点→确认闸 ConfirmGatePanel 长通路; ③ 前端 Clash/Conflict 追加式面板「只看最新」开关。全量 609→611 (上轮 P0+P1) →620 (+9 有效护栏非灌水), 0 回归 | `cbf70eb` | 机制层自主子集收敛: verify 11 孪生全齐, 前端自洽诊断四类型 (clash/summary/dwg-scan/duplicates) 全通, 追加式结果体验收口 |
+*最后刷新：2026-10-13 · 620 passed / 5 skipped / 0 failed（机制层护栏续命 + UI 诊断收口轮: HEAD 裸哈希回填 + direct_run 并行提速 + verify_duplicates 全通路 + 前端只看最新, 611→620）*
