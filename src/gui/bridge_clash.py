@@ -110,7 +110,8 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
     summary 含 value_conflicts/added/removed/duplicates 四维度计数。
     同稿自比 → count=0 空列表 (诚实, 不造假)。"""
     from src.agents.src.tools.conflict_detection import (  # 懒
-        detect_conflicts, summarize_conflicts, verify_summary)
+        detect_conflicts, detect_duplicate_elements,
+        summarize_conflicts, verify_summary, verify_duplicates)
 
     raw_a = _load_sample_raw(sample_a)
     raw_b = _load_sample_raw(sample_b)
@@ -119,6 +120,10 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
     # 机制层对账: 汇总计数 vs 冲突列表是否自洽 (summarize 自产必一致;
     # 透出为诊断, 一旦未来上游改动导致失步, 端点如实标 out_of_sync, 不静默穿透 UI)
     check = verify_summary(summary, conflicts)
+    # 机制层对账 (M5 重复清单孪生): 几何等价类 duplicate 子集 vs 两稿源数据是否自洽
+    # (自产清单恒自洽; 失步才留痕, 仿 summary_consistent 范式, 防脏 DUP 静默进 UI)
+    dup_check = verify_duplicates(raw_a, raw_b,
+                                  [c for c in conflicts if c.get("kind") == "duplicate"])
     return {
         "sample_a": sample_a,
         "sample_b": sample_b,
@@ -128,6 +133,8 @@ def api_conflict(sample_a: str = "residential_100sqm.json",
         "summary": summary,
         "summary_consistent": check["consistent"],
         "summary_issues": check["issues"],
+        "duplicates_consistent": dup_check["valid"],
+        "duplicates_issues": dup_check["issues"],
     }
 
 

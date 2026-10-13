@@ -200,6 +200,50 @@ def test_conflict_hit_path(monkeypatch):
         # 机制层对账透出: summarize 自产必一致 → summary_consistent=true, issues 空
         assert body["summary_consistent"] is True
         assert body["summary_issues"] == []
+        # 机制层对账透出 (M5 重复清单孪生): 本例无几何重复 → 自产恒自洽, issues 空
+        assert body["duplicates_consistent"] is True
+        assert body["duplicates_issues"] == []
+
+
+def test_conflict_hit_path_with_duplicates_consistent(monkeypatch):
+    """命中路径带几何重复: 同坐标不同 id → duplicate 冲突, verify 仍自洽。
+
+    补上「自产 duplicate 清单喂 verify_duplicates 恒自洽」的端点侧钉死 —
+    防未来上游把 duplicate 清单改脏后 /api/conflict 静默把脏 DUP 透进前端。
+    detect_duplicate_elements 在「单份 raw 内同坐标 >1 个不同 id」判重,
+    故造稿B: 复制第一个带坐标的元素, 保留坐标改新 id → 同坐标 2 个不同 id。
+    """
+    from src.gui import bridge as bridge_main, bridge_clash as bridge_mod
+
+    raw_a = _raw()
+    raw_b = copy.deepcopy(raw_a)
+    # 找一份带坐标 (x/y) 且非空的元素类, 复制其首元素改 id 保留坐标 → 真重复
+    target_key = None
+    for key in ("outlets", "doors", "windows", "switches"):
+        items = raw_b.get(key) or []
+        if items and any(isinstance(el, dict) and el.get("x") is not None
+                         and el.get("y") is not None for el in items):
+            target_key = key
+            break
+    assert target_key, "sample 应含带坐标的元素类 (outlets/doors/...) 可造重复"
+    src_el = next(el for el in raw_b[target_key]
+                  if isinstance(el, dict) and el.get("x") is not None)
+    raw_b[target_key].append({**src_el, "id": str(src_el["id"]) + "_dup"})
+    # 稿A 不变 (raw_a 里该坐标原本只有 1 个), 稿B 同坐标 2 个不同 id → 重复
+
+    def fake_loader(sample: str) -> dict:
+        return raw_a if sample == "A.json" else raw_b
+
+    monkeypatch.setattr(bridge_mod, "_load_sample_raw", fake_loader)
+    with TestClient(bridge_main.app) as client:
+        resp = client.get("/api/conflict?sample_a=A.json&sample_b=B.json")
+        assert resp.status_code == 200
+        body = resp.json()
+        kinds = {c["kind"] for c in body["conflicts"]}
+        assert "duplicate" in kinds, f"应检出几何重复, 实际 kinds={kinds}"
+        # 自产 duplicate 清单喂 verify_duplicates 恒自洽 → 不虚标
+        assert body["duplicates_consistent"] is True
+        assert body["duplicates_issues"] == []
 
 
 if __name__ == "__main__":

@@ -95,6 +95,14 @@ export default function ConflictSection() {
                   </span>
                 </div>
               )}
+              {r.duplicates_consistent === false && (r.duplicates_issues?.length ?? 0) > 0 && (
+                <div className="clash-line clash-diag-bad">
+                  <span className="clash-kind">重复自洽</span>
+                  <span className="clash-detail">
+                    重复清单与两稿失步 ({r.duplicates_issues!.length} 处) — 重复标记不可信, 以下方列表为准
+                  </span>
+                </div>
+              )}
             </>
           ) : (
             <span className="clash-clean">✓ 两稿无改动冲突 · {r.sample_a} vs {r.sample_b}</span>

@@ -100,6 +100,9 @@ export interface ConflictResult {
   // 机制层自洽诊断 (bridge verify_summary 透出, 防汇总/列表失步静默穿透 UI)
   summary_consistent?: boolean;
   summary_issues?: string[];
+  // 机制层自洽诊断 (bridge verify_duplicates 透出, 防 M5 重复清单失步静默穿透 UI)
+  duplicates_consistent?: boolean;
+  duplicates_issues?: string[];
 }
 
 // ─── M5 在线协同持久层 (bridge.py H 段, 本地锁演示通路) ───
