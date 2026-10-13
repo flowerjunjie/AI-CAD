@@ -514,6 +514,28 @@ def test_cad_execute_conflict_task_surfaces_duplicates_diagnostic():
     assert r["duplicates_issues"] == []
 
 
+def test_node_result_join_preserves_duplicates_key():
+    """节点→前端 join 层: bridge _agent/run 把 cad_results 按 task_id join 进
+    pending[].result (纯 dict 搬运, 不重算)。钉死「duplicates_consistent 键经
+    join 后不丢」— 前端 ConfirmGatePanel 从 p.result.duplicates_consistent 读,
+    若 join 丢键, 那条诊断行永远静默 (P12 同款黑洞)。"""
+    from src.agents.src.nodes.cad_rule_export import cad_execute_node
+
+    state = {
+        "raw_data": {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]},
+        "conflict_raw_b": {"outlets": [{"id": "o2", "x": 1.0, "y": 1.0}]},
+        "task_list": [{"id": "conflict-x", "type": "conflict"}],
+        "output_path": "/tmp/aicad_conflict_join.dwg", "auto_mode": True}
+    res = cad_execute_node(state)
+    # 模拟 bridge bridge.py L357-366 的 join: result_by_task[task_id] → result
+    result_by_task = {r["task_id"]: r for r in res["cad_results"] if isinstance(r, dict)}
+    joined = result_by_task.get("conflict-x", {})
+    assert "duplicates_consistent" in joined, \
+        f"join 层丢了 duplicates_consistent 键, 前端诊断行会永静默 (黑洞): {list(joined)}"
+    assert joined["duplicates_consistent"] is True
+    assert joined["duplicates_issues"] == []
+
+
 if __name__ == "__main__":
     test_diff_elements_value_conflict()
     test_diff_elements_identical_returns_empty()
@@ -544,4 +566,5 @@ if __name__ == "__main__":
     test_verify_duplicates_missing_coord_flagged()
     test_verify_duplicates_malformed_no_crash()
     test_cad_execute_conflict_task_surfaces_duplicates_diagnostic()
+    test_node_result_join_preserves_duplicates_key()
     print("OK: all conflict detection tests passed")

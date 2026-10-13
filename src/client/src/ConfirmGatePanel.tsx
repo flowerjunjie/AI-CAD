@@ -49,13 +49,25 @@ export default function ConfirmGatePanel() {
             已挂起 {agentRun.thread_id} · {agentRun.pending_task_count} 个待确认 /
             CAD 已出 {agentRun.cad_result_count} 图元
           </span>
-          {(agentRun.pending ?? []).map((p) => (
-            <div key={p.task_id} className="pending-line">
-              <span className="pending-kind">{p.type}</span>
-              <span className="pending-id">{p.task_id}</span>
-              {p.description && <span className="pending-desc">{p.description}</span>}
-            </div>
-          ))}
+          {(agentRun.pending ?? []).map((p) => {
+            // M5 重复清单自洽诊断 (出图节点 verify_duplicates 已算, 经 pending[].result
+            // 流到前端 — 仿 clashes_consistent 范式, 失步才留痕, 正常静默不刷屏)
+            const dupConsistent = p.result?.duplicates_consistent;
+            const dupIssues = p.result?.duplicates_issues;
+            const dupOutOfSync = dupConsistent === false && Array.isArray(dupIssues) && dupIssues.length > 0;
+            return (
+              <div key={p.task_id} className="pending-line">
+                <span className="pending-kind">{p.type}</span>
+                <span className="pending-id">{p.task_id}</span>
+                {p.description && <span className="pending-desc">{p.description}</span>}
+                {dupOutOfSync && (
+                  <span className="clash-detail clash-diag-bad">
+                    重复自洽失步 ({(dupIssues as string[]).length} 处) — DUP 标记不可信
+                  </span>
+                )}
+              </div>
+            );
+          })}
           {agentRun.preview_url && (
             <a className="pending-preview" href={agentRun.preview_url} target="_blank" rel="noreferrer">
               查看出图预览 →
