@@ -238,6 +238,8 @@ M1 数值终确认 / M2 图层约定 / M5 权限模型 为**外部依赖占位**
 - [交付报告 DELIVERY.md](./DELIVERY.md) — 决策者主文档（能力清单 / 占位边界 / 路线图 / 实跑命令）
 - [能力地图 capability-map.md](./docs/capability-map.md) — 一页纸 ✅ 已通 / ▢ 占位
 - [技术合作方案](./doc/AIWeb_AICAD技术合作方案.md)
+- [参与指南 CONTRIBUTING.md](./CONTRIBUTING.md) — 专业专家/贡献者/制图规范方怎么参与（回填值·提 PR·挂名背书）
+- 授权：[MIT](./LICENSE)
 
 ---
 
