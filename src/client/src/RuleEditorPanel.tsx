@@ -18,6 +18,8 @@ function RuleEditorPanel() {
   const { dslAudit, dslAuditLoading } = useEngineStore();
   const store = useRuleEditorStore;
   const [pendingDiff, setPendingDiff] = useState<DslApplyDiff | null>(null);
+  // M5/P12 同类收口: 三桶 diff 自洽诊断 (bridge verify_diff_buckets 透出), 失步才留痕
+  const [diffIssues, setDiffIssues] = useState<string[]>([]);
   const [applyMsg, setApplyMsg] = useState<string>('');
 
   /** DSL 信任边界体检: 一键读端点, 看「哪些规则声明类型会落空 / predicate 引用未声明变量」。 */
@@ -47,6 +49,7 @@ function RuleEditorPanel() {
         return;
       }
       setPendingDiff(preview.diff); // 展示 diff, 等用户二次确认
+      setDiffIssues(preview.diff_consistent === false ? (preview.diff_issues ?? []) : []);
       return;
     }
     // 二次确认: 已拿到 diff, 带 confirm=true 真写盘
@@ -54,6 +57,7 @@ function RuleEditorPanel() {
     if (res && res.status === 'applied') {
       setApplyMsg(`已写盘 (${res.applied_rule_count} 条) · 备份 ${res.backup}`);
       setPendingDiff(null);
+      setDiffIssues([]);
       store.getState().setRules(rules.map((r) => ({ ...r }))); // 刷新 originalRules 基线
     } else {
       setApplyMsg(res ? '写盘失败, 未落盘' : '无法连接写回端点');
@@ -110,6 +114,14 @@ function RuleEditorPanel() {
             {pendingDiff.changed.length + pendingDiff.added.length + pendingDiff.removed.length === 0 &&
               <li className="dsl-apply-none">当前无字段改动 (与 default.json 一致)</li>}
           </ul>
+          {diffIssues.length > 0 && (
+            <div className="clash-line clash-diag-bad">
+              <span className="clash-kind">diff 自洽</span>
+              <span className="clash-detail">
+                三桶 diff 与源数据失步 ({diffIssues.length} 处) — 上方改动清单可能不准, 落盘前请核对
+              </span>
+            </div>
+          )}
         </div>
       )}
       {applyMsg !== '' && <div className="dsl-apply-msg">{applyMsg}</div>}

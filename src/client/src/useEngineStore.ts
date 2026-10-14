@@ -314,6 +314,9 @@ export interface DslApplyResp {
   backup?: string;
   applied_rule_count?: number;
   message?: string;
+  // 机制层自洽诊断 (bridge verify_diff_buckets 透出, 防三桶 diff 失步静默穿透落盘预览)
+  diff_consistent?: boolean;
+  diff_issues?: string[];
 }
 
 interface EngineState {
