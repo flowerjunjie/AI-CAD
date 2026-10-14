@@ -105,6 +105,32 @@ _DEFAULT = "duct"                                                            # T
 柱、基础各画在哪个图层 / 用什么块名）—— 跟 M1-2 的值不同源：M1-2 定"截面多宽"，
 M2-3 定"多宽的那根梁在哪个图层上找"。
 
+### M2 实扫候选起点（现有 4 份 sample DXF，无需外部真 DWG 即可开推）
+
+> 没真实业务 DWG 也能先把 M2 往前推：**项目自带的 4 份 sample DXF**
+> （`data/sample/{electrical,hvac,plumbing,structural}_sample.dxf`，由
+> `make_*_sample_dxf.py` 生成）就能喂 `scan_sample_reader` 出图层/块名候选，给
+> 上面 dict 一个**可确认的起点**。拿到真实业务 DWG 后**重扫一遍、对照更新候选
+> 即可**，流程零返工。以下为 2026-10-13 实扫结果（可复现：
+> `python -c "from src.agents.src.tools.dwg_layer_scan import scan_sample_reader; ..."`）。
+
+| sample DXF | 图层 | INSERT 块名候选 | 对应 kind（专家确认） |
+|-----------|------|-----------------|----------------------|
+| electrical | `ELEC_OUTLET` | `OUTLET_GND` / `OUTLET_HI` | 插座（grounded/high 区分待专家） |
+| electrical | `ELEC_SWITCH` | `SWITCH_OK` | 开关 |
+| hvac | `HVAC_DUCT` | `DUCT_STD` | 风管 |
+| hvac | `HVAC_GRILLE` | `GRILLE_STD` | 风口 |
+| hvac | `HVAC_UNIT` | `UNIT_STD` | 机组 |
+| plumbing | `PIPE` / `PIPE_WASTE` | （无 INSERT，纯 LINE） | 排水管（横管/立管，图层名区分） |
+| structural | `BEAM` | （无 INSERT，纯 LINE） | 梁 |
+| structural | `COLUMN` | `COL_K` / `COL_S` | 柱（K/S 区分待专家） |
+
+**回填动作**：专家对照上表勾"真实图层/块名 → kind"，把确认值填进 M2-1/2/3 的
+dict（电气/暖通走 `dxf_reader.py`，结构走 `structural_extractor.py`），对应行
+`status: open → confirmed`。**填的是值不是签字**——决定权在专家，agent 只把候选
+摆出来（不虚标红线）。通用 CAD 公开数据集（操作录像类）证伪过不适用，**真实业务
+样本才是钥匙**（脱敏即可，隐项目名/单位/坐标，保留图层与块名）。
+
 ---
 
 ## M5 · 权限模型回填（`permission_model.py`）
