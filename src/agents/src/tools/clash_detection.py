@@ -271,3 +271,72 @@ def verify_clashes(raw: dict, clashes: list[dict]) -> dict:
         if b not in known_ids:
             issues.append(f"clashes[{i}].b_id={b!r} 不在 raw (出图会兜底原点假圈)")
     return {"valid": not issues, "issues": issues, "count": len(clashes)}
+
+
+# ─── 碰撞检测「完整性」审计 (机制层自主子集, 纯函数) ───────────
+# 边界 (诚实, 呼应 CLAUDE.md「不虚标」): verify_clashes 判「碰撞结果本身是否自洽」
+# (脏 id/非法 kind), 本函数判另一维度 — 「该纳入检测的元素是否都纳入了」(完备性)。
+# M4 detect_clashes 只扫固定 6 类可碰撞元素 (见 _CLASH_DETECTABLE_KEYS); 若业务往
+# raw 里新增元素类 / 某可碰撞类被漏进几何判定, 碰撞"0 检出"可能是「真无碰撞」也可能是
+# 「该类根本没进检测」— 完整性审计把后者揪出来, 不静默吞。纯函数, 只统计/标记,
+# 不改几何判据、不新增碰撞结果 (不虚标: 不判「会不会碰撞」, 只报「哪些没检」)。
+# 注: 这是「该检没检」的完备性审计, 非「假阴性」(M4 是确定性几何, 错=bug 非概率漏检,
+# 假阴性审计接 M1 占位值判定, 见 docs/borrow-false-negative-audit.md)。
+
+
+# M4 实际纳入几何判定的可碰撞元素类 (与 detect_clashes 的 6 个 raw 键同源)
+_CLASH_DETECTABLE_KEYS: tuple[str, ...] = (
+    "structural_beams", "structural_columns",
+    "pipes", "hvac_ducts", "outlets", "hvac_grilles",
+)
+
+
+def verify_clash_completeness(raw: dict, clashes: list[dict]) -> dict:
+    """审计 M4 碰撞检测的完整性: raw 里「该检却没纳入」的元素被揪出。纯函数, 不崩。
+
+    判据 (返回结构化结论, 全干净 → complete=True, gaps=[]):
+      ① 未知可碰撞类: raw 里出现 _CLASH_DETECTABLE_KEYS 之外的元素键 (业务新增类,
+         M4 不认识 → 该类碰撞未检)。
+      ② 可碰撞类全空: 6 类里非空的, 其 kind 从未出现在 clashes 检出中, 且该侧
+         (段/点) 也确无碰撞 — 诚实标「有数据但 0 检出」(非缺口, 仅提示, 不虚标)。
+      ③ 无任何可检数据: raw 里 6 类全空 → not_checkable=True (无碰撞可言, 非缺陷)。
+    gaps 只列「真缺口」= ① 未知类; ②③ 是提示位 (gaps 之外的字段), 不混进缺口判据。
+    畸形输入 (raw 非 dict / 值非 list) → 计入 issues 不崩。
+    """
+    raw = raw or {}
+    clashes = clashes or []
+    issues: list[str] = []
+    if not isinstance(raw, dict):
+        issues.append(f"raw 非 dict (畸形 {type(raw).__name__})")
+        return {"complete": False, "gaps": [], "unknown_keys": [],
+                "present_detectable": [], "not_checkable": False,
+                "issues": issues, "checked": 0}
+
+    # ① 未知可碰撞类: raw 里带了 M4 不认识的元素键
+    unknown_keys = sorted(k for k in raw.keys() if k not in _CLASH_DETECTABLE_KEYS)
+    # (raw 的键都是元素类名单 — M4 契约下不会混入非元素键, 若混入也如实标出)
+
+    # ② 各可碰撞类的非空状态 (提示位: 有数据但 0 检出)
+    detectable_present: list[str] = []
+    for key in _CLASH_DETECTABLE_KEYS:
+        items = raw.get(key) or []
+        if isinstance(items, (list, tuple)) and len(items) > 0:
+            detectable_present.append(key)
+
+    # ③ 无任何可检数据
+    not_checkable = not detectable_present and not unknown_keys
+
+    # gaps = 真缺口: 业务新增、M4 几何判定未覆盖的元素类 (最可能的漏检源)
+    gaps = list(unknown_keys)
+    for k in unknown_keys:
+        issues.append(f"raw[{k!r}] 非 M4 可碰撞类 (几何判定未覆盖, 该类碰撞未检)")
+
+    return {
+        "complete": not gaps,          # 无未知类即「可碰撞面完整」
+        "gaps": gaps,                  # 真缺口 (未纳入 M4 的元素类)
+        "unknown_keys": unknown_keys,
+        "present_detectable": detectable_present,   # 提示: 有数据但 0 检出的类
+        "not_checkable": not_checkable,             # 6 类全空 → 无碰撞可言
+        "issues": issues,
+        "checked": len(detectable_present) + len(unknown_keys),
+    }

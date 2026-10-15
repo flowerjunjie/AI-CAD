@@ -64,6 +64,10 @@ export interface ClashResult {
   // 机制层自洽诊断 (bridge verify_clashes 透出, 防脏碰撞静默穿透出图假圈)
   clashes_consistent?: boolean;
   clashes_issues?: string[];
+  // 完整性审计 (bridge verify_clash_completeness 透出: M4 未纳入几何判定的元素类)
+  clash_complete?: boolean;
+  clash_gaps?: string[];
+  clash_not_checkable?: boolean;
 }
 
 /** M5 单条冲突 (bridge /api/conflict 的 conflicts[i])。 */

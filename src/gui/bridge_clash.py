@@ -70,7 +70,8 @@ def api_clash(sample: str = "residential_100sqm.json",
     返回 {sample, tolerance_m, tolerance_source, clashes: [...], count}。
     无碰撞 → count=0 空列表 (诚实, 不造假)。"""
     from src.agents.src.tools.clash_detection import (  # 懒
-        detect_clashes, resolve_clash_tolerance, verify_clashes)
+        detect_clashes, resolve_clash_tolerance, verify_clashes,
+        verify_clash_completeness)
 
     dsl_rule = None
     try:
@@ -91,10 +92,16 @@ def api_clash(sample: str = "residential_100sqm.json",
     # 机制层对账: 碰撞结果与 raw 源是否自洽 (a_id!=b_id / kind 合法 / id 在 raw,
     # 出图侧反查才不兜底原点假圈)。自产必一致; 透出为诊断, 失步不静默穿透出图。
     check = verify_clashes(raw, clashes)
+    # 完整性审计: raw 里「M4 未纳入几何判定的元素类」揪出 (业务新增类 → 该类碰撞
+    # 未检), 把「0 检出=真无碰撞 or 没检」的后者显化。失步才透出 (无缺口静默)。
+    complete = verify_clash_completeness(raw, clashes)
     return {"sample": sample, "tolerance_m": tol, "tolerance_source": tol_src,
             "clashes": clashes, "count": len(clashes),
             "clashes_consistent": check["valid"],
-            "clashes_issues": check["issues"]}
+            "clashes_issues": check["issues"],
+            "clash_complete": complete["complete"],
+            "clash_gaps": complete["gaps"],
+            "clash_not_checkable": complete["not_checkable"]}
 
 
 @router.get("/api/conflict")

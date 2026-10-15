@@ -244,6 +244,60 @@ def test_verify_clashes_malformed_no_crash():
     assert res["valid"] is False and any("非 dict" in it for it in res["issues"])
 
 
+# ─── 碰撞检测完整性审计 (verify_clash_completeness, 机制层自主子集) ───
+# 判「该纳入检测的元素是否都纳入了」: raw 带 M4 不认识的元素类 = 真缺口
+# (业务新增类几何判定未覆盖), 把「0 检出 = 真无碰撞 or 该类没检」的后者揪出。
+
+
+def test_clash_completeness_clean_raw_complete():
+    """raw 只含 M4 已知的 6 类可碰撞元素 → complete, 无缺口。"""
+    cd = _import()
+    raw = {"structural_beams": [{"id": "b1", "start": [0, 0], "end": [5, 0]}],
+           "structural_columns": [{"id": "c1", "x": 2.0, "y": 2.0}],
+           "pipes": [], "hvac_ducts": [], "outlets": [], "hvac_grilles": []}
+    res = cd.verify_clash_completeness(raw, [])
+    assert res["complete"] is True, f"已知类应完整, 反例 {res}"
+    assert res["gaps"] == []
+    assert "structural_beams" in res["present_detectable"]
+
+
+def test_clash_completeness_unknown_key_flagged_gap():
+    """raw 带 M4 不认识的元素类 (业务新增 fire_pipes) → 揪为缺口 (该类碰撞未检)。"""
+    cd = _import()
+    raw = {"structural_beams": [{"id": "b1", "start": [0, 0], "end": [5, 0]}],
+           "fire_pipes": [{"id": "f1", "start": [0, 1], "end": [5, 1]}]}
+    res = cd.verify_clash_completeness(raw, [])
+    assert res["complete"] is False
+    assert "fire_pipes" in res["gaps"], f"业务新增类应列为缺口, 实际 {res['gaps']}"
+    assert "fire_pipes" in res["unknown_keys"]
+
+
+def test_clash_completeness_all_empty_not_checkable():
+    """6 类全空 + 无未知类 → not_checkable (无碰撞可言, 诚实非缺陷, 不算缺口)。"""
+    cd = _import()
+    res = cd.verify_clash_completeness({}, [])
+    assert res["complete"] is True, "无数据非缺口"
+    assert res["not_checkable"] is True
+    assert res["gaps"] == []
+
+
+def test_clash_completeness_present_but_zero_hit_hint():
+    """有可碰撞数据但 0 检出 → present_detectable 提示位 (不虚标, 不混进 gaps)。"""
+    cd = _import()
+    raw = {"outlets": [{"id": "o1", "x": 1.0, "y": 1.0}]}
+    res = cd.verify_clash_completeness(raw, [])  # 0 碰撞
+    assert "outlets" in res["present_detectable"]
+    assert res["gaps"] == []  # 有数据但 0 检出不是缺口 (可能真无碰撞), 只提示
+
+
+def test_clash_completeness_malformed_no_crash():
+    """畸形输入 (raw 非 dict) → 计入 issues 不崩。"""
+    cd = _import()
+    res = cd.verify_clash_completeness("not-a-dict", [])
+    assert res["complete"] is False
+    assert any("非 dict" in s for s in res["issues"])
+
+
 def test_clash_kinds_constant_matches_detect_output():
     """CLASH_KINDS 常量与 detect_clashes 真产出 kind 同源 (消白名单漂移)。"""
     cd = _import()
@@ -324,6 +378,11 @@ if __name__ == "__main__":
     test_verify_clashes_malformed_no_crash()
     test_clash_kinds_constant_matches_detect_output()
     test_resolve_clash_tolerance_priority()
+    test_clash_completeness_clean_raw_complete()
+    test_clash_completeness_unknown_key_flagged_gap()
+    test_clash_completeness_all_empty_not_checkable()
+    test_clash_completeness_present_but_zero_hit_hint()
+    test_clash_completeness_malformed_no_crash()
     print("OK: all clash detection tests passed")
 
 

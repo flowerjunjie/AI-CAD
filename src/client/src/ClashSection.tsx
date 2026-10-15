@@ -95,12 +95,32 @@ export default function ClashSection() {
                   </span>
                 </div>
               )}
+              {r.clash_complete === false && (r.clash_gaps?.length ?? 0) > 0 && (
+                <div className="clash-line clash-diag-bad">
+                  <span className="clash-kind">完整性审计</span>
+                  <span className="clash-detail">
+                    M4 未覆盖元素类: {r.clash_gaps!.join(', ')} — 该类碰撞未检, 0 检出≠真无碰撞
+                  </span>
+                </div>
+              )}
             </>
           ) : (
-            <span className="clash-clean">
-              ✓ 无跨专业碰撞 · {r.sample}
-              {r.clashes_consistent === false && ' · 自洽诊断异常'}
-            </span>
+            <>
+              <span className="clash-clean">
+                ✓ 无跨专业碰撞 · {r.sample}
+                {r.clashes_consistent === false && ' · 自洽诊断异常'}
+              </span>
+              {/* 完整性诊断在「0 碰撞」分支同样要显: 无碰撞时最易误以为"检完了",
+                  M4 未覆盖的元素类缺口必须在此显化 (有缺口才显, 无则静默不刷屏) */}
+              {r.clash_complete === false && (r.clash_gaps?.length ?? 0) > 0 && (
+                <div className="clash-line clash-diag-bad">
+                  <span className="clash-kind">完整性审计</span>
+                  <span className="clash-detail">
+                    M4 未覆盖元素类: {r.clash_gaps!.join(', ')} — 该类碰撞未检, 0 检出≠真无碰撞
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
       ))}

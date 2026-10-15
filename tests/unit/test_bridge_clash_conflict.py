@@ -115,6 +115,34 @@ def test_clash_missing_sample_404():
         assert "样本不存在" in resp.json()["detail"]
 
 
+def test_clash_completeness_flagged_unknown_class(monkeypatch):
+    """raw 带 M4 未覆盖的元素类 (fire_pipes) → 端点透出 clash_gaps 揪出 (防"没检"当"无碰撞")。"""
+    from src.gui import bridge as bridge_main, bridge_clash as bridge_mod
+
+    raw = _build_clashing_raw()
+    raw["fire_pipes"] = [{"id": "fX", "start": [0.0, 0.0], "end": [3.0, 3.0]}]
+    monkeypatch.setattr(bridge_mod, "_load_sample_raw", lambda s: raw)
+    with TestClient(bridge_main.app) as client:
+        resp = client.get(f"/api/clash?sample={_SAMPLE}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["clash_complete"] is False
+        assert "fire_pipes" in body["clash_gaps"], \
+            f"M4 未覆盖类应透出为缺口, 实际 {body.get('clash_gaps')}"
+
+
+def test_clash_completeness_known_classes_no_false_gap(monkeypatch):
+    """raw 只含 M4 已知 6 类可碰撞元素 → clash_complete=true (不虚标缺口)。"""
+    from src.gui import bridge as bridge_main, bridge_clash as bridge_mod
+
+    monkeypatch.setattr(bridge_mod, "_load_sample_raw", lambda s: _build_clashing_raw())
+    with TestClient(bridge_main.app) as client:
+        resp = client.get(f"/api/clash?sample={_SAMPLE}")
+        body = resp.json()
+        assert body["clash_complete"] is True
+        assert body["clash_gaps"] == []
+
+
 def test_clash_hit_path(monkeypatch, tmp_path):
     """命中路径: monkeypatch _load_sample_raw 返回构造的碰撞 raw → 真命中 pipe-beam。
 

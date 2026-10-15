@@ -56,4 +56,8 @@ M1 占位值**全 open 未回填**（见 `pending-backfill-checklist.md`）—�
 - [ ] M1 至少 1 组占位值回填为专家真值 → 接 `audit_placeholder_verdicts`
 - [ ] `/api/rules/...` 加端点透出 `fn_rate` 诊断（仿 `verify_*` 失步才留痕范式）
 - [ ] 前端"规则审计"区显假阴性率（失步才显，正常静默，同 P12 范式）
-- [ ] M4 做**完整性审计**（报"未纳入检测的图层/元素"）——这是另一条，非假阴性
+- [x] M4 做**完整性审计**（报"未纳入检测的图层/元素"）——**已落地**：
+      `verify_clash_completeness`（`clash_detection.py`，纯函数）揪 raw 里 M4 未覆盖
+      的元素类 → `/api/clash` 透出 `clash_complete/clash_gaps/clash_not_checkable` →
+      前端 `ClashSection` 命中/0碰撞两分支失步才显「完整性审计」行 + 2 端点护栏。
+      水位 620→627（+7：5 纯函数用例 + 2 端点用例）。
